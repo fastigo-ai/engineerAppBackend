@@ -1,0 +1,787 @@
+[
+  {
+    "name": "Quick Support",
+    "description": "Fast diagnostic and resolution services for common computer issues",
+    "image": "",
+    "planTypes": [
+      {
+        "planType": "Quick",
+        "services": [
+          {
+            "name": "Not Sure About the Problem",
+            "subtitle": "5-10 mins",
+            "price": 99,
+            "image": "",
+            "features": [
+              "Our experts will diagnose the problem and provide the best possible solution"
+            ]
+          },
+          {
+            "name": "Excel Not Working",
+            "subtitle": "5-10 mins",
+            "price": 99,
+            "image": "",
+            "features": [
+              "Our experts will diagnose the problem and provide the best possible solution"
+            ]
+          },
+          {
+            "name": "Laptop Hanging or Freezing",
+            "subtitle": "5-10 mins",
+            "price": 99,
+            "image": "",
+            "features": [
+              "Our experts will diagnose the problem and provide the best possible solution"
+            ]
+          },
+          {
+            "name": "Windows Starting Slowly",
+            "subtitle": "5-10 mins",
+            "price": 199,
+            "image": "",
+            "features": [
+              "Our experts will diagnose the problem and provide the best possible solution"
+            ]
+          },
+          {
+            "name": "Wi-Fi Not Connecting",
+            "subtitle": "5-10 mins",
+            "price": 99,
+            "image": "",
+            "features": [
+              "Our experts will diagnose the problem and provide the best possible solution"
+            ]
+          },
+          {
+            "name": "Windows Updates Not Installing",
+            "subtitle": "5-10 mins",
+            "price": 119,
+            "image": "",
+            "features": [
+              "Our experts will diagnose the problem and provide the best possible solution"
+            ]
+          },
+          {
+            "name": "Software Not Opening or Crashing",
+            "subtitle": "5-10 mins",
+            "price": 99,
+            "image": "",
+            "features": [
+              "Our experts will diagnose the problem and provide the best possible solution"
+            ]
+          }
+        ]
+      },
+      {
+        "planType": "Booking",  
+        "services": [
+          {
+            "name": "Display Issue",
+            "subtitle": "45 mins",
+            "price": 599,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "The technician inspects your laptop & provides a diagnosis with a repair quote",
+              "Sourcing spare parts (if required) from local market",
+              "Technician hands over the hard disk for data safety & completes the repair",
+              "Thorough cleaning of area & surfaces after repair"
+            ]
+          },
+          {
+            "name": "Keyboard Issue",
+            "subtitle": "25 mins",
+            "price": 499,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Professional keyboard repair or replacement",
+              "Data safety ensured during repair process"
+            ]
+          },
+          {
+            "name": "Keyboard Issue",
+            "subtitle": "25 mins",
+            "price": 499,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Professional keyboard repair or replacement",
+              "Data safety ensured during repair process"
+            ]
+          },   {
+            "name": "Keyboard Issue",
+            "subtitle": "25 mins",
+            "price": 499,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Professional keyboard repair or replacement",
+              "Data safety ensured during repair process"
+            ]
+          },   {
+            "name": "Keyboard Issue",
+            "subtitle": "25 mins",
+            "price": 499,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Professional keyboard repair or replacement",
+              "Data safety ensured during repair process"
+            ]
+          },   {
+            "name": "Keyboard Issue",
+            "subtitle": "25 mins",
+            "price": 499,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Professional keyboard repair or replacement",
+              "Data safety ensured during repair process"
+            ]
+          },   {
+            "name": "Keyboard Issue",
+            "subtitle": "25 mins",
+            "price": 499,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Professional keyboard repair or replacement",
+              "Data safety ensured during repair process"
+            ]
+          },   {
+            "name": "Keyboard Issue",
+            "subtitle": "25 mins",
+            "price": 499,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Professional keyboard repair or replacement",
+              "Data safety ensured during repair process"
+            ]
+          },   {
+            "name": "Keyboard Issue",
+            "subtitle": "25 mins",
+            "price": 499,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Professional keyboard repair or replacement",
+              "Data safety ensured during repair process"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Windows Laptop",
+    "description": "Complete repair and diagnostic services for Windows laptops",
+    "image": "",
+    "planTypes": [
+      {
+        "planType": "Booking",
+        "services": [
+          {
+            "name": "Display Issue",
+            "subtitle": "45 mins",
+            "price": 599,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "The technician inspects your laptop & provides a diagnosis with a repair quote",
+              "Sourcing spare parts (if required) from local market",
+              "Technician hands over the hard disk for data safety & completes the repair",
+              "Thorough cleaning of area & surfaces after repair"
+            ]
+          },
+          {
+            "name": "Keyboard Issue",
+            "subtitle": "25 mins",
+            "price": 499,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Professional keyboard repair or replacement",
+              "Data safety ensured during repair process"
+            ]
+          },
+          {
+            "name": "Touchpad Issue",
+            "subtitle": "40 mins",
+            "price": 499,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Professional touchpad repair or replacement",
+              "Calibration and testing after repair"
+            ]
+          },
+          {
+            "name": "Charging/Power Issue",
+            "subtitle": "45 mins",
+            "price": 499,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Battery and charging port inspection",
+              "Power adapter testing and replacement if needed"
+            ]
+          },
+          {
+            "name": "Overheating Issue",
+            "subtitle": "45 mins",
+            "price": 499,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Fan cleaning and replacement",
+              "Thermal paste application"
+            ]
+          },
+          {
+            "name": "Software/OS Related Issue/System Formatting",
+            "subtitle": "45 mins",
+            "price": 599,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Operating system installation and setup",
+              "Software troubleshooting and optimization",
+              "Data backup and recovery"
+            ]
+          },
+          {
+            "name": "Port Issue",
+            "subtitle": "30 mins",
+            "price": 299,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "USB, HDMI, and other port repairs",
+              "Connection testing and validation"
+            ]
+          },
+          {
+            "name": "My System is Slow/Hanging Issue",
+            "subtitle": "50 mins",
+            "price": 599,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Performance optimization",
+              "Malware removal and system cleanup"
+            ]
+          },
+          {
+            "name": "Speaker/Camera/Internet Issue",
+            "subtitle": "30 mins",
+            "price": 199,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Audio and video troubleshooting",
+              "Network connectivity fixes"
+            ]
+          },
+          {
+            "name": "Physical Damage",
+            "subtitle": "1.30 mins",
+            "price": 599,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Screen replacement and casing repairs",
+              "Structural damage assessment and repair"
+            ]
+          },
+          {
+            "name": "Laptop Overheating",
+            "subtitle": "40 mins",
+            "price": 0,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis"
+            ]
+          }
+        ],
+        "additionalInfo": {
+          "howItWorks": [
+            "Check-up: The technician inspects your laptop & provides a diagnosis with a repair quote",
+            "Sourcing spare parts (if required): If needed, the technician will procure spare parts from the local market",
+            "Repair: The technician hands over the hard disk for data safety & completes the repair",
+            "Post Repair: The technician thoroughly cleans the area & surfaces after the repair",
+            "Payment: Pay the final repair amount, minus the booking fee already paid"
+          ],
+          "pleaseNotes": [
+            "For motherboard issue, the laptop will be taken to the repair shop",
+            "The repair quote will be provided after the check-up",
+            "Visitation charges will be adjusted in the final quote",
+            "We don't repair commercial appliances"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "Macbook Repair",
+    "description": "Specialized repair and diagnostic services for MacBooks",
+    "image": "",
+    "planTypes": [
+      {
+        "planType": "Booking",
+        "services": [
+          {
+            "name": "Display Issue",
+            "subtitle": "45 mins",
+            "price": 699,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "MacBook screen repair and replacement",
+              "Retina display calibration"
+            ]
+          },
+          {
+            "name": "Keyboard Issue",
+            "subtitle": "30 mins",
+            "price": 599,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "MacBook keyboard repair or replacement",
+              "Key mechanism and backlight fixes"
+            ]
+          },
+          {
+            "name": "Touchpad Issue",
+            "subtitle": "40 mins",
+            "price": 599,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "MacBook trackpad repair and calibration",
+              "Force Touch functionality restoration"
+            ]
+          },
+          {
+            "name": "Charging/Power Issue",
+            "subtitle": "45 mins",
+            "price": 499,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "MacBook charging port and battery service",
+              "MagSafe connector repair"
+            ]
+          },
+          {
+            "name": "Overheating Issue",
+            "subtitle": "50 mins",
+            "price": 599,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "MacBook cooling system maintenance",
+              "Fan replacement and thermal management"
+            ]
+          },
+          {
+            "name": "Software/OS Related Issue/System Formatting",
+            "subtitle": "1.30 mins",
+            "price": 799,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "macOS installation and setup",
+              "Software compatibility and optimization"
+            ]
+          },
+          {
+            "name": "Port Issue",
+            "subtitle": "40 mins",
+            "price": 399,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Thunderbolt, USB-C, and other port repairs",
+              "Connection and data transfer testing"
+            ]
+          },
+          {
+            "name": "My System is Slow/Hanging Issue",
+            "subtitle": "45 mins",
+            "price": 399,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "macOS performance optimization",
+              "System cleanup and maintenance"
+            ]
+          },
+          {
+            "name": "Speaker/Camera/Internet Issue",
+            "subtitle": "40 mins",
+            "price": 299,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Audio and video system repairs",
+              "Network connectivity troubleshooting"
+            ]
+          },
+          {
+            "name": "Physical Damage",
+            "subtitle": "1.30 mins",
+            "price": 699,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "MacBook body and screen damage repair",
+              "Precision component replacement"
+            ]
+          }
+        ],
+        "additionalInfo": {
+          "howItWorks": [
+            "Check-up: The technician inspects your laptop & provides a diagnosis with a repair quote",
+            "Sourcing spare parts (if required): If needed, the technician will procure spare parts from the local market",
+            "Repair: The technician hands over the hard disk for data safety & completes the repair",
+            "Post Repair: The technician thoroughly cleans the area & surfaces after the repair",
+            "Payment: Pay the final repair amount, minus the booking fee already paid"
+          ],
+          "pleaseNotes": [
+            "For motherboard issue, the laptop will be taken to the repair shop",
+            "The repair quote will be provided after the check-up",
+            "Visitation charges will be adjusted in the final quote",
+            "We don't repair commercial appliances"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "Desktop Repair",
+    "description": "Comprehensive repair and upgrade services for desktop computers",
+    "image": "",
+    "planTypes": [
+      {
+        "planType": "Booking",
+        "services": [
+          {
+            "name": "Not Sure of the Issue/Other Issue",
+            "subtitle": "Diagnosis",
+            "price": 99,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis"
+            ]
+          },
+          {
+            "name": "Display Issue",
+            "subtitle": "45 mins",
+            "price": 599,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Monitor and graphics card troubleshooting",
+              "Display connection and cable testing"
+            ]
+          },
+          {
+            "name": "Keyboard Issue",
+            "subtitle": "30 mins",
+            "price": 499,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Keyboard replacement and repair",
+              "USB and connectivity troubleshooting"
+            ]
+          },
+          {
+            "name": "Touchpad Issue",
+            "subtitle": "40 mins",
+            "price": 499,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Mouse and pointing device repairs",
+              "USB port and driver issues"
+            ]
+          },
+          {
+            "name": "Charging/Power Issue",
+            "subtitle": "45 mins",
+            "price": 499,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Power supply unit testing and replacement",
+              "Electrical connection troubleshooting"
+            ]
+          },
+          {
+            "name": "Overheating Issue",
+            "subtitle": "50 mins",
+            "price": 499,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "CPU and case fan maintenance",
+              "Thermal paste application and cooling optimization"
+            ]
+          },
+          {
+            "name": "Software/OS Related Issue/System Formatting",
+            "subtitle": "1.30 mins",
+            "price": 599,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Operating system installation and setup",
+              "Driver installation and software optimization"
+            ]
+          },
+          {
+            "name": "Port Issue",
+            "subtitle": "40 mins",
+            "price": 299,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "USB, HDMI, and audio port repairs",
+              "Motherboard port replacement"
+            ]
+          },
+          {
+            "name": "My System is Slow/Hanging Issue",
+            "subtitle": "45 mins",
+            "price": 599,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Performance optimization and cleanup",
+              "Hardware and software diagnostics"
+            ]
+          },
+          {
+            "name": "Speaker/Camera/Internet Issue",
+            "subtitle": "40 mins",
+            "price": 199,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Audio system and webcam troubleshooting",
+              "Network adapter and connectivity fixes"
+            ]
+          },
+          {
+            "name": "Physical Damage",
+            "subtitle": "1.30 mins",
+            "price": 599,
+            "image": "",
+            "features": [
+              "Complete diagnosis to identify the issue before repair",
+              "Final repair cost will be shared after the diagnosis",
+              "Case and component damage assessment",
+              "Structural repair and replacement"
+            ]
+          }
+        ],
+        "additionalInfo": {
+          "howItWorks": [
+            "Check-up: The technician inspects your laptop & provides a diagnosis with a repair quote",
+            "Sourcing spare parts (if required): If needed, the technician will procure spare parts from the local market",
+            "Repair: The technician hands over the hard disk for data safety & completes the repair",
+            "Post Repair: The technician thoroughly cleans the area & surfaces after the repair",
+            "Payment: Pay the final repair amount, minus the booking fee already paid"
+          ],
+          "pleaseNotes": [
+            "For motherboard issue, the laptop will be taken to the repair shop",
+            "The repair quote will be provided after the check-up",
+            "Visitation charges will be adjusted in the final quote",
+            "We don't repair commercial appliances"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "Upgrade / Component Installation",
+    "description": "Hardware upgrade and component installation services",
+    "image": "",
+    "planTypes": [
+      {
+        "planType": "Booking",
+        "services": [
+          {
+            "name": "Graphics Card Installation",
+            "subtitle": "45 mins",
+            "price": 599,
+            "image": "",
+            "features": [
+              "Enhance visual performance for gaming or graphic-intensive tasks",
+              "Professional GPU installation and setup",
+              "Driver installation and optimization",
+              "Performance testing and validation"
+            ]
+          },
+          {
+            "name": "RAM Installation",
+            "subtitle": "40 mins",
+            "price": 799,
+            "image": "",
+            "features": [
+              "Improve your laptop's multitasking speed by adding more memory",
+              "Memory compatibility testing",
+              "Professional installation and configuration",
+              "System optimization after upgrade"
+            ]
+          },
+          {
+            "name": "Hard Disk Installation",
+            "subtitle": "60 mins",
+            "price": 599,
+            "image": "",
+            "features": [
+              "Boost performance with faster SSD drives for quicker boot-up and file access",
+              "Data migration from old drive",
+              "Professional installation and setup",
+              "System optimization for new storage"
+            ]
+          },
+          {
+            "name": "SMPS Installation",
+            "subtitle": "45 mins",
+            "price": 999,
+            "image": "",
+            "features": [
+              "Wiring & Connections: Proper wiring to ensure the stable operation of all components",
+              "Power supply unit installation",
+              "Cable management and organization",
+              "System stability testing"
+            ]
+          },
+          {
+            "name": "Mother Board Installation",
+            "subtitle": "1.30 mins",
+            "price": 599,
+            "image": "",
+            "features": [
+              "We'll help you choose the right motherboard for your system's specifications and install it",
+              "Component compatibility verification",
+              "Professional installation and setup",
+              "BIOS configuration and testing"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Service",
+    "description": "Maintenance and optimization services for computers",
+    "image": "",
+    "planTypes": [
+      {
+        "planType": "Booking",
+        "services": [
+          {
+            "name": "Windows Service",
+            "subtitle": "Maintenance",
+            "price": 599,
+            "image": "",
+            "features": [
+              "Memory optimisation",
+              "Internal & external deep cleaning",
+              "Spare parts & repair cost extra if needed",
+              "Performance optimization",
+              "System maintenance and tune-up"
+            ]
+          },
+          {
+            "name": "MacBook Service",
+            "subtitle": "Maintenance",
+            "price": 699,
+            "image": "",
+            "features": [
+              "Memory optimisation",
+              "Internal & external deep cleaning",
+              "Spare parts & repair cost extra if needed",
+              "macOS optimization",
+              "Hardware maintenance and inspection"
+            ]
+          },
+          {
+            "name": "Desktop Service",
+            "subtitle": "Maintenance",
+            "price": 599,
+            "image": "",
+            "features": [
+              "Memory optimisation",
+              "Internal & external deep cleaning",
+              "Spare parts & repair cost extra if needed",
+              "Component inspection and maintenance",
+              "System performance optimization"
+            ]
+          },
+          {
+            "name": "Gaming Laptop/Desktop Service",
+            "subtitle": "Maintenance",
+            "price": 799,
+            "image": "",
+            "features": [
+              "Memory optimisation",
+              "Internal & external deep cleaning",
+              "Spare parts & repair cost extra if needed",
+              "Gaming performance optimization",
+              "Cooling system maintenance",
+              "Graphics and CPU overclocking checks"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]
