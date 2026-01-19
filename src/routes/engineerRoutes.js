@@ -10,7 +10,8 @@ import {
     getAcceptedRequests,
     getRejectedRequests,
     updateWorkStatus,
-    getCompletedRequests
+    getCompletedRequests,
+    servicableLocation
 } from '../controllers/engineerController/requestController.js';
 import { authenticate, authenticateEngineer } from '../middleware/authMiddleWare.js';
 
@@ -40,5 +41,10 @@ router.get('/requests/accepted', authenticateEngineer, getAcceptedRequests);
 router.get('/requests/rejected', authenticateEngineer, getRejectedRequests);
 router.put('/requests/updateWorkStatus/:id', authenticateEngineer, updateWorkStatus);
 router.get('/requests/completed', authenticateEngineer, getCompletedRequests);
+
+// Vender-specific routes can be added here
+
+// router.post('/vendorOrder/request',getVendorRequests);
+router.get('/vendorOrder/serviceable',servicableLocation);
 
 export default router;

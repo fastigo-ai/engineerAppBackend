@@ -1,4 +1,7 @@
 import mongoose from 'mongoose';
+import { latLngToCell } from "h3-js";
+
+const H3_RESOLUTION = 8;
 
 // Engineer Schema
 const EngineerSchema = new mongoose.Schema({
@@ -28,11 +31,11 @@ const EngineerSchema = new mongoose.Schema({
     type: [String],
     default: []
   },
-  pincode: {
+  pincode : {
     type: String,
     trim: true
   },
-  categories:{
+  categories: {
     type: [String],
     default: []
   },
@@ -86,11 +89,57 @@ const EngineerSchema = new mongoose.Schema({
   completedJobs: {
     type: Number,
     default: 0
-  }
+  },
+  h3Index: {
+  type: String,
+  index: true 
+},
 }, {
   timestamps: true,
   collection: 'engineers'
 });
+
+EngineerSchema.pre("save", function () {
+  if (
+    this.isModified("location") &&
+    this.location?.coordinates?.length === 2
+  ) {
+    const [lng, lat] = this.location.coordinates;
+
+    this.h3Index = latLngToCell(lat, lng, H3_RESOLUTION);
+  }
+
+  
+});
+
+EngineerSchema.pre(
+  ["findOneAndUpdate", "updateOne", "updateMany"],
+  function () {
+    const update = this.getUpdate();
+
+    const location =
+      update?.location ||
+      update?.$set?.location;
+
+    if (
+      location?.coordinates &&
+      location.coordinates.length === 2
+    ) {
+      const [lng, lat] = location.coordinates;
+
+      this.setUpdate({
+        ...update,
+        $set: {
+          ...update.$set,
+          h3Index: latLngToCell(lat, lng, H3_RESOLUTION),
+        },
+      });
+    }
+
+    
+  }
+);
+
 
 // Index for geospatial queries
 EngineerSchema.index({ location: '2dsphere' });
