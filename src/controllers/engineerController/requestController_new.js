@@ -1,7 +1,8 @@
-import { Order } from '../../models/orderSchema.js';
-import User from '../../models/user.js';
-import { Engineer } from '../../models/engineersModal.js';
-import STATUS_CODES from '../../constants/statusCodes.js';
+import { Order } from "../../models/orderSchema.js";
+import User from "../../models/user.js";
+import { Engineer } from "../../models/engineersModal.js";
+import STATUS_CODES from "../../constants/statusCodes.js"; 
+import { latLngToCell, gridDisk } from "h3-js";
 
 // Update Engineer Location
 export const updateEngineerLocation = async (req, res) => {
@@ -87,7 +88,6 @@ export const getNearbyRequests = async (req, res) => {
     try {
         const engineerId = req.user.id;
         const { latitude, longitude, maxDistance = 50000 } = req.query; // maxDistance in meters (default 50km)
-        console.log(longitude, latitude, "longitudedewfdwfewfwe");
         let coordinates = [];
 
         // If coordinates provided in query, use them
@@ -110,8 +110,6 @@ export const getNearbyRequests = async (req, res) => {
             });
         }
 
-        console.log(coordinates, "    coordinates");
-
         const requests = await Order.find({
             status: { $in: ['created', 'paid'] },
             assignedEngineer: null,
@@ -126,7 +124,10 @@ export const getNearbyRequests = async (req, res) => {
                     $maxDistance: parseInt(maxDistance)
                 }
             }
-        }).populate('userId', 'name phone address').populate('servicePlan', 'name');
+        })
+            .populate('userId', 'name phone address')
+            .populate('servicePlan', 'name')
+            .populate('servicePlans', 'name');
         console.log(requests, "    requests");
         res.status(STATUS_CODES.SUCCESS || 200).json({
             success: true,
@@ -256,36 +257,64 @@ export const rejectRequest = async (req, res) => {
             });
         }
         console.log('✅ Order found:', order._id);
+        console.log('Order acceptedBy:', order.acceptedBy);
+        console.log('Order assignedEngineer:', order.assignedEngineer);
         console.log('Order rejectedBy:', order.rejectedBy);
 
-        // Check if already assigned (accepted by someone)
-        if (order.acceptedBy || order.assignedEngineer) {
-            console.log('❌ Order already assigned');
+        const engineerIdString = engineerId.toString();
+
+        // Check if this engineer is the one who accepted the order
+        const isAcceptedByThisEngineer = order.acceptedBy && order.acceptedBy.toString() === engineerIdString;
+        const isAssignedToThisEngineer = order.assignedEngineer && order.assignedEngineer.toString() === engineerIdString;
+
+        if (isAcceptedByThisEngineer || isAssignedToThisEngineer) {
+            console.log('📝 Engineer is rejecting their own accepted order...');
+
+            // Remove from acceptedBy and assignedEngineer
+            order.acceptedBy = null;
+            order.assignedEngineer = null;
+
+            // Reset order status to make it available for other engineers
+            order.orderStatus = 'Upcoming';
+            order.work_status = 'Upcoming';
+
+            // Add to rejectedBy array if not already present
+            const rejectedByStrings = order.rejectedBy.map(id => id.toString());
+            if (!rejectedByStrings.includes(engineerIdString)) {
+                order.rejectedBy.push(engineerId);
+                console.log('✅ Engineer removed from acceptedBy/assignedEngineer and added to rejectedBy');
+            } else {
+                console.log('✅ Engineer removed from acceptedBy/assignedEngineer (already in rejectedBy)');
+            }
+        } else if (order.acceptedBy || order.assignedEngineer) {
+            // Order is assigned to a different engineer
+            console.log('❌ Order already assigned to another engineer');
             return res.status(STATUS_CODES.BAD_REQUEST).json({
                 success: false,
                 message: 'Order already accepted by another engineer. Cannot reject.'
             });
-        }
-
-        console.log('📝 Processing REJECTION...');
-        // Convert ObjectIds to strings for comparison
-        const rejectedByStrings = order.rejectedBy.map(id => id.toString());
-        const engineerIdString = engineerId.toString();
-
-        console.log('Current rejectedBy array:', rejectedByStrings);
-        console.log('Engineer attempting to reject:', engineerIdString);
-
-        // Add to rejectedBy array if not already present
-        if (!rejectedByStrings.includes(engineerIdString)) {
-            order.rejectedBy.push(engineerId);
-            console.log('✅ Engineer added to rejectedBy array');
         } else {
-            console.log('ℹ️ Engineer already in rejectedBy array');
-            return res.status(STATUS_CODES.SUCCESS).json({
-                success: true,
-                message: 'Order already rejected by you',
-                data: order
-            });
+            // Order is not assigned to anyone, normal rejection
+            console.log('📝 Processing normal REJECTION...');
+
+            // Convert ObjectIds to strings for comparison
+            const rejectedByStrings = order.rejectedBy.map(id => id.toString());
+
+            console.log('Current rejectedBy array:', rejectedByStrings);
+            console.log('Engineer attempting to reject:', engineerIdString);
+
+            // Add to rejectedBy array if not already present
+            if (!rejectedByStrings.includes(engineerIdString)) {
+                order.rejectedBy.push(engineerId);
+                console.log('✅ Engineer added to rejectedBy array');
+            } else {
+                console.log('ℹ️ Engineer already in rejectedBy array');
+                return res.status(STATUS_CODES.SUCCESS).json({
+                    success: true,
+                    message: 'Order already rejected by you',
+                    data: order
+                });
+            }
         }
 
         // Keep orderStatus as 'Upcoming' so other engineers can still accept it
@@ -462,8 +491,33 @@ export const updateRequestStatus = async (req, res) => {
             order.work_status = 'Completed';
             console.log('✅ Order fields updated for completion');
         } else {
-            // For Accepted and Rejected statuses, check if already assigned
-            if (order.acceptedBy || order.assignedEngineer) {
+            // For Accepted and Rejected statuses
+            const engineerIdString = engineerId.toString();
+            const isAcceptedByThisEngineer = order.acceptedBy && order.acceptedBy.toString() === engineerIdString;
+            const isAssignedToThisEngineer = order.assignedEngineer && order.assignedEngineer.toString() === engineerIdString;
+
+            // Special case: Engineer is rejecting their own accepted order
+            if (status === 'Rejected' && (isAcceptedByThisEngineer || isAssignedToThisEngineer)) {
+                console.log('📝 Engineer is rejecting their own accepted order...');
+
+                // Remove from acceptedBy and assignedEngineer
+                order.acceptedBy = null;
+                order.assignedEngineer = null;
+
+                // Reset order status to make it available for other engineers
+                order.orderStatus = 'Upcoming';
+                order.work_status = 'Upcoming';
+
+                // Add to rejectedBy array if not already present
+                const rejectedByStrings = order.rejectedBy.map(id => id.toString());
+                if (!rejectedByStrings.includes(engineerIdString)) {
+                    order.rejectedBy.push(engineerId);
+                    console.log('✅ Engineer removed from acceptedBy/assignedEngineer and added to rejectedBy');
+                } else {
+                    console.log('✅ Engineer removed from acceptedBy/assignedEngineer (already in rejectedBy)');
+                }
+            } else if (order.acceptedBy || order.assignedEngineer) {
+                // Order is assigned to someone (and not the current engineer trying to reject)
                 console.log('❌ Order already assigned');
                 console.log('acceptedBy:', order.acceptedBy);
                 console.log('assignedEngineer:', order.assignedEngineer);
@@ -475,8 +529,9 @@ export const updateRequestStatus = async (req, res) => {
                         assignedEngineer: order.assignedEngineer
                     }
                 });
+            } else {
+                console.log('✅ Order is available for assignment');
             }
-            console.log('✅ Order is available for assignment');
 
             if (status === 'Accepted') {
                 console.log('📝 Processing ACCEPTANCE...');
@@ -498,8 +553,9 @@ export const updateRequestStatus = async (req, res) => {
                 order.work_status = 'Accepted'; // Update work_status as well
                 console.log('✅ Order fields updated for acceptance');
                 console.log('✅ Engineer saved in acceptedBy:', engineerId);
-            } else if (status === 'Rejected') {
-                console.log('📝 Processing REJECTION...');
+            } else if (status === 'Rejected' && !isAcceptedByThisEngineer && !isAssignedToThisEngineer) {
+                // Normal rejection (not un-accepting own order)
+                console.log('📝 Processing normal REJECTION...');
                 // Convert ObjectIds to strings for comparison
                 const rejectedByStrings = order.rejectedBy.map(id => id.toString());
                 const engineerIdString = engineerId.toString();
@@ -680,4 +736,223 @@ export const getCompletedRequests = async (req, res) => {
             message: error.message
         });
     }
+};
+
+const toRad = (value) => (value * Math.PI) / 180;
+
+const getDistanceInMeters = (lat1, lon1, lat2, lon2) => {
+  const R = 6371000;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) ** 2;
+
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+};
+
+export const servicableLocation = async (req, res) => {
+  try {
+    const { project_id, calls } = req.body;
+
+    if (!Array.isArray(calls) || calls.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Calls array is required and cannot be empty",
+      });
+    }
+
+    const SERVICE_RADIUS = 20000; // 20 km
+    const H3_RESOLUTION = 8;
+    const RING_SIZE = 22;
+
+    const callMap = new Map();
+    const allRequiredCells = new Set();
+
+    /* ----------------------------------------------------
+       STEP 1: PREPARE H3 SEARCH AREAS
+    ---------------------------------------------------- */
+    for (const call of calls) {
+      const { call_id, lat, lng } = call;
+
+      if (typeof lat !== "number" || typeof lng !== "number") continue;
+
+      try {
+        const centerCell = latLngToCell(lat, lng, H3_RESOLUTION);
+        const lookupCells = gridDisk(centerCell, RING_SIZE);
+
+        callMap.set(call_id, { lat, lng, lookupCells });
+
+        for (const cell of lookupCells) {
+          allRequiredCells.add(cell);
+        }
+      } catch (err) {
+        console.error(`H3 error for call ${call_id}`, err);
+      }
+    }
+
+    /* ----------------------------------------------------
+       STEP 2: SINGLE FAST DB QUERY
+    ---------------------------------------------------- */
+    const availableEngineers = await Engineer.find({
+      isActive: true,
+      isAvailable: true,
+      isDeleted: false,
+      isBlocked: false,
+      isSuspended: false,
+      h3Index: { $in: Array.from(allRequiredCells) }
+    }).select("h3Index location").lean();
+
+    /* ----------------------------------------------------
+       STEP 3: GROUP ENGINEERS BY H3 CELL
+    ---------------------------------------------------- */
+    const cellToEngineers = new Map();
+
+    for (const eng of availableEngineers) {
+      if (!cellToEngineers.has(eng.h3Index)) {
+        cellToEngineers.set(eng.h3Index, []);
+      }
+      cellToEngineers.get(eng.h3Index).push(eng);
+    }
+
+    /* ----------------------------------------------------
+       STEP 4: FINAL SERVICEABILITY CHECK (EXACT DISTANCE)
+    ---------------------------------------------------- */
+    const serviceable = [];
+    const non_serviceable = [];
+
+    for (const call of calls) {
+      const data = callMap.get(call.call_id);
+
+      if (!data) {
+        non_serviceable.push({ call_id: call.call_id, reason: "Invalid coordinates" });
+        continue;
+      }
+
+      const { lat, lng, lookupCells } = data;
+      let found = false;
+
+      // Only check engineers inside candidate cells
+      for (const cell of lookupCells) {
+        const engineersInCell = cellToEngineers.get(cell);
+        if (!engineersInCell) continue;
+
+        for (const eng of engineersInCell) {
+          const [engLng, engLat] = eng.location.coordinates;
+
+          const distance = getDistanceInMeters(lat, lng, engLat, engLng);
+
+          if (distance <= SERVICE_RADIUS) {
+            found = true;
+            break;
+          }
+        }
+
+        if (found) break;
+      }
+
+      if (found) {
+        serviceable.push({ call_id: call.call_id });
+      } else {
+        non_serviceable.push({ call_id: call.call_id });
+      }
+    }
+
+    /* ----------------------------------------------------
+       STEP 5: RESPONSE
+    ---------------------------------------------------- */
+    return res.status(200).json({
+      success: true,
+      project_id,
+      meta: {
+        total_calls: calls.length,
+        serviceable_count: serviceable.length,
+        non_serviceable_count: non_serviceable.length,
+      },
+      serviceable,
+      non_serviceable,
+    });
+
+  } catch (err) {
+    console.error("Bulk Serviceability Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+export const getVendorRequests = async (req, res) => {
+  try {
+    const { location, orderId } = req.body;
+
+    // 1. Extract coordinates from the location object
+    // Expecting: { type: "Point", coordinates: [lng, lat] }
+    if (!location?.coordinates || location.coordinates.length !== 2) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid location format. Expected { type: 'Point', coordinates: [lng, lat] }"
+      });
+    }
+
+    const [lng, lat] = location.coordinates;
+    const H3_RESOLUTION = 8;
+    const MAX_RADIUS_KM = 25;
+    
+    // 25km radius at Res 8 is approx 28-30 rings
+    const RING_SIZE = 28; 
+
+    /* ----------------------------------------------------
+       STEP 2: GENERATE H3 SEARCH AREA
+    ---------------------------------------------------- */
+    // h3-js uses [lat, lng], but your input is [lng, lat]
+    const orderCell = latLngToCell(lat, lng, H3_RESOLUTION);
+    const searchCells = gridDisk(orderCell, RING_SIZE);
+
+    /* ----------------------------------------------------
+       STEP 3: DB QUERY (INDEXED H3 LOOKUP)
+    ---------------------------------------------------- */
+    const nearbyEngineers = await Engineer.find({
+      isActive: true,
+      isAvailable: true,
+      isDeleted: false,
+      isBlocked: false,
+      isSuspended: false,
+      h3Index: { $in: searchCells } // Fast string index match
+    })
+    .select("_id name mobile h3Index location")
+    .lean();
+
+    /* ----------------------------------------------------
+       STEP 4: PRECISION FILTERING & SORTING
+    ---------------------------------------------------- */
+    const matchedEngineers = nearbyEngineers
+      .map(eng => {
+        const [eLng, eLat] = eng.location.coordinates;
+        const dist = getDistanceInMeters(lat, lng, eLat, eLng);
+        return { ...eng, distanceInMeters: dist };
+      })
+      .filter(eng => eng.distanceInMeters <= MAX_RADIUS_KM * 1000)
+      .sort((a, b) => a.distanceInMeters - b.distanceInMeters);
+
+    /* ----------------------------------------------------
+       STEP 5: RESPONSE
+    ---------------------------------------------------- */
+    return res.status(200).json({
+      success: true,
+      matchType: "H3_GEO_MATCH",
+      results: {
+        totalFound: matchedEngineers.length,
+        engineers: matchedEngineers
+      },
+      orderId
+    });
+
+  } catch (error) {
+    console.error("Match Error:", error);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
 };

@@ -30,7 +30,7 @@ console.log('Firebase connected:', isFirebaseConnected);
 
 // Default route (root)
 app.get('/', (req, res) => {
-  res.send('🚀 Door2fy Backend is running successfully!');
+  res.send('Door2fy Backend is running successfully!');
 });
 
 // Health check route
@@ -55,7 +55,7 @@ app.use('/api/engineer/auth', engineerAuthRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('❌ Server Error:', err.stack);
+  console.error('Server Error:', err.stack);
   res.status(500).json({ error: 'Something went wrong!' });
 });
 
@@ -63,5 +63,5 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || config.port || 8080;
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });

@@ -10,10 +10,10 @@ let isFirebaseConnected = false;
     }),
   });
 
-  console.log("🚀 Firebase Admin: ✅ Connected successfully!");
+  console.log("🚀 Firebase Admin: Connected successfully!");
   isFirebaseConnected = true;
 } catch (err) {
-  console.error("🚨 Firebase Admin: ❌ Initialization failed!");
+  console.error("🚨 Firebase Admin:  Initialization failed!");
   console.error("Reason:", err.message);
   isFirebaseConnected = false;
 }
