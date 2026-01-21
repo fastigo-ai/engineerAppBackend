@@ -1,6 +1,6 @@
 import { Engineer } from "../../models/engineersModal.js";
 import VendorOrder from "../../models/vendorOrderModal.js";
-import { createAndMatchVendorOrder } from "../../services/vendorRequestService.js";
+import { createAndMatchVendorOrder, acceptOrderService } from "../../services/vendorRequestService.js";
 import { getDistanceInMeters } from "../../utils/distance.js";
 import { latLngToCell, gridDisk } from "h3-js";
 
@@ -186,6 +186,51 @@ export const getVendorRequests = async (req, res) => {
     });
   }
 };
+
+export const acceptVendorOrder = async (req, res) => {
+  try {
+    const { orderId, distance } = req.body;
+    const engineerId = req.user.id;
+
+    // Call the service
+    const order = await acceptOrderService({
+      orderId,
+      engineerId,
+      distance
+    });
+
+    // 🔔 SOCKET (Handle after successful service execution)
+    const io = getIO();
+    const orderRoom = `order_${order._id}`;
+
+    // Notify winner
+    io.to(engineerId.toString()).emit("ORDER_CONFIRMED", { 
+      order_id: order._id 
+    });
+
+    // Close for everyone else
+    io.to(orderRoom).emit("ORDER_CLOSED", { 
+      order_id: order._id 
+    });
+
+    return res.status(200).json({ 
+      success: true, 
+      order 
+    });
+
+  } catch (err) {
+    console.error("Accept Order Controller Error:", err);
+    
+    // Send specific status code if thrown by service, else default to 500
+    const statusCode = err.status || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: err.message || "Internal server error"
+    });
+  }
+};
+
+
 
 
 

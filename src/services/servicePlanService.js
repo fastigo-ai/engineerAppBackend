@@ -236,3 +236,4 @@ export const createServicePlanService = async (data, file) => {
 export const getAllCategoryService = async () => {
   return getAllCategoryRepository();
 };
+

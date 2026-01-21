@@ -23,6 +23,7 @@ import {
 import {
     getVendorRequests,
     servicableLocation,
+    acceptVendorOrder,
 } from "../controllers/engineerController/venderRequestController.js";
 import {
   authenticate,
@@ -67,5 +68,6 @@ router.get("/requests/completed", authenticateEngineer, getCompletedRequests);
 
 router.post("/vendorOrder/request", getVendorRequests);
 router.get("/vendorOrder/serviceable", servicableLocation);
+router.post("/vendorOrder/accept", authenticateEngineer, acceptVendorOrder);
 
 export default router;

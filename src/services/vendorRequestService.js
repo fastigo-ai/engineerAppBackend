@@ -3,6 +3,7 @@ import { Engineer } from "../models/engineersModal.js";
 import { getDistanceInMeters } from "../utils/distance.js";
 import { getIO } from "../config/socket.js";
 import VendorOrder from "../models/vendorOrderModal.js";
+import axios from 'axios';
 
 /* 🔔 SOCKET EMITTER */
 
@@ -22,6 +23,7 @@ const notifyEngineers = async (engineers, order) => {
       address: order.complete_address,
       distance: eng.distanceKm,
       support_type: order.support_type,
+      order_price:" To Be Decided",
       timer: 30
     });
 
@@ -176,64 +178,56 @@ export const createAndMatchVendorOrder = async (payload) => {
   };
 };
 
-
-
-export const acceptOrder = async (req, res) => {
-  try {
-    const { orderId } = req.body;
-    const engineerId = req.user.id;
-
-    const order = await VendorOrder.findOneAndUpdate(
-      {
-        _id: orderId,
-        status: { $in: ["PENDING", "MATCHING"] }
-      },
-      {
-        $set: {
-          status: "ACCEPTED",
-          assigned_engineer_id: engineerId,
-          accepted_at: new Date()
-        }
-      },
-      { new: true }
-    );
-
-    if (!order) {
-      return res.status(400).json({
-        success: false,
-        message: "Order already taken or expired"
-      });
-    }
-
-    const io = getIO();
-    const orderRoom = `order_${order._id}`;
-
-    // ✅ Confirm winner ONLY
-    io.to(engineerId.toString()).emit("ORDER_CONFIRMED", {
-      order_id: order._id
-    });
-
-    // ✅ Close popup ONLY for engineers who saw this order
-    io.to(orderRoom).emit("ORDER_CLOSED", {
-      order_id: order._id
-    });
-
-    io.in(orderRoom).socketsLeave(orderRoom);
-    console.log(`All engineers left ${orderRoom}`);
-
-    return res.status(200).json({
-      success: true,
-      order
-    });
-
-  } catch (err) {
-    console.error("Accept Order Error:", err);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
+export const acceptOrderService = async ({ orderId, engineerId, distance }) => {
+  // 1. Fetch Engineer
+  const engineer = await Engineer.findById(engineerId).lean();
+  if (!engineer) {
+    throw { status: 404, message: "Engineer not found" };
   }
+
+  // 2. Atomic Update (Locking the order)
+  const order = await VendorOrder.findOneAndUpdate(
+    {
+      _id: orderId,
+      status: { $in: ["PENDING", "MATCHING"] },
+      notified_engineers: engineerId.toString()
+    },
+    {
+      $set: {
+        status: "ACCEPTED",
+        assigned_engineer_id: engineerId,
+        accepted_at: new Date(),
+        payment_status: "PENDING",
+        work_status: "IN_PROGRESS"
+      }
+    },
+    { new: true }
+  );
+
+  if (!order) {
+    throw { status: 409, message: "Order already taken or not assigned to you" };
+  }
+
+  // 3. Wait for Vendor Backend (Synchronous per your requirement)
+  const payload = {
+    call_id: order.call_id,
+    status: "ACCEPTED",
+    engineer_id: engineer.engineerId,
+    engineer_name: engineer.name,
+    engineer_contact: engineer.phone,
+    distance,
+    accepted_at: order.accepted_at
+  };
+
+    await axios.post(
+      "https://vendor-backend-1t05.onrender.com/engineer/assignment-result",
+      payload,
+    );
+  
+
+  return order;
 };
+
 
 export const rejectOrder = async (req, res) => {
   try {

@@ -33,6 +33,11 @@ const VendorOrderSchema = new mongoose.Schema(
       required: true,
     },
 
+    order_price: {
+      type: Number,
+      default: 0,
+    },
+
     /* -------- Geo Location -------- */
     location: {
       type: { type: String, enum: ["Point"], default: "Point" },
@@ -42,8 +47,14 @@ const VendorOrderSchema = new mongoose.Schema(
     /* -------- Assignment -------- */
     status: {
       type: String,
-      enum: ["PENDING", "MATCHING", "ACCEPTED", "EXPIRED", "CANCELLED"],
+      enum: ["PENDING", "MATCHING", "ACCEPTED", "EXPIRED", "CANCELLED","COMPLETED"],
       default: "PENDING",
+      index: true,
+    },
+    work_status: {
+      type: String,
+      enum: ["NOT_STARTED", "IN_PROGRESS", "COMPLETED"],
+      default: "NOT_STARTED",
       index: true,
     },
     assigned_engineer_id: {
@@ -70,6 +81,28 @@ const VendorOrderSchema = new mongoose.Schema(
     expires_at: {
       type: Date,
       index: { expireAfterSeconds: 0 },
+    },
+
+    payout_amount: {
+      type: Number,
+      default: 0,
+    },
+
+    payment_status: {
+      type: String,
+      enum: ["PENDING", "PAID"],
+      default: "PENDING",
+      index: true,
+    },
+
+    paid_at: {
+      type: Date,
+      default: null,
+    },
+
+    completed_at: {
+      type: Date,
+      default: null,
     },
   },
   {

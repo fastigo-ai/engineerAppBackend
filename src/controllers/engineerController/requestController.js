@@ -233,7 +233,7 @@ export const acceptRequest = async (req, res) => {
             error: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
-};
+}; 
 
 // Reject Request
 export const rejectRequest = async (req, res) => {
