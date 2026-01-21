@@ -87,7 +87,7 @@ const engineers = await Engineer.find({
       const [eLng, eLat] = e.location.coordinates;
       const distance = getDistanceInMeters(orderLat, orderLng, eLat, eLng);
 
-    //   console.log(`Checking Eng: ${e.name} | Dist: ${(distance / 1000).toFixed(2)}km | H3: ${e.h3Index}`);
+      console.log(`Checking Eng: ${e.name} | Dist: ${(distance / 1000).toFixed(2)}km | H3: ${e.h3Index}`);
 
       return {
         engineer_id: e._id,
