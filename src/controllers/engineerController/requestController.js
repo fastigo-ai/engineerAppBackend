@@ -2,7 +2,6 @@ import { Order } from "../../models/orderSchema.js";
 import User from "../../models/user.js";
 import { Engineer } from "../../models/engineersModal.js";
 import STATUS_CODES from "../../constants/statusCodes.js"; 
-import { latLngToCell, gridDisk } from "h3-js";
 
 // Update Engineer Location
 export const updateEngineerLocation = async (req, res) => {
@@ -146,7 +145,7 @@ export const getNearbyRequests = async (req, res) => {
 // Accept Request
 export const acceptRequest = async (req, res) => {
     try {
-        const { id } = req.params; // Order ID
+        const { id } = req.params;
         const engineerId = req.user.id;
 
         console.log('=== ACCEPT REQUEST ===');

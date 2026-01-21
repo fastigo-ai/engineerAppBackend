@@ -2,6 +2,8 @@ import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import config from './config/config.js';
+import { initSocket } from './config/socket.js';
+import { createServer } from 'http';
 import logger from './middleware/logger.js';
 import serviceRoutes from './routes/serviceRoutes.js';
 import authRoutes from './routes/authRoutes.js';
@@ -19,6 +21,8 @@ connectDB();
 
 // Initialize Express app
 const app = express();
+const httpServer = createServer(app);
+initSocket(httpServer);
 
 // Middleware
 app.use(cors({ origin: '*', credentials: true }));
@@ -62,6 +66,6 @@ app.use((err, req, res, next) => {
 // Start server
 const PORT = process.env.PORT || config.port || 8080;
 
-app.listen(PORT, '0.0.0.0', () => {
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });

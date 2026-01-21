@@ -956,3 +956,217 @@ export const getVendorRequests = async (req, res) => {
     return res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
+
+
+
+// export const getVendorRequests = async (req, res) => {
+//   try {
+//     const payload = req.body;
+
+//     const {
+//       vendor_id,
+//       call_id,
+//       location
+//     } = payload;
+
+//     if (!vendor_id || !call_id) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "vendor_id and call_id are required"
+//       });
+//     }
+
+//     // 🔒 Location validation
+//     if (
+//       !location ||
+//       !Array.isArray(location.coordinates) ||
+//       location.coordinates.length !== 2
+//     ) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid location format"
+//       });
+//     }
+
+//     /* ==================================================
+//        1️⃣ ATOMIC CREATE + LOCK (NO RACE CONDITION)
+//     ================================================== */
+
+//     const order = await VendorOrder.findOneAndUpdate(
+//       { vendor_id, call_id },
+//       {
+//         $setOnInsert: {
+//           vendor_id,
+//           project_id: payload.project_id,
+//           call_id,
+
+//           state_name: payload.state,
+//           branch_name: payload.branch_name,
+//           branch_code: payload.branch_code,
+
+//           complete_address: payload.address,
+//           pincode: payload.pincode,
+
+//           assets_count: payload.asset_count || 1,
+//           support_type: payload.support_type,
+//           asset_type: payload.asset_type,
+
+//           l1_support_name: payload.l1_support_name,
+//           l1_support_number: payload.l1_support_number,
+
+//           location,
+//           status: "PENDING"
+//         },
+//       },
+//       { upsert: true, new: true }
+//     );
+
+   
+
+//     /* ==================================================
+//        2️⃣ MATCH ENGINEERS
+//     ================================================== */
+
+//     const matchedEngineers = await matchEngineers({ location: order.location });
+
+    
+
+//     if (!matchedEngineers.length) {
+//       await VendorOrder.findByIdAndUpdate(order._id, {
+//         status: "EXPIRED",
+//         failure_reason: "NO_ENGINEERS_AVAILABLE"
+//       });
+
+//       return res.status(200).json({
+//         success: false,
+//         message: "No engineers available",
+//         orderId: order._id,
+//       });
+//     }
+
+//     /* ==================================================
+//        3️⃣ ASYNC NOTIFICATION
+//     ================================================== */
+
+//     const io = getIO();
+    
+//     matchedEngineers.forEach((engineer) => {
+//       // Send to the private room of the engineer
+//       // room name = engineer_id (string)
+//       io.to(engineer.engineer_id.toString()).emit("NEW_ORDER_REQUEST", {
+//         order_id: order._id,
+//         address: order.complete_address,
+//         distance: engineer.distanceKm,
+//         support_type: order.support_type,
+//         timer: 30 // Tell the app to show a 30s countdown
+//       });
+//     });
+
+//     return res.status(200).json({
+//       success: true,
+//       matchType: "H3_GEO_MATCH",
+//       orderId: order._id,
+//       matchedEngineers,
+//       results: {
+//         totalFound: matchedEngineers.length
+//       }
+//     });
+
+//   } catch (err) {
+//     console.error("Match Error:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Internal server error"
+//     });
+//   }
+// };
+
+
+// export const getVendorRequests = async (req, res) => {
+//   try {
+//     const { location, orderId } = req.body;
+
+//     if (
+//       !location?.coordinates ||
+//       location.coordinates.length !== 2
+//     ) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid location format"
+//       });
+//     }
+
+//     const [lng, lat] = location.coordinates;
+
+//     if (
+//       lat < -90 || lat > 90 ||
+//       lng < -180 || lng > 180
+//     ) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid latitude or longitude"
+//       });
+//     }
+
+//     const H3_RESOLUTION = 8;
+//     const MAX_RADIUS_KM = 25;
+
+//     // Correct ring size for 25km at res 8
+//     const RING_SIZE = Math.ceil((MAX_RADIUS_KM * 1000) / 460);
+
+//     /* ------------------ H3 SEARCH ------------------ */
+//     const orderCell = latLngToCell(lat, lng, H3_RESOLUTION);
+//     const searchCells = gridDisk(orderCell, RING_SIZE);
+
+//     /* ------------------ DB QUERY ------------------ */
+//     const engineers = await Engineer.find({
+//       isActive: true,
+//       isAvailable: true,
+//       isDeleted: false,
+//       isBlocked: false,
+//       isSuspended: false,
+//       h3Index: { $in: searchCells }
+//     })
+//       .select("_id name mobile location h3Index")
+//       .lean();
+
+//     if (!engineers.length) {
+//       return res.json({
+//         success: true,
+//         results: { totalFound: 0, engineers: [] },
+//         orderId
+//       });
+//     }
+
+//     /* ------------------ PRECISE FILTER ------------------ */
+//     const matchedEngineers = engineers
+//       .map(e => {
+//         const [eLng, eLat] = e.location.coordinates;
+//         return {
+//           ...e,
+//           distanceInMeters: getDistanceInMeters(
+//             lat, lng, eLat, eLng
+//           )
+//         };
+//       })
+//       .filter(e => e.distanceInMeters <= MAX_RADIUS_KM * 1000)
+//       .sort((a, b) => a.distanceInMeters - b.distanceInMeters);
+
+//     return res.json({
+//       success: true,
+//       matchType: "H3_GEO_MATCH",
+//       results: {
+//         totalFound: matchedEngineers.length,
+//         engineers: matchedEngineers
+//       },
+//       orderId
+//     });
+
+//   } catch (error) {
+//     console.error("Match Error:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Internal server error"
+//     });
+//   }
+// };

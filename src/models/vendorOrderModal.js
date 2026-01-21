@@ -25,18 +25,18 @@ const VendorOrderSchema = new mongoose.Schema(
     support_type: {
       type: String,
       enum: ["pm_activity", "breakfix", "on_call"],
-      required: true
+      required: true,
     },
     asset_type: {
       type: String,
       enum: ["Laptop", "Printer", "Network", "ATM"],
-      required: true
+      required: true,
     },
 
     /* -------- Geo Location -------- */
     location: {
       type: { type: String, enum: ["Point"], default: "Point" },
-      coordinates: { type: [Number], required: true }
+      coordinates: { type: [Number], required: true },
     },
 
     /* -------- Assignment -------- */
@@ -44,14 +44,20 @@ const VendorOrderSchema = new mongoose.Schema(
       type: String,
       enum: ["PENDING", "MATCHING", "ACCEPTED", "EXPIRED", "CANCELLED"],
       default: "PENDING",
-      index: true
+      index: true,
     },
     assigned_engineer_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Engineer",
-      default: null
+      default: null,
     },
-
+    notified_engineers: [String],
+    rejected_engineers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Engineer",
+      },
+    ],
     locked_at: Date,
     match_attempts: { type: Number, default: 0 },
     failure_reason: String,
@@ -63,20 +69,17 @@ const VendorOrderSchema = new mongoose.Schema(
     /* -------- Expiry -------- */
     expires_at: {
       type: Date,
-      index: { expireAfterSeconds: 0 }
-    }
+      index: { expireAfterSeconds: 0 },
+    },
   },
   {
-    timestamps: { createdAt: "created_at", updatedAt: "updated_at" }
-  }
+    timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
+  },
 );
 
 /* -------- Indexes -------- */
 VendorOrderSchema.index({ location: "2dsphere" });
 VendorOrderSchema.index({ status: 1, created_at: -1 });
-VendorOrderSchema.index(
-  { vendor_id: 1, call_id: 1 },
-  { unique: true }
-);
+VendorOrderSchema.index({ vendor_id: 1, call_id: 1 }, { unique: true });
 
 export default mongoose.model("VendorOrder", VendorOrderSchema);

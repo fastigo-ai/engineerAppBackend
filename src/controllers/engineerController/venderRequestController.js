@@ -1,23 +1,9 @@
 import { Engineer } from "../../models/engineersModal.js";
 import VendorOrder from "../../models/vendorOrderModal.js";
-import { matchEngineers } from "../../services/vendorRequestService.js";
+import { createAndMatchVendorOrder } from "../../services/vendorRequestService.js";
 import { getDistanceInMeters } from "../../utils/distance.js";
 import { latLngToCell, gridDisk } from "h3-js";
-const toRad = (value) => (value * Math.PI) / 180;
 
-// const getDistanceInMeters = (lat1, lon1, lat2, lon2) => {
-//   const R = 6371000;
-//   const dLat = toRad(lat2 - lat1);
-//   const dLon = toRad(lon2 - lon1);
-
-//   const a =
-//     Math.sin(dLat / 2) ** 2 +
-//     Math.cos(toRad(lat1)) *
-//       Math.cos(toRad(lat2)) *
-//       Math.sin(dLon / 2) ** 2;
-
-//   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-// };
 
 export const servicableLocation = async (req, res) => {
   try {
@@ -152,13 +138,7 @@ export const servicableLocation = async (req, res) => {
 
 export const getVendorRequests = async (req, res) => {
   try {
-    const payload = req.body;
-
-    const {
-      vendor_id,
-      call_id,
-      location
-    } = payload;
+    const { vendor_id, call_id, location } = req.body;
 
     if (!vendor_id || !call_id) {
       return res.status(400).json({
@@ -167,7 +147,6 @@ export const getVendorRequests = async (req, res) => {
       });
     }
 
-    // 🔒 Location validation
     if (
       !location ||
       !Array.isArray(location.coordinates) ||
@@ -179,75 +158,24 @@ export const getVendorRequests = async (req, res) => {
       });
     }
 
-    /* ==================================================
-       1️⃣ ATOMIC CREATE + LOCK (NO RACE CONDITION)
-    ================================================== */
+    const result = await createAndMatchVendorOrder(req.body);
 
-    const order = await VendorOrder.findOneAndUpdate(
-      { vendor_id, call_id },
-      {
-        $setOnInsert: {
-          vendor_id,
-          project_id: payload.project_id,
-          call_id,
-
-          state_name: payload.state,
-          branch_name: payload.branch_name,
-          branch_code: payload.branch_code,
-
-          complete_address: payload.address,
-          pincode: payload.pincode,
-
-          assets_count: payload.asset_count || 1,
-          support_type: payload.support_type,
-          asset_type: payload.asset_type,
-
-          l1_support_name: payload.l1_support_name,
-          l1_support_number: payload.l1_support_number,
-
-          location,
-          status: "PENDING"
-        },
-      },
-      { upsert: true, new: true }
-    );
-
-   
-
-    /* ==================================================
-       2️⃣ MATCH ENGINEERS
-    ================================================== */
-
-    const matchedEngineers = await matchEngineers({ location: order.location });
-
-    
-
-    if (!matchedEngineers.length) {
-      await VendorOrder.findByIdAndUpdate(order._id, {
-        status: "EXPIRED",
-        failure_reason: "NO_ENGINEERS_AVAILABLE"
-      });
-
+    if (!result.success) {
       return res.status(200).json({
         success: false,
         message: "No engineers available",
-        orderId: order._id,
+        orderId: result.order._id
       });
     }
-
-    /* ==================================================
-       3️⃣ ASYNC NOTIFICATION
-    ================================================== */
-    // notifyEngineers(matchedEngineers, order);
 
     return res.status(200).json({
       success: true,
       matchType: "H3_GEO_MATCH",
-      orderId: order._id,
-      matchedEngineers,
+      orderId: result.order._id,
       results: {
-        totalFound: matchedEngineers.length
-      }
+        totalFound: result.matchedEngineers.length
+      },
+      matchedEngineers: result.matchedEngineers
     });
 
   } catch (err) {
@@ -260,91 +188,4 @@ export const getVendorRequests = async (req, res) => {
 };
 
 
-// export const getVendorRequests = async (req, res) => {
-//   try {
-//     const { location, orderId } = req.body;
 
-//     if (
-//       !location?.coordinates ||
-//       location.coordinates.length !== 2
-//     ) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid location format"
-//       });
-//     }
-
-//     const [lng, lat] = location.coordinates;
-
-//     if (
-//       lat < -90 || lat > 90 ||
-//       lng < -180 || lng > 180
-//     ) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid latitude or longitude"
-//       });
-//     }
-
-//     const H3_RESOLUTION = 8;
-//     const MAX_RADIUS_KM = 25;
-
-//     // Correct ring size for 25km at res 8
-//     const RING_SIZE = Math.ceil((MAX_RADIUS_KM * 1000) / 460);
-
-//     /* ------------------ H3 SEARCH ------------------ */
-//     const orderCell = latLngToCell(lat, lng, H3_RESOLUTION);
-//     const searchCells = gridDisk(orderCell, RING_SIZE);
-
-//     /* ------------------ DB QUERY ------------------ */
-//     const engineers = await Engineer.find({
-//       isActive: true,
-//       isAvailable: true,
-//       isDeleted: false,
-//       isBlocked: false,
-//       isSuspended: false,
-//       h3Index: { $in: searchCells }
-//     })
-//       .select("_id name mobile location h3Index")
-//       .lean();
-
-//     if (!engineers.length) {
-//       return res.json({
-//         success: true,
-//         results: { totalFound: 0, engineers: [] },
-//         orderId
-//       });
-//     }
-
-//     /* ------------------ PRECISE FILTER ------------------ */
-//     const matchedEngineers = engineers
-//       .map(e => {
-//         const [eLng, eLat] = e.location.coordinates;
-//         return {
-//           ...e,
-//           distanceInMeters: getDistanceInMeters(
-//             lat, lng, eLat, eLng
-//           )
-//         };
-//       })
-//       .filter(e => e.distanceInMeters <= MAX_RADIUS_KM * 1000)
-//       .sort((a, b) => a.distanceInMeters - b.distanceInMeters);
-
-//     return res.json({
-//       success: true,
-//       matchType: "H3_GEO_MATCH",
-//       results: {
-//         totalFound: matchedEngineers.length,
-//         engineers: matchedEngineers
-//       },
-//       orderId
-//     });
-
-//   } catch (error) {
-//     console.error("Match Error:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Internal server error"
-//     });
-//   }
-// };
