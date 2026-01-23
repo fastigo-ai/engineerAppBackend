@@ -1,5 +1,6 @@
 import { Engineer } from '../models/engineersModal.js';
 import { Order } from '../models/orderSchema.js';
+import { getEngineerStatsService } from '../services/engineerService.js';
 
 
  export const addengineerController = async (req, res) => {
@@ -64,5 +65,24 @@ export  const AssignEngineerToOrderController = async (req, res) => {
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
+};
+
+export const getEngineerDashboard = async (req, res) => {
+  try {
+    const engineerId = req.user.id;
+
+    const stats = await getEngineerStatsService(engineerId);
+
+    return res.status(200).json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    console.error("Dashboard Stats Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch engineer statistics"
+    });
+  }
 };
 

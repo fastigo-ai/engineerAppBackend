@@ -8,7 +8,7 @@ const EngineerSchema = new mongoose.Schema({
   engineerId: {
     type: String,
     trim: true,
-    sparse: true // Allows multiple null values for backwards compatibility
+    sparse: true 
   },
   name: {
     type: String,

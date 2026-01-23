@@ -6,6 +6,7 @@ import {
   updateEngineerController,
   AssignEngineerToOrderController,
   unAssignEngineerFromOrderController,
+  getEngineerDashboard,
 } from "../controllers/engineerController.js";
 import {
   updateEngineerLocation,
@@ -69,5 +70,9 @@ router.get("/requests/completed", authenticateEngineer, getCompletedRequests);
 router.post("/vendorOrder/request", getVendorRequests);
 router.get("/vendorOrder/serviceable", servicableLocation);
 router.post("/vendorOrder/accept", authenticateEngineer, acceptVendorOrder);
+
+
+
+router.get("/dashboard", authenticateEngineer, getEngineerDashboard);
 
 export default router;
