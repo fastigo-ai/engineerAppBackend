@@ -1,4 +1,7 @@
 import mongoose from "mongoose";
+import { latLngToCell } from "h3-js";
+
+const H3_RESOLUTION = 8;
 
 const VendorOrderSchema = new mongoose.Schema(
   {
@@ -104,11 +107,17 @@ const VendorOrderSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    h3Index:{
+      type: String,
+      index: true,
+    }
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
   },
 );
+
+
 
 /* -------- Indexes -------- */
 VendorOrderSchema.index({ location: "2dsphere" });

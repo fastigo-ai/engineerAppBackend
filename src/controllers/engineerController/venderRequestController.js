@@ -231,6 +231,53 @@ export const acceptVendorOrder = async (req, res) => {
 };
 
 
+const H3_RESOLUTION = 8;
+const SEARCH_RING_SIZE = 30;
+
+export const getNearbyVendorOrders = async (req, res) => {
+  try {
+    const engineerId = req.user.id;
+    const { latitude, longitude } = req.query;
+
+    if (!latitude || !longitude) {
+      return res.status(400).json({
+        success: false,
+        message: "Latitude and longitude are required"
+      });
+    }
+
+    // 1. Get the H3 cell for the engineer's current location
+    const centerCell = latLngToCell(parseFloat(latitude), parseFloat(longitude), H3_RESOLUTION);
+
+    // 2. Get all neighboring hexagons within the radius
+    const searchCells = gridDisk(centerCell, SEARCH_RING_SIZE);
+
+    // 3. Find orders in these hexagons
+    const nearbyOrders = await VendorOrder.find({
+      status: "PENDING",
+      h3Index: { $in: searchCells }, // High-speed string matching
+      assigned_engineer_id: null,    // Only unassigned orders
+      rejected_engineers: { $ne: engineerId } // Hide orders this engineer already rejected
+    })
+    .sort({ created_at: -1 }) // Show newest orders first
+    .limit(20)
+    .lean();
+
+    return res.status(200).json({
+      success: true,
+      count: nearbyOrders.length,
+      orders: nearbyOrders
+    });
+  } catch (err) {
+    console.error("H3 Nearby Orders Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+};
+
+
 
 
 

@@ -14,13 +14,8 @@ export const getEngineerStatsService = async (engineerId) => {
     assigned_engineer_id: engineerId
   }).select('status work_status order_price payout_amount').lean();
 
-  // 3. Get Verified Payments from Payment Model (Standard Orders only)
-  // We filter for 'captured' or 'authorized' to ensure the money is real
-  // const verifiedPaymentsPromise = Payment.aggregate([
-  //   { $match: { userId: engineerId, status: "captured" } },
-  //   { $group: { _id: null, total: { $sum: "$amount" } } }
-  // ]);
 
+  // 3. Get total verified payments for Standard Orders
   const verifiedPaymentsPromise = Order.aggregate([
     { $match: { assignedEngineer: engineerId, status: "paid" } },
     { $group: { _id: null, total: { $sum: "$amount" } } }

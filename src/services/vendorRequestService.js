@@ -5,6 +5,11 @@ import { getIO } from "../config/socket.js";
 import VendorOrder from "../models/vendorOrderModal.js";
 import axios from 'axios';
 
+const H3_RESOLUTION = 8;
+const MAX_RADIUS_KM = 25;
+const RING_SIZE = 30;
+const MAX_RESULTS = 10;
+
 /* 🔔 SOCKET EMITTER */
 
 const notifyEngineers = async (engineers, order) => {
@@ -38,10 +43,7 @@ const notifyEngineers = async (engineers, order) => {
 
 /* 🛠️ ENGINEER MATCHING LOGIC */
 
-const H3_RESOLUTION = 8;
-const MAX_RADIUS_KM = 25;
-const RING_SIZE = 30; // Optimized for 25km at Res 8
-const MAX_RESULTS = 10;
+
 
 export async function matchEngineers({ location }) {
   if (!location?.coordinates || location.coordinates.length !== 2) {
@@ -52,6 +54,8 @@ export async function matchEngineers({ location }) {
   const [orderLng, orderLat] = location.coordinates;
   const orderCell = latLngToCell(orderLat, orderLng, H3_RESOLUTION);
   const searchCells = gridDisk(orderCell, RING_SIZE);
+
+  console.log('searchCells:', orderCell);
 
 
 
@@ -118,6 +122,13 @@ export const createAndMatchVendorOrder = async (payload) => {
   } = payload;
 
   /* 1️⃣ ATOMIC UPSERT (IDEMPOTENT) */
+
+    const [orderLng, orderLat] = location.coordinates;
+  const orderCell = latLngToCell(orderLat, orderLng, H3_RESOLUTION);
+
+  console.log('Creating order with H3 index:', orderCell);
+
+
   const order = await VendorOrder.findOneAndUpdate(
     { vendor_id, call_id },
     {
@@ -141,7 +152,8 @@ export const createAndMatchVendorOrder = async (payload) => {
         l1_support_number: payload.l1_support_number,
 
         location,
-        status: "PENDING"
+        status: "PENDING",
+        h3Index: orderCell
       }
     },
     { upsert: true, new: true }
@@ -151,6 +163,11 @@ export const createAndMatchVendorOrder = async (payload) => {
   const matchedEngineers = await matchEngineers({
     location: order.location
   });
+  if(matchedEngineers){
+    await VendorOrder.findByIdAndUpdate(order._id, {
+      h3Index: latLngToCell(location.coordinates[1], location.coordinates[0], H3_RESOLUTION)
+    });
+  }
 
   if (!matchedEngineers.length) {
     await VendorOrder.findByIdAndUpdate(order._id, {

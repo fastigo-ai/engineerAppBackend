@@ -6,6 +6,6 @@ const router = express.Router();
 
 router.post("/engineer/login", login);
 router.post("/engineer/register", register);
-router.post("/engineer/onboard", onboardEngineer); // Called by FastAPI after approval
+router.post("/engineer/onboard", onboardEngineer);
 
 export default router;
