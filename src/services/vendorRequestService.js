@@ -246,7 +246,7 @@ export const acceptOrderService = async ({ orderId, engineerId, distance }) => {
 };
 
 
-export const rejectOrderService = async ({ orderId, engineerId, distance }) => {
+export const rejectOrderService = async ({ orderId, engineerId }) => {
   // 1. Fetch Engineer details first (needed for the payload)
   const engineer = await Engineer.findById(engineerId).lean();
   if (!engineer) {
@@ -267,27 +267,26 @@ export const rejectOrderService = async ({ orderId, engineerId, distance }) => {
   }
 
   // 3. Construct the payload for the Vendor
-  const payload = {
-    call_id: order.call_id,
-    status: "REJECTED",
-    engineer_id: engineerId,
-    engineer_name: engineer.name,
-    engineer_contact: engineer.mobile || engineer.phone,
-    distance: distance || 0,
-    rejected_at: new Date()
-  };
+  // const payload = {
+  //   call_id: order.call_id,
+  //   status: "REJECTED",
+  //   engineer_id: engineerId,
+  //   engineer_name: engineer.name,
+  //   engineer_contact: engineer.mobile || engineer.phone,
+  //   rejected_at: new Date()
+  // };
 
   // 4. Notify Vendor Backend
   // We wrap this in a try-catch or use Promise.allSettled so 
   // a vendor API failure doesn't crash your local rejection logic.
-  try {
-    await axios.post(
-      "https://door2fyvendor-gv4g4.ondigitalocean.app/calls/engineer/assignment-result",
-      payload
-    );
-  } catch (axiosError) {
-    console.warn("Vendor notification failed during rejection, but order was updated locally.");
-  }
+  // try {
+  //   await axios.post(
+  //     "https://door2fyvendor-gv4g4.ondigitalocean.app/calls/engineer/assignment-result",
+  //     payload
+  //   );
+  // } catch (axiosError) {
+  //   console.warn("Vendor notification failed during rejection, but order was updated locally.");
+  // }
 
   return order;
 };
