@@ -237,7 +237,7 @@ export const acceptOrderService = async ({ orderId, engineerId, distance }) => {
   };
 
     await axios.post(
-      "https://door2fyvendor-gv4g4.ondigitalocean.app/engineer/assignment-result",
+      "https://door2fyvendor-gv4g4.ondigitalocean.app/calls/engineer/assignment-result",
       payload,
     );
   
@@ -282,7 +282,7 @@ export const rejectOrderService = async ({ orderId, engineerId, distance }) => {
   // a vendor API failure doesn't crash your local rejection logic.
   try {
     await axios.post(
-      "https://door2fyvendor-gv4g4.ondigitalocean.app/engineer/assignment-result",
+      "https://door2fyvendor-gv4g4.ondigitalocean.app/calls/engineer/assignment-result",
       payload
     );
   } catch (axiosError) {
