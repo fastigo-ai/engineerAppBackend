@@ -2,6 +2,7 @@ import { Order } from "../../models/orderSchema.js";
 import User from "../../models/user.js";
 import { Engineer } from "../../models/engineersModal.js";
 import STATUS_CODES from "../../constants/statusCodes.js"; 
+import vendorOrderModal from "../../models/vendorOrderModal.js";
 
 // Update Engineer Location
 export const updateEngineerLocation = async (req, res) => {
@@ -617,10 +618,15 @@ export const getAcceptedRequests = async (req, res) => {
             orderStatus: 'Accepted'
         }).populate('userId', 'name phone address').populate('servicePlan', 'name');
 
+        const VendorRequests = await vendorOrderModal.find({
+            assignedEngineer: engineerId,
+            orderStatus: 'paid'
+        }).populate('userId', 'name phone address').populate('servicePlan', 'name');
+
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
-            count: requests.length,
-            data: requests
+            count: requests.length + VendorRequests.length,
+            data: [...requests, ...VendorRequests]
         });
     } catch (error) {
         console.error('Get accepted requests error:', error);
