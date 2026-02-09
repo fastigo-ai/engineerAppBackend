@@ -1,9 +1,10 @@
 import { Engineer } from "../../models/engineersModal.js";
 import VendorOrder from "../../models/vendorOrderModal.js";
-import { createAndMatchVendorOrder, acceptOrderService } from "../../services/vendorRequestService.js";
+import { createAndMatchVendorOrder, acceptOrderService,rejectOrderService } from "../../services/vendorRequestService.js";
 import { getDistanceInMeters } from "../../utils/distance.js";
 import { latLngToCell, gridDisk } from "h3-js";
-
+const H3_RESOLUTION = 8;
+const SEARCH_RING_SIZE = 30;
 
 export const servicableLocation = async (req, res) => {
   try {
@@ -230,9 +231,35 @@ export const acceptVendorOrder = async (req, res) => {
   }
 };
 
+export const rejectVendorOrder = async (req, res) => {
+  try {
+    const { orderId } = req.body;
+    const engineerId = req.user.id;
 
-const H3_RESOLUTION = 8;
-const SEARCH_RING_SIZE = 30;
+    // 1. Call the service to update the Database
+    const order = await rejectOrderService({ orderId, engineerId });
+
+    // 2. SOCKET: Remove this engineer from the order room 
+    const io = getIO();
+    const engineerRoom = engineerId.toString();
+    const orderRoom = `order_${orderId}`;
+    
+    io.in(engineerRoom).socketsLeave(orderRoom);
+
+    return res.status(200).json({ 
+      success: true, 
+      message: "Order rejected and removed from your feed" 
+    });
+
+  } catch (err) {
+    console.error("Reject Order Controller Error:", err);
+    const statusCode = err.status || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: err.message || "Internal server error"
+    });
+  }
+};
 
 export const getNearbyVendorOrders = async (req, res) => {
   try {
@@ -255,11 +282,11 @@ export const getNearbyVendorOrders = async (req, res) => {
     // 3. Find orders in these hexagons
     const nearbyOrders = await VendorOrder.find({
       status: "PENDING",
-      h3Index: { $in: searchCells }, // High-speed string matching
-      assigned_engineer_id: null,    // Only unassigned orders
-      rejected_engineers: { $ne: engineerId } // Hide orders this engineer already rejected
+      h3Index: { $in: searchCells },
+      assigned_engineer_id: null,    
+      rejected_engineers: { $ne: engineerId } 
     })
-    .sort({ created_at: -1 }) // Show newest orders first
+    .sort({ created_at: -1 }) 
     .limit(20)
     .lean();
 
