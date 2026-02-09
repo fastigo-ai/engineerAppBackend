@@ -3,6 +3,7 @@ import User from "../../models/user.js";
 import { Engineer } from "../../models/engineersModal.js";
 import STATUS_CODES from "../../constants/statusCodes.js"; 
 import vendorOrderModal from "../../models/vendorOrderModal.js";
+import mongoose from "mongoose";
 
 // Update Engineer Location
 export const updateEngineerLocation = async (req, res) => {
@@ -613,20 +614,60 @@ export const getAcceptedRequests = async (req, res) => {
     try {
         const engineerId = req.user.id;
 
+        // 1. Fetch Direct Orders (Standard Mongoose Find)
         const requests = await Order.find({
             assignedEngineer: engineerId,
             orderStatus: 'Accepted'
-        }).populate('userId', 'name phone address').populate('servicePlan', 'name');
+        })
+        .populate('userId', 'name phone address')
+        .populate('servicePlan', 'name')
+        .lean(); // Use lean for performance since we are merging arrays
 
-        const VendorRequests = await vendorOrderModal.find({
-            assignedEngineer: engineerId,
-            orderStatus: 'paid'
-        }).populate('userId', 'name phone address').populate('servicePlan', 'name');
+        // 2. Fetch Vendor Orders (Aggregate to Format)
+        const VendorRequests = await vendorOrderModal.aggregate([
+            {
+                $match: {
+                    assigned_engineer_id: new mongoose.Types.ObjectId(engineerId),
+                    status: "ACCEPTED"
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    customerDetails: {
+                        name: { $ifNull: ["$contact_name", "$l1_support_name"] },
+                        phone: { $ifNull: ["$contact_phone", "$l1_support_number"] },
+                        email: { $literal: "vendor@order.com" } 
+                    },
+                    servicePlan: {
+                        name: "$support_type",
+                    },
+                    amount: "$order_price",
+                    orderStatus: "Accepted", // Hardcode to match direct order case sensitivity
+                    work_status: "$work_status",
+                    assignedEngineer: { $toString: "$assigned_engineer_id" },
+                    location: "$location",
+                    createdAt: "$created_at",
+                    updatedAt: "$updated_at",
+                    notes: {
+                        orderId: "$call_id",
+                        serviceCount: "$assets_count",
+                        servicePlanNames: "$support_type",
+                    },
+                    isVendorOrder: { $literal: true } // Helper flag for frontend logic
+                }
+            }
+        ]);
+
+        // 3. Merge and Sort by Date
+        const combinedData = [...requests, ...VendorRequests].sort(
+            (a, b) => new Date(b.createdAt || b.created_at) - new Date(a.createdAt || a.created_at)
+        );
 
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
-            count: requests.length + VendorRequests.length,
-            data: [...requests, ...VendorRequests]
+            count: combinedData.length,
+            data: combinedData
         });
     } catch (error) {
         console.error('Get accepted requests error:', error);

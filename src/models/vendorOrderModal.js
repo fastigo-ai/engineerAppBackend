@@ -20,8 +20,8 @@ const VendorOrderSchema = new mongoose.Schema(
     pincode: { type: String, index: true },
 
     /* -------- Contact -------- */
-    contact_name: String,
-    contact_phone: String,
+    contact_name: { type: String },
+    contact_phone: { type: Number },
 
     /* -------- Order Meta -------- */
     assets_count: { type: Number, default: 1 },

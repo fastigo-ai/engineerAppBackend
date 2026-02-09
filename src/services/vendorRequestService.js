@@ -151,6 +151,11 @@ export const createAndMatchVendorOrder = async (payload) => {
         l1_support_name: payload.l1_support_name,
         l1_support_number: payload.l1_support_number,
 
+        contact_name: payload.contact_name,
+        contact_phone: payload.contact_phone,
+
+        order_price: payload.order_price || 0,
+
         location,
         status: "PENDING",
         h3Index: orderCell
