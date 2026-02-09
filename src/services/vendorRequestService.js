@@ -207,7 +207,6 @@ export const acceptOrderService = async ({ orderId, engineerId, distance }) => {
     {
       _id: orderId,
       status: { $in: ["PENDING", "MATCHING"] },
-      notified_engineers: engineerId.toString()
     },
     {
       $set: {
