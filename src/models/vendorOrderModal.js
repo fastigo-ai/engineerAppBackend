@@ -85,6 +85,10 @@ const VendorOrderSchema = new mongoose.Schema(
       type: Date,
       index: { expireAfterSeconds: 0 },
     },
+    accepted_at: {
+      type: Date,
+      default: null,
+    },
 
     payout_amount: {
       type: Number,

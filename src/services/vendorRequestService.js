@@ -235,10 +235,12 @@ export const acceptOrderService = async ({ orderId, engineerId, distance }) => {
     status: "ACCEPTED",
     engineer_id: engineer.engineerId,
     engineer_name: engineer.name,
-    engineer_contact: engineer.phone,
+    engineer_contact: engineer.mobile,
     distance,
     accepted_at: order.accepted_at
   };
+
+  console.log("Notifying Vendor of acceptance with payload:", payload);
 
     await axios.post(
       "https://door2fyvendor-gv4g4.ondigitalocean.app/calls/engineer/assignment-result",
