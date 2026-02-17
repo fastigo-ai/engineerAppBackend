@@ -194,12 +194,20 @@ export const acceptVendorOrder = async (req, res) => {
     const { orderId, distance } = req.body;
     const engineerId = req.user.id;
 
+    if (!orderId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "OrderId is required" 
+      });
+    }
+
     // Call the service
     const order = await acceptOrderService({
       orderId,
       engineerId,
       distance
     });
+
 
     // 🔔 SOCKET (Handle after successful service execution)
     const io = getIO();
