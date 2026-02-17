@@ -262,55 +262,6 @@ export const rejectVendorOrder = async (req, res) => {
   }
 };
 
-// export const getNearbyVendorOrders = async (req, res) => {
-//   try {
-//     const engineerId = req.user.id;
-//     const { latitude, longitude } = req.query;
-
-//     if (!latitude || !longitude) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Latitude and longitude are required"
-//       });
-//     }
-
-//     // 1. Get the H3 cell for the engineer's current location
-//     const centerCell = latLngToCell(parseFloat(latitude), parseFloat(longitude), H3_RESOLUTION);
-
-//     // 2. Get all neighboring hexagons within the radius
-//     const searchCells = gridDisk(centerCell, SEARCH_RING_SIZE);
-
-//     // 3. Find orders in these hexagons
-//     const nearbyOrders = await VendorOrder.find({
-//       status: "PENDING",
-//       h3Index: { $in: searchCells },
-//       assigned_engineer_id: null,    
-//       rejected_engineers: { $ne: engineerId } 
-//     })
-//     .sort({ created_at: -1 }) 
-//     .limit(20)
-//     .lean();
-
-//     const distance = getDistanceInMeters(parseFloat(latitude), parseFloat(longitude), nearbyOrders[0]?.location.coordinates[1], nearbyOrders[0]?.location.coordinates[0]);
-    
-
-
-//     console.log("Nearby Orders Found:", nearbyOrders);
-
-//     return res.status(200).json({
-//       success: true,
-//       count: nearbyOrders.length,
-//       orders: nearbyOrders,
-//     });
-//   } catch (err) {
-//     console.error("H3 Nearby Orders Error:", err);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Internal server error"
-//     });
-//   }
-// };
-
 export const getNearbyVendorOrders = async (req, res) => {
   try {
     const engineerId = req.user.id;
@@ -378,6 +329,43 @@ export const getNearbyVendorOrders = async (req, res) => {
   }
 };
 
+export const updateVendorOrderWorkStatus = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { workStatus } = req.body;
+    const engineerId = req.user.id;
+    if (!["NOT_STARTED", "IN_PROGRESS", "COMPLETED","STARTED"].includes(workStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid work status value"
+      });
+    }
+    
+    const order = await VendorOrder.findOneAndUpdate(
+      { _id: orderId, assigned_engineer_id: engineerId },
+      { work_status: workStatus },
+      { new: true }
+    );
 
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found or not assigned to this engineer"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Work status updated successfully",
+      data: order
+    });
+  } catch (err) {
+    console.error("Update Work Status Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+};
 
 

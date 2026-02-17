@@ -27,6 +27,7 @@ import {
     acceptVendorOrder,
     getNearbyVendorOrders,
     rejectVendorOrder,
+    updateVendorOrderWorkStatus,
 } from "../controllers/engineerController/venderRequestController.js";
 import {
   authenticate,
@@ -74,6 +75,7 @@ router.get("/vendorOrder/serviceable", servicableLocation);
 router.post("/vendorOrder/accept", authenticateEngineer, acceptVendorOrder);
 router.post("/vendorOrder/reject", authenticateEngineer, rejectVendorOrder);
 router.get("/vendorOrder/nearby", authenticateEngineer, getNearbyVendorOrders);
+router.post("/vendorOrder/updateVendorOrderStatus", authenticateEngineer, updateVendorOrderWorkStatus);
 
 
 

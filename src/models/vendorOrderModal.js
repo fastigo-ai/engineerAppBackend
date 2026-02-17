@@ -56,7 +56,7 @@ const VendorOrderSchema = new mongoose.Schema(
     },
     work_status: {
       type: String,
-      enum: ["NOT_STARTED", "IN_PROGRESS", "COMPLETED"],
+      enum: ["NOT_STARTED", "IN_PROGRESS", "COMPLETED","STARTED"],
       default: "NOT_STARTED",
       index: true,
     },
@@ -114,6 +114,9 @@ const VendorOrderSchema = new mongoose.Schema(
     h3Index:{
       type: String,
       index: true,
+    },
+    sop:{
+      type: String,
     }
   },
   {
