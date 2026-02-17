@@ -75,7 +75,7 @@ router.get("/vendorOrder/serviceable", servicableLocation);
 router.post("/vendorOrder/accept", authenticateEngineer, acceptVendorOrder);
 router.post("/vendorOrder/reject", authenticateEngineer, rejectVendorOrder);
 router.get("/vendorOrder/nearby", authenticateEngineer, getNearbyVendorOrders);
-router.post("/vendorOrder/updateVendorOrderStatus", authenticateEngineer, updateVendorOrderWorkStatus);
+router.post("/vendorOrder/updateVendorOrderStatus/:orderId", authenticateEngineer, updateVendorOrderWorkStatus);
 
 
 
