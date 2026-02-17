@@ -4,7 +4,6 @@ import { getDistanceInMeters } from "../utils/distance.js";
 import { getIO } from "../config/socket.js";
 import VendorOrder from "../models/vendorOrderModal.js";
 import axios from 'axios';
-
 const H3_RESOLUTION = 8;
 const MAX_RADIUS_KM = 25;
 const RING_SIZE = 30;

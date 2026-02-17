@@ -4,6 +4,7 @@ import { Engineer } from "../../models/engineersModal.js";
 import STATUS_CODES from "../../constants/statusCodes.js"; 
 import vendorOrderModal from "../../models/vendorOrderModal.js";
 import mongoose from "mongoose";
+import { getDistanceInMeters } from "../../utils/distance.js"; // Ensure you import your distance helper
 
 // Update Engineer Location
 export const updateEngineerLocation = async (req, res) => {
@@ -613,17 +614,30 @@ export const updateRequestStatus = async (req, res) => {
 export const getAcceptedRequests = async (req, res) => {
     try {
         const engineerId = req.user.id;
+        const { latitude, longitude } = req.query;
 
-        // 1. Fetch Direct Orders (Standard Mongoose Find)
+        // 1. STACK TRACE & VALIDATION
+        // If the app doesn't send coordinates, we stop early.
+        if (!latitude || !longitude) {
+            return res.status(STATUS_CODES.BAD_REQUEST).json({
+                success: false,
+                message: "Current location (latitude and longitude) is required to calculate distances."
+            });
+        }
+
+        const latNum = parseFloat(latitude);
+        const lngNum = parseFloat(longitude);
+
+        // 2. Fetch Direct Orders
         const requests = await Order.find({
             assignedEngineer: engineerId,
             orderStatus: 'Accepted'
         })
         .populate('userId', 'name phone address')
         .populate('servicePlan', 'name')
-        .lean(); // Use lean for performance since we are merging arrays
+        .lean();
 
-        // 2. Fetch Vendor Orders (Aggregate to Format)
+        // 3. Fetch Vendor Orders
         const VendorRequests = await vendorOrderModal.aggregate([
             {
                 $match: {
@@ -639,30 +653,51 @@ export const getAcceptedRequests = async (req, res) => {
                         phone: { $ifNull: ["$contact_phone", "$l1_support_number"] },
                         email: { $literal: "vendor@order.com" } 
                     },
-                    servicePlan: {
-                        name: "$support_type",
-                    },
+                    servicePlan: { name: "$support_type" },
                     amount: "$order_price",
-                    orderStatus: "Accepted", // Hardcode to match direct order case sensitivity
+                    orderStatus: "Accepted",
                     work_status: "$work_status",
                     assignedEngineer: { $toString: "$assigned_engineer_id" },
-                    location: "$location",
+                    location: "$location", 
                     createdAt: "$created_at",
                     updatedAt: "$updated_at",
+                    address: "$complete_address",
+                    pincode: "$pincode",
                     notes: {
                         orderId: "$call_id",
                         serviceCount: "$assets_count",
                         servicePlanNames: "$support_type",
                     },
-                    isVendorOrder: { $literal: true } // Helper flag for frontend logic
+                    isVendorOrder: { $literal: true }
                 }
             }
         ]);
 
-        // 3. Merge and Sort by Date
-        const combinedData = [...requests, ...VendorRequests].sort(
-            (a, b) => new Date(b.createdAt || b.created_at) - new Date(a.createdAt || a.created_at)
-        );
+        // 4. Merge and add Distance Calculation
+        const combinedData = [...requests, ...VendorRequests].map(order => {
+            let distanceKm = null;
+            const orderCoords = order.location?.coordinates;
+
+            if (orderCoords && orderCoords.length === 2) {
+                // orderCoords[0] = lng, orderCoords[1] = lat
+                const distMeters = getDistanceInMeters(
+                    latNum,
+                    lngNum,
+                    orderCoords[1],
+                    orderCoords[0]
+                );
+                distanceKm = parseFloat((distMeters / 1000).toFixed(2));
+            }
+
+            return {
+                ...order,
+                distance: distanceKm,
+                distanceUnit: "km"
+            };
+        });
+
+        // 5. Final Sort (Closest distance first)
+        combinedData.sort((a, b) => (a.distance || 0) - (b.distance || 0));
 
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
