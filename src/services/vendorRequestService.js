@@ -296,46 +296,7 @@ export const rejectOrderService = async ({ orderId, engineerId }) => {
   return order;
 };
 
-export const completeOrder = async (req, res) => {
-  try {
-    const { orderId } = req.body;
-    const engineerId = req.user.id;
 
-    const order = await VendorOrder.findOneAndUpdate(
-      { 
-        _id: orderId, 
-        assigned_engineer_id: engineerId, 
-        status: "ACCEPTED" 
-      },
-      { 
-        $set: { 
-          status: "COMPLETED", 
-          completed_at: new Date() 
-        } 
-      },
-      { new: true }
-    );
-
-    if (!order) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Order not found or not assigned to you." 
-      });
-    }
-
-    // 🚀 CRITICAL: Make the engineer available again
-    await Engineer.findByIdAndUpdate(engineerId, { isAvailable: true });
-
-    return res.status(200).json({
-      success: true,
-      message: "Order completed successfully. You are now online for new orders.",
-      order
-    });
-  } catch (err) {
-    console.error("Complete Order Error:", err);
-    res.status(500).json({ success: false, message: "Internal server error" });
-  }
-};
 
 
 

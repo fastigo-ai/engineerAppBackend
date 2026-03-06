@@ -119,6 +119,7 @@ const VendorOrderSchema = new mongoose.Schema(
       type: String,
     },
     image_url:[String],
+    completion_images:[String],
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

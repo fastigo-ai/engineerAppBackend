@@ -4,6 +4,7 @@ import { createAndMatchVendorOrder, acceptOrderService,rejectOrderService } from
 import { getDistanceInMeters } from "../../utils/distance.js";
 import { latLngToCell, gridDisk } from "h3-js";
 import { getIO } from "../../config/socket.js";
+import { uploadToCloudinary } from "../../utils/uploadToCloudinary.js";
 const H3_RESOLUTION = 8;
 const SEARCH_RING_SIZE = 30;
 
@@ -373,6 +374,79 @@ export const updateVendorOrderWorkStatus = async (req, res) => {
       success: false,
       message: "Internal server error"
     });
+  }
+};
+
+export const completeOrder = async (req, res) => {
+  try {
+    const { orderId } = req.body;
+    const engineerId = req.user.id;
+    const files = req.files; 
+
+    // 1. Basic Validation
+    if (!orderId) return res.status(400).json({ success: false, message: "Order ID is required." });
+    if (!files || files.length === 0) {
+      return res.status(400).json({ success: false, message: "Please upload at least one completion image." });
+    }
+
+    // 2. Parallel Upload to Cloudinary
+    // We map over req.files and call your utility for each buffer
+    const uploadResults = await Promise.all(
+      files.map(file => uploadToCloudinary(file.buffer, "order_completions"))
+    );
+
+    // Extract only the URLs for the database
+    const imageUrls = uploadResults.map(result => result.url);
+
+    // 3. Update Order Status and Save Image URLs
+    const order = await VendorOrder.findOneAndUpdate(
+      { 
+        _id: orderId, 
+        assigned_engineer_id: engineerId, 
+        status: "ACCEPTED" 
+      },
+      { 
+        $set: { 
+          status: "COMPLETED", 
+          work_status: "COMPLETED",
+          completed_at: new Date(),
+          completion_images: imageUrls // Store the array of Cloudinary URLs
+        } 
+      },
+      { new: true }
+    );
+
+    if (!order) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Order not found or you aren't authorized to complete it." 
+      });
+    }
+
+    // 4. Update Engineer Availability
+    await Engineer.findByIdAndUpdate(engineerId, { isAvailable: true });
+
+    // 5. Notify Vendor Webhook (Standard Payload)
+    const webhookPayload = {
+      call_id: order.call_id,
+      status: "COMPLETED",
+      completed_at: order.completed_at,
+      proof_images: imageUrls
+    };
+
+    // Fire-and-forget or await depending on vendor reliability
+    // axios.post("https://door2fyvendor-gv4g4.ondigitalocean.app/calls/engineer/assignment-result", webhookPayload)
+    //   .catch(err => console.error("Vendor Webhook Error:", err.message));
+
+    return res.status(200).json({
+      success: true,
+      message: "Job completed successfully!",
+      order
+    });
+
+  } catch (err) {
+    console.error("Complete Order Error:", err);
+    res.status(500).json({ success: false, message: err.message || "Internal server error" });
   }
 };
 
