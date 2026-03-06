@@ -79,7 +79,7 @@ router.post("/vendorOrder/reject", authenticateEngineer, rejectVendorOrder);
 router.get("/vendorOrder/nearby", authenticateEngineer, getNearbyVendorOrders);
 router.post("/vendorOrder/updateVendorOrderStatus/:orderId", authenticateEngineer, updateVendorOrderWorkStatus);
 
-router.post("/complete", upload.array("images", 20), completeOrder);
+router.post("/vendorOrder/complete", upload.array("images", 20),authenticateEngineer ,completeOrder);
 
 
 
