@@ -8,6 +8,10 @@ import {
   unAssignEngineerFromOrderController,
   getEngineerDashboard,
 } from "../controllers/engineerController.js";
+import { 
+  getProfile, 
+  updateProfile 
+} from "../controllers/engineerController/authController.js";
 import {
   updateEngineerLocation,
   getNearbyRequests,
@@ -84,5 +88,9 @@ router.post("/vendorOrder/complete", upload.array("images", 20),authenticateEngi
 
 
 router.get("/dashboard", authenticateEngineer, getEngineerDashboard);
+
+// Profile routes
+router.get("/profile", authenticateEngineer, getProfile);
+router.put("/profile/update", authenticateEngineer, updateProfile);
 
 export default router;

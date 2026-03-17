@@ -112,6 +112,7 @@ export const getNearbyRequests = async (req, res) => {
             });
         }
 
+        // 2. Fetch Regular Orders
         const requests = await Order.find({
             status: { $in: ['created', 'paid'] },
             assignedEngineer: null,
@@ -129,12 +130,64 @@ export const getNearbyRequests = async (req, res) => {
         })
             .populate('userId', 'name phone address')
             .populate('servicePlan', 'name')
-            .populate('servicePlans', 'name');
-        console.log(requests, "    requests");
+            .populate('servicePlans', 'name')
+            .lean();
+
+        // 3. Fetch Vendor Orders
+        const vendorRequests = await vendorOrderModal.aggregate([
+            {
+                $geoNear: {
+                    near: { type: 'Point', coordinates: coordinates },
+                    distanceField: 'distance',
+                    maxDistance: parseInt(maxDistance),
+                    query: {
+                        status: 'PENDING',
+                        assigned_engineer_id: null,
+                        rejected_engineers: { $ne: new mongoose.Types.ObjectId(engineerId) }
+                    },
+                    spherical: true
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    customerDetails: {
+                        name: { $ifNull: ["$contact_name", "$l1_support_name"] },
+                        phone: { $ifNull: ["$contact_phone", "$l1_support_number"] },
+                        email: { $literal: "vendor@order.com" } 
+                    },
+                    servicePlan: { name: "$support_type" },
+                    amount: "$order_price",
+                    orderStatus: "Upcoming",
+                    work_status: "$work_status",
+                    location: "$location", 
+                    createdAt: "$created_at",
+                    updatedAt: "$updated_at",
+                    address: "$complete_address",
+                    pincode: "$pincode",
+                    notes: {
+                        orderId: "$call_id",
+                        serviceCount: "$assets_count"
+                    },
+                    isVendorOrder: { $literal: true }
+                }
+            }
+        ]);
+
+        const combinedData = [...requests, ...vendorRequests].map(order => {
+            const orderCoords = order.location?.coordinates;
+            let distance = "TBD";
+            if (orderCoords && coordinates.length === 2) {
+                const d = getDistanceInMeters(coordinates[1], coordinates[0], orderCoords[1], orderCoords[0]);
+                distance = (d / 1000).toFixed(2);
+            }
+            return { ...order, distance };
+        });
+
         res.status(STATUS_CODES.SUCCESS || 200).json({
             success: true,
-            count: requests.length,
-            data: requests
+            count: combinedData.length,
+            data: combinedData
         });
     } catch (error) {
         console.error('Get nearby requests error:', error);
@@ -718,13 +771,40 @@ export const getRejectedRequests = async (req, res) => {
         const engineerId = req.user.id;
 
         const requests = await Order.find({
-            rejectedBy: engineerId // Check if engineerId is in rejectedBy array
-        }).populate('userId', 'name phone address').populate('servicePlan', 'name');
+            rejectedBy: engineerId
+        }).populate('userId', 'name phone address').populate('servicePlan', 'name').lean();
+
+        const vendorRequests = await vendorOrderModal.aggregate([
+            {
+                $match: {
+                    rejected_engineers: new mongoose.Types.ObjectId(engineerId)
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    customerDetails: {
+                        name: { $ifNull: ["$contact_name", "$l1_support_name"] },
+                        phone: { $ifNull: ["$contact_phone", "$l1_support_number"] }
+                    },
+                    servicePlan: { name: "$support_type" },
+                    amount: "$order_price",
+                    orderStatus: "Rejected",
+                    work_status: "$work_status",
+                    location: "$location", 
+                    createdAt: "$created_at",
+                    address: "$complete_address",
+                    isVendorOrder: { $literal: true }
+                }
+            }
+        ]);
+
+        const combined = [...requests, ...vendorRequests];
 
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
-            count: requests.length,
-            data: requests
+            count: combined.length,
+            data: combined
         });
     } catch (error) {
         console.error('Get rejected requests error:', error);
@@ -741,51 +821,75 @@ export const updateWorkStatus = async (req, res) => {
         const { id } = req.params; // Order ID
         const { work_status } = req.body; // 'In Progress', 'Completed', 'Cancelled'
         const engineerId = req.user.id;
-        console.log(id, work_status, engineerId, "    id, work_status, engineerId");
 
-        const validStatuses = ['In Progress', 'Completed', 'Cancelled'];
-        if (!validStatuses.includes(work_status)) {
+        if (!work_status) {
             return res.status(STATUS_CODES.BAD_REQUEST).json({
                 success: false,
-                message: `Invalid work status. Must be one of: ${validStatuses.join(', ')}`
+                message: 'Work status is required'
             });
         }
 
-        const order = await Order.findById(id);
+        // 1. Try updating regular Order first
+        let order = await Order.findById(id);
+        if (order) {
+            const validStatuses = ['In Progress', 'Completed', 'Cancelled'];
+            if (!validStatuses.includes(work_status)) {
+                return res.status(STATUS_CODES.BAD_REQUEST).json({
+                    success: false,
+                    message: `Invalid work status. Must be one of: ${validStatuses.join(', ')}`
+                });
+            }
 
-        if (!order) {
-            return res.status(STATUS_CODES.NOT_FOUND).json({
-                success: false,
-                message: 'Order not found'
+            if (!order.assignedEngineer || order.assignedEngineer.toString() !== engineerId.toString()) {
+                return res.status(STATUS_CODES.FORBIDDEN).json({
+                    success: false,
+                    message: 'You are not assigned to this order.'
+                });
+            }
+
+            order.work_status = work_status;
+            if (work_status === 'Completed') {
+                order.status = 'paid';
+                order.orderStatus = 'Completed';
+            } else if (work_status === 'Cancelled') {
+                order.orderStatus = 'Cancelled';
+            }
+
+            await order.save();
+            return res.status(STATUS_CODES.SUCCESS).json({
+                success: true,
+                message: `Work status updated to ${work_status}`,
+                data: order
             });
         }
 
-        // Verify that the logged-in engineer acts on this order
-        console.log(`Order Engineer: ${order.assignedEngineer}, Auth User: ${engineerId}`);
-        if (!order.assignedEngineer || order.assignedEngineer.toString() !== engineerId.toString()) {
-            return res.status(STATUS_CODES.FORBIDDEN).json({
-                success: false,
-                message: 'You are not assigned to this order.'
+        // 2. Try updating Vendor Order if regular Order not found
+        // Convert to vendor format if needed, e.g., "In Progress" -> "IN_PROGRESS"
+        const vendorWorkStatus = work_status.toUpperCase().replace(/\s+/g, '_'); 
+        const vendorOrder = await vendorOrderModal.findOneAndUpdate(
+            { _id: id, assigned_engineer_id: engineerId },
+            { work_status: vendorWorkStatus }, 
+            { new: true }
+        );
+
+        if (vendorOrder) {
+             // If completed, sync main status too
+             if (work_status === 'Completed') {
+                await vendorOrderModal.findByIdAndUpdate(id, { status: 'COMPLETED' });
+             }
+
+            return res.status(STATUS_CODES.SUCCESS).json({
+                success: true,
+                message: `Vendor order work status updated to ${work_status}`,
+                data: vendorOrder
             });
         }
 
-        order.work_status = work_status;
-
-        // Optionally sync with main status if needed
-        if (work_status === 'Completed') {
-            order.status = 'paid'; // or 'completed' if that enum exists
-            order.orderStatus = 'Completed';
-        } else if (work_status === 'Cancelled') {
-            order.orderStatus = 'Cancelled';
-        }
-
-        await order.save();
-
-        res.status(STATUS_CODES.SUCCESS).json({
-            success: true,
-            message: `Work status updated to ${work_status}`,
-            data: order
+        return res.status(STATUS_CODES.NOT_FOUND).json({
+            success: false,
+            message: 'Order not found in regular or vendor collections'
         });
+
     } catch (error) {
         console.error('Update work status error:', error);
         res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({
@@ -803,12 +907,40 @@ export const getCompletedRequests = async (req, res) => {
         const requests = await Order.find({
             assignedEngineer: engineerId,
             orderStatus: 'Completed'
-        }).populate('userId', 'name phone address').populate('servicePlan', 'name');
+        }).populate('userId', 'name phone address').populate('servicePlan', 'name').lean();
+
+        const vendorRequests = await vendorOrderModal.aggregate([
+            {
+                $match: {
+                    assigned_engineer_id: new mongoose.Types.ObjectId(engineerId),
+                    status: "COMPLETED"
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    customerDetails: {
+                        name: { $ifNull: ["$contact_name", "$l1_support_name"] },
+                        phone: { $ifNull: ["$contact_phone", "$l1_support_number"] }
+                    },
+                    servicePlan: { name: "$support_type" },
+                    amount: "$order_price",
+                    orderStatus: "Completed",
+                    work_status: "$work_status",
+                    location: "$location", 
+                    createdAt: "$created_at",
+                    address: "$complete_address",
+                    isVendorOrder: { $literal: true }
+                }
+            }
+        ]);
+
+        const combined = [...requests, ...vendorRequests];
 
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
-            count: requests.length,
-            data: requests
+            count: combined.length,
+            data: combined
         });
     } catch (error) {
         console.error('Get completed requests error:', error);

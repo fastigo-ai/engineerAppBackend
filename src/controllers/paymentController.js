@@ -4,6 +4,37 @@ import { ServicePlan } from '../models/serviceModal.js';
 import { Order } from '../models/orderSchema.js';
 import { Payment } from '../models/paymentSchema.js';
 import User from '../models/user.js';
+import { matchEngineersByLocation, notifyMatchedEngineers } from '../services/notificationEngineerService.js';
+
+// Helper to notify engineers for a regular order
+const notifyEngineersForOrder = async (order) => {
+  try {
+    if (order.location && order.location.coordinates) {
+      const matchedEngineers = await matchEngineersByLocation({
+        location: order.location
+      });
+
+      if (matchedEngineers && matchedEngineers.length > 0) {
+        // Populate service plans if not already populated
+        if (!order.servicePlan && !order.servicePlans?.length) {
+            await order.populate('servicePlan servicePlans');
+        }
+
+        const orderData = {
+          id: order._id,
+          call_id: order.orderId,
+          address: order.bookingDetails?.address || 'nearby location',
+          type: order.servicePlan?.name || (order.servicePlans?.[0]?.name) || 'New Job',
+          price: order.amount ? `₹${order.amount}` : "To Be Decided"
+        };
+        
+        await notifyMatchedEngineers(matchedEngineers, orderData);
+      }
+    }
+  } catch (notifyError) {
+    console.error('Error notifying engineers for regular order:', notifyError);
+  }
+};
 
 
 // Create Checkout Session
@@ -235,6 +266,9 @@ export const verifyPayment = async (req, res) => {
         message: 'Order not found',
       });
     }
+
+    // 4️⃣ Notify nearby engineers
+    await notifyEngineersForOrder(order);
 
     // 4️⃣ Create a payment record (optional but useful for analytics)
     const payment = await Payment.create({
@@ -481,6 +515,7 @@ const handlePaymentCaptured = async (payload) => {
 
     // TODO: Send confirmation email/notification to user
     // TODO: Trigger any post-payment business logic
+    await notifyEngineersForOrder(order);
 
   } catch (error) {
     console.error('Handle payment captured error:', error);
@@ -558,6 +593,9 @@ const handleOrderPaid = async (payload) => {
     });
 
     console.log(`Order paid: ${orderEntity.id}`);
+    
+    // Trigger notification
+    await notifyEngineersForOrder(order);
 
   } catch (error) {
     console.error('Handle order paid error:', error);

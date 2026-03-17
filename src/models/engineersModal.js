@@ -91,9 +91,13 @@ const EngineerSchema = new mongoose.Schema({
     default: 0
   },
   h3Index: {
-  type: String,
-  index: true 
-},
+    type: String,
+    index: true 
+  },
+  fcmToken: {
+    type: String,
+    trim: true
+  },
 }, {
   timestamps: true,
   collection: 'engineers'
