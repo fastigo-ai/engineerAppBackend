@@ -18,9 +18,6 @@ import errorHandler from './middleware/errorHandler.js';
 // Load environment variables
 dotenv.config();
 
-// Connect to database
-connectDB();
-
 // Initialize Express app
 const app = express();
 const httpServer = createServer(app);
@@ -64,8 +61,19 @@ app.use('/api/engineer/auth', engineerAuthRoutes);
 app.use(errorHandler);
 
 // Start server
-const PORT = process.env.PORT || config.port || 8080;
+const startServer = async () => {
+  try {
+    // Connect to database
+    await connectDB();
 
-httpServer.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
-});
+    const PORT = process.env.PORT || config.port || 8080;
+    httpServer.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error.message);
+    process.exit(1);
+  }
+};
+
+startServer();
