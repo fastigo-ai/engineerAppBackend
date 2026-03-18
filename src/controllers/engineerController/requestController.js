@@ -769,10 +769,21 @@ export const getAcceptedRequests = async (req, res) => {
         // 5. Final Sort (Closest distance first)
         combinedData.sort((a, b) => (a.distance || 0) - (b.distance || 0));
 
+        // Deduplicate entries by _id to avoid showing the same order twice
+        const uniqueData = [];
+        const seenIds = new Set();
+        combinedData.forEach(item => {
+            const idStr = item._id ? item._id.toString() : '';
+            if (idStr && !seenIds.has(idStr)) {
+                seenIds.add(idStr);
+                uniqueData.push(item);
+            }
+        });
+
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
-            count: combinedData.length,
-            data: combinedData
+            count: uniqueData.length,
+            data: uniqueData
         });
     } catch (error) {
         console.error('Get accepted requests error:', error);
