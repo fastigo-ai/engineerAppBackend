@@ -707,83 +707,13 @@ export const getAcceptedRequests = async (req, res) => {
         .populate('servicePlan', 'name')
         .lean();
 
-        // 3. Fetch Vendor Orders
-        const VendorRequests = await vendorOrderModal.aggregate([
-            {
-                $match: {
-                    assigned_engineer_id: new mongoose.Types.ObjectId(engineerId),
-                    status: "ACCEPTED"
-                }
-            },
-            {
-                $project: {
-                    _id: 1,
-                    customerDetails: {
-                        name: { $ifNull: ["$contact_name", "$l1_support_name"] },
-                        phone: { $ifNull: ["$contact_phone", "$l1_support_number"] },
-                        email: { $literal: "vendor@order.com" } 
-                    },
-                    servicePlan: { name: "$support_type" },
-                    amount: "$order_price",
-                    orderStatus: "Accepted",
-                    work_status: "$work_status",
-                    assignedEngineer: { $toString: "$assigned_engineer_id" },
-                    location: "$location", 
-                    createdAt: "$created_at",
-                    updatedAt: "$updated_at",
-                    address: "$complete_address",
-                    pincode: "$pincode",
-                    notes: {
-                        orderId: "$call_id",
-                        serviceCount: "$assets_count",
-                        servicePlanNames: "$support_type",
-                    },
-                    isVendorOrder: { $literal: true }
-                }
-            }
-        ]);
-
-        // 4. Merge and add Distance Calculation
-        const combinedData = [...requests, ...VendorRequests].map(order => {
-            let distanceKm = null;
-            const orderCoords = order.location?.coordinates;
-
-            if (orderCoords && orderCoords.length === 2) {
-                // orderCoords[0] = lng, orderCoords[1] = lat
-                const distMeters = getDistanceInMeters(
-                    latNum,
-                    lngNum,
-                    orderCoords[1],
-                    orderCoords[0]
-                );
-                distanceKm = parseFloat((distMeters / 1000).toFixed(2));
-            }
-
-            return {
-                ...order,
-                distance: distanceKm,
-                distanceUnit: "km"
-            };
-        });
-
         // 5. Final Sort (Closest distance first)
-        combinedData.sort((a, b) => (a.distance || 0) - (b.distance || 0));
-
-        // Deduplicate entries by _id to avoid showing the same order twice
-        const uniqueData = [];
-        const seenIds = new Set();
-        combinedData.forEach(item => {
-            const idStr = item._id ? item._id.toString() : '';
-            if (idStr && !seenIds.has(idStr)) {
-                seenIds.add(idStr);
-                uniqueData.push(item);
-            }
-        });
+        requests.sort((a, b) => (a.distance || 0) - (b.distance || 0));
 
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
-            count: uniqueData.length,
-            data: uniqueData
+            count: requests.length,
+            data: requests
         });
     } catch (error) {
         console.error('Get accepted requests error:', error);
@@ -802,37 +732,10 @@ export const getRejectedRequests = async (req, res) => {
             rejectedBy: engineerId
         }).populate('userId', 'name phone address').populate('servicePlan', 'name').lean();
 
-        const vendorRequests = await vendorOrderModal.aggregate([
-            {
-                $match: {
-                    rejected_engineers: new mongoose.Types.ObjectId(engineerId)
-                }
-            },
-            {
-                $project: {
-                    _id: 1,
-                    customerDetails: {
-                        name: { $ifNull: ["$contact_name", "$l1_support_name"] },
-                        phone: { $ifNull: ["$contact_phone", "$l1_support_number"] }
-                    },
-                    servicePlan: { name: "$support_type" },
-                    amount: "$order_price",
-                    orderStatus: "Rejected",
-                    work_status: "$work_status",
-                    location: "$location", 
-                    createdAt: "$created_at",
-                    address: "$complete_address",
-                    isVendorOrder: { $literal: true }
-                }
-            }
-        ]);
-
-        const combined = [...requests, ...vendorRequests];
-
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
-            count: combined.length,
-            data: combined
+            count: requests.length,
+            data: requests
         });
     } catch (error) {
         console.error('Get rejected requests error:', error);
@@ -937,38 +840,10 @@ export const getCompletedRequests = async (req, res) => {
             orderStatus: 'Completed'
         }).populate('userId', 'name phone address').populate('servicePlan', 'name').lean();
 
-        const vendorRequests = await vendorOrderModal.aggregate([
-            {
-                $match: {
-                    assigned_engineer_id: new mongoose.Types.ObjectId(engineerId),
-                    status: "COMPLETED"
-                }
-            },
-            {
-                $project: {
-                    _id: 1,
-                    customerDetails: {
-                        name: { $ifNull: ["$contact_name", "$l1_support_name"] },
-                        phone: { $ifNull: ["$contact_phone", "$l1_support_number"] }
-                    },
-                    servicePlan: { name: "$support_type" },
-                    amount: "$order_price",
-                    orderStatus: "Completed",
-                    work_status: "$work_status",
-                    location: "$location", 
-                    createdAt: "$created_at",
-                    address: "$complete_address",
-                    isVendorOrder: { $literal: true }
-                }
-            }
-        ]);
-
-        const combined = [...requests, ...vendorRequests];
-
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
-            count: combined.length,
-            data: combined
+            count: requests.length,
+            data: requests
         });
     } catch (error) {
         console.error('Get completed requests error:', error);
