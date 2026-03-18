@@ -174,7 +174,17 @@ export const getNearbyRequests = async (req, res) => {
             }
         ]);
 
-        const combinedData = [...requests, ...vendorRequests].map(order => {
+        const mappedRequests = requests.map(order => {
+            const orderCoords = order.location?.coordinates;
+            let distance = "TBD";
+            if (orderCoords && coordinates.length === 2) {
+                const d = getDistanceInMeters(coordinates[1], coordinates[0], orderCoords[1], orderCoords[0]);
+                distance = (d / 1000).toFixed(2);
+            }
+            return { ...order, distance };
+        });
+
+        const mappedVendorRequests = vendorRequests.map(order => {
             const orderCoords = order.location?.coordinates;
             let distance = "TBD";
             if (orderCoords && coordinates.length === 2) {
@@ -185,9 +195,16 @@ export const getNearbyRequests = async (req, res) => {
         });
 
         res.status(STATUS_CODES.SUCCESS || 200).json({
-            success: true,
-            count: combinedData.length,
-            data: combinedData
+            requests: {
+                success: true,
+                count: mappedRequests.length,
+                data: mappedRequests
+            },
+            vendorOrders: {
+                success: true,
+                count: mappedVendorRequests.length,
+                orders: mappedVendorRequests
+            }
         });
     } catch (error) {
         console.error('Get nearby requests error:', error);
