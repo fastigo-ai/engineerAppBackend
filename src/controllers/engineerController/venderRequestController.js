@@ -458,10 +458,12 @@ export const getAcceptedVendorOrders = async (req, res) => {
       status: "ACCEPTED",
     }).sort({ accepted_at: -1 }).lean();
 
+    const mappedOrders = orders.map(order => ({ ...order, isVendorOrder: true }));
+
     return res.status(200).json({
       success: true,
-      data: orders,
-      orders: orders, // Provide both for compatibility
+      data: mappedOrders,
+      orders: mappedOrders, // Provide both for compatibility
     });
   } catch (err) {
     console.error("Get Accepted Vendor Orders Error:", err);
@@ -476,10 +478,12 @@ export const getRejectedVendorOrders = async (req, res) => {
       rejected_engineers: engineerId,
     }).sort({ created_at: -1 }).lean();
 
+    const mappedOrders = orders.map(order => ({ ...order, isVendorOrder: true }));
+
     return res.status(200).json({
       success: true,
-      data: orders,
-      orders: orders,
+      data: mappedOrders,
+      orders: mappedOrders,
     });
   } catch (err) {
     console.error("Get Rejected Vendor Orders Error:", err);
@@ -495,10 +499,12 @@ export const getCompletedVendorOrders = async (req, res) => {
       status: "COMPLETED",
     }).sort({ completed_at: -1 }).lean();
 
+    const mappedOrders = orders.map(order => ({ ...order, isVendorOrder: true }));
+
     return res.status(200).json({
       success: true,
-      data: orders,
-      orders: orders,
+      data: mappedOrders,
+      orders: mappedOrders,
     });
   } catch (err) {
     console.error("Get Completed Vendor Orders Error:", err);
