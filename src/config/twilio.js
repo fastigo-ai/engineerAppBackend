@@ -7,7 +7,6 @@ const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const verifySid = process.env.TWILIO_VERIFY_SERVICE_SID;
 
-console.log(accountSid, authToken, verifySid);
 
 if (!accountSid || !authToken || !verifySid) {
     console.warn('⚠️  Twilio Verify credentials not configured. OTP functionality will not work.');

@@ -33,6 +33,9 @@ import {
     rejectVendorOrder,
     updateVendorOrderWorkStatus,
     completeOrder,
+    getAcceptedVendorOrders,
+    getRejectedVendorOrders,
+    getCompletedVendorOrders,
 } from "../controllers/engineerController/venderRequestController.js";
 import {
   authenticate,
@@ -84,6 +87,10 @@ router.get("/vendorOrder/nearby", authenticateEngineer, getNearbyVendorOrders);
 router.post("/vendorOrder/updateVendorOrderStatus/:orderId", authenticateEngineer, updateVendorOrderWorkStatus);
 
 router.post("/vendorOrder/complete", upload.array("images", 20),authenticateEngineer ,completeOrder);
+
+router.get("/vendorOrder/accepted", authenticateEngineer, getAcceptedVendorOrders);
+router.get("/vendorOrder/rejected", authenticateEngineer, getRejectedVendorOrders);
+router.get("/vendorOrder/completed", authenticateEngineer, getCompletedVendorOrders);
 
 
 

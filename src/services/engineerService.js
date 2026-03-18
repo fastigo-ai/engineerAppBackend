@@ -30,11 +30,13 @@ export const getEngineerStatsService = async (engineerId) => {
 
   // --- PROCESSING STANDARD ORDERS ---
   const stdCompleted = standardOrders.filter(o => o.work_status === "Completed");
-  const stdInProgress = standardOrders.filter(o => o.work_status === "In Progress" || o.work_status === "Accepted");
+  const stdInProgress = standardOrders.filter(o => o.work_status === "In Progress" || o.work_status === "Started" || o.work_status === "STARTED");
+  const stdActive = standardOrders.filter(o => o.work_status === "Accepted" || o.work_status === "ACCEPTED");
 
   // --- PROCESSING VENDOR ORDERS ---
   const vendorCompleted = vendorOrders.filter(o => o.work_status === "COMPLETED");
-  const vendorInProgress = vendorOrders.filter(o => o.work_status === "IN_PROGRESS");
+  const vendorInProgress = vendorOrders.filter(o => o.work_status === "IN_PROGRESS" || o.work_status === "STARTED" || o.work_status === "Started");
+  const vendorActive = vendorOrders.filter(o => o.work_status === "ACCEPTED");
 
   // --- EARNINGS CALCULATION ---
   // Standard Earning: Sum of amounts from Orders where status is 'paid' 
@@ -48,17 +50,20 @@ export const getEngineerStatsService = async (engineerId) => {
     summary: {
       totalEarnings: standardEarnings + vendorEarnings,
       totalCompletedOrders: stdCompleted.length + vendorCompleted.length,
-      totalActiveOrders: stdInProgress.length + vendorInProgress.length,
+      totalActiveOrders: stdActive.length + vendorActive.length, // Now explicitly Active
+      totalInProgressOrders: stdInProgress.length + vendorInProgress.length, // New field
     },
     details: {
       standard: {
         completed: stdCompleted.length,
         inProgress: stdInProgress.length,
+        active: stdActive.length,
         verifiedEarnings: standardEarnings
       },
       vendor: {
         completed: vendorCompleted.length,
         inProgress: vendorInProgress.length,
+        active: vendorActive.length,
         payoutEarnings: vendorEarnings
       }
     }

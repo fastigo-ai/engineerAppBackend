@@ -450,4 +450,60 @@ export const completeOrder = async (req, res) => {
   }
 };
 
+export const getAcceptedVendorOrders = async (req, res) => {
+  try {
+    const engineerId = req.user.id;
+    const orders = await VendorOrder.find({
+      assigned_engineer_id: engineerId,
+      status: "ACCEPTED",
+    }).sort({ accepted_at: -1 }).lean();
+
+    return res.status(200).json({
+      success: true,
+      data: orders,
+      orders: orders, // Provide both for compatibility
+    });
+  } catch (err) {
+    console.error("Get Accepted Vendor Orders Error:", err);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+export const getRejectedVendorOrders = async (req, res) => {
+  try {
+    const engineerId = req.user.id;
+    const orders = await VendorOrder.find({
+      rejected_engineers: engineerId,
+    }).sort({ created_at: -1 }).lean();
+
+    return res.status(200).json({
+      success: true,
+      data: orders,
+      orders: orders,
+    });
+  } catch (err) {
+    console.error("Get Rejected Vendor Orders Error:", err);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+export const getCompletedVendorOrders = async (req, res) => {
+  try {
+    const engineerId = req.user.id;
+    const orders = await VendorOrder.find({
+      assigned_engineer_id: engineerId,
+      status: "COMPLETED",
+    }).sort({ completed_at: -1 }).lean();
+
+    return res.status(200).json({
+      success: true,
+      data: orders,
+      orders: orders,
+    });
+  } catch (err) {
+    console.error("Get Completed Vendor Orders Error:", err);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
 

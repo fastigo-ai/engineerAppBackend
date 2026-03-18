@@ -1,6 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
+import helmet from 'helmet';
 import config from './config/config.js';
 import { initSocket } from './config/socket.js';
 import { createServer } from 'http';
@@ -12,6 +13,7 @@ import engineerRoutes from './routes/engineerRoutes.js';
 import connectDB from './config/db.js';
 import { isFirebaseConnected } from './config/firebase.js';
 import engineerAuthRoutes from './routes/engineerRoutes/authRoutes.js'; 
+import errorHandler from './middleware/errorHandler.js';
 
 // Load environment variables
 dotenv.config();
@@ -25,7 +27,8 @@ const httpServer = createServer(app);
 initSocket(httpServer);
 
 // Middleware
-app.use(cors({ origin: '*', credentials: true }));
+app.use(helmet());
+app.use(cors({ origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : '*', credentials: true }));
 app.use(express.json());
 app.use(logger);
 
@@ -58,10 +61,7 @@ app.use('/api/engineer/auth', engineerAuthRoutes);
 
 
 // Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Server Error:', err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
-});
+app.use(errorHandler);
 
 // Start server
 const PORT = process.env.PORT || config.port || 8080;

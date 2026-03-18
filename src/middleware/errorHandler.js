@@ -1,10 +1,4 @@
-// src/middleware/errorHandler.js
-
-/**
- * Express error handling middleware (Error Boundary for backend)
- * Catches errors and sends a consistent error response
- */
-const STATUS = require('../constants/statusCodes');
+import STATUS from '../constants/statusCodes.js';
 
 function errorHandler(err, req, res, next) {
   console.error(err.stack);
@@ -16,4 +10,4 @@ function errorHandler(err, req, res, next) {
   });
 }
 
-module.exports = errorHandler;
+export default errorHandler;
