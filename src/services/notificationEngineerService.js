@@ -31,7 +31,8 @@ export const notifyMatchedEngineers = async (engineers, orderData) => {
       distance: eng.distanceKm,
       support_type: orderData.type,
       order_price: orderData.price || "To Be Decided",
-      timer: 30
+      timer: 30,
+      location: orderData.location
     });
 
     // 2. Send push notification via FCM if fcmToken exists

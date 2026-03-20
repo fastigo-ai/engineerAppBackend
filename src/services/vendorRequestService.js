@@ -12,7 +12,8 @@ const notifyEngineers = async (engineers, order) => {
     call_id: order.call_id,
     address: order.complete_address,
     type: order.support_type,
-    price: order.order_price ? `₹${order.order_price}` : "To Be Decided"
+    price: order.order_price ? `₹${order.order_price}` : "To Be Decided",
+    location: order.location
   };
   return notifyMatchedEngineers(engineers, orderData);
 };

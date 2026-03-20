@@ -25,7 +25,8 @@ const notifyEngineersForOrder = async (order) => {
           call_id: order.orderId,
           address: order.bookingDetails?.address || 'nearby location',
           type: order.servicePlan?.name || (order.servicePlans?.[0]?.name) || 'New Job',
-          price: order.amount ? `₹${order.amount}` : "To Be Decided"
+          price: order.amount ? `₹${order.amount}` : "To Be Decided",
+          location: order.location
         };
         
         await notifyMatchedEngineers(matchedEngineers, orderData);
