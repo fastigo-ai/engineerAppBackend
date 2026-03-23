@@ -28,6 +28,8 @@ export const notifyMatchedEngineers = async (engineers, orderData) => {
       order_id: orderData.id,
       call_id: orderData.call_id || orderData.id,
       address: orderData.address,
+      branch_name: orderData.branch_name,
+      state_name: orderData.state_name,
       distance: eng.distanceKm,
       support_type: orderData.type,
       order_price: orderData.price || "To Be Decided",

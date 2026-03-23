@@ -11,6 +11,8 @@ const notifyEngineers = async (engineers, order) => {
     id: order._id,
     call_id: order.call_id,
     address: order.complete_address,
+    branch_name: order.branch_name,
+    state_name: order.state_name,
     type: order.support_type,
     price: order.order_price ? `₹${order.order_price}` : "To Be Decided",
     location: order.location

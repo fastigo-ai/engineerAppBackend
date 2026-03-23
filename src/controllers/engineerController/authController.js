@@ -213,69 +213,43 @@ export const onboardEngineer = async (req, res) => {
       }
     }
 
-    // Check if engineer already exists by mobile
-    const existingEngineerByMobile = await Engineer.findOne({ mobile });
-    if (existingEngineerByMobile) {
-      return res.status(409).json({
-        success: false,
-        error: "Engineer with this mobile number already exists",
-        engineerId: existingEngineerByMobile._id
-      });
-    }
-
-    // Check if engineer already exists by engineerId (if provided)
-    if (finalEngineerId) {
-      const existingEngineerById = await Engineer.findOne({ engineerId: finalEngineerId });
-      if (existingEngineerById) {
-        return res.status(409).json({
-          success: false,
-          error: "Engineer with this engineer ID already exists",
-          engineerId: existingEngineerById._id
-        });
+    // Use findOneAndUpdate with upsert to support both initial onboarding and subsequent updates (re-syncs)
+    const result = await Engineer.findOneAndUpdate(
+      { mobile: mobile.trim() },
+      {
+        $set: {
+          engineerId: finalEngineerId ? finalEngineerId.trim() : undefined,
+          name: name.trim(),
+          email: email ? email.trim().toLowerCase() : undefined,
+          skills: skills || [],
+          address: address ? address.trim() : undefined,
+          currentLocation: currentLocation ? currentLocation.trim() : undefined,
+          location: location || undefined,
+          pincode: pincode ? pincode.trim() : undefined,
+          categories: categories || [],
+          isActive: isActive,
+          isAvailable: isAvailable,
+          rating: rating || 0,
+          updatedAt: new Date()
+        },
+        $setOnInsert: {
+          totalJobs: 0,
+          completedJobs: 0,
+          isDeleted: false,
+          isBlocked: false,
+          isSuspended: false,
+          createdAt: new Date()
+        }
+      },
+      { 
+        new: true, 
+        upsert: true, 
+        rawResult: true // returns the raw mongo result to check updatedExisting
       }
-    }
+    );
 
-    // Validate location format if provided (GeoJSON)
-    if (location) {
-      if (!location.type || !location.coordinates) {
-        return res.status(400).json({
-          success: false,
-          error: "Invalid location format. Expected GeoJSON format with type and coordinates"
-        });
-      }
-    }
-
-    // Validate skills array
-    if (skills && !Array.isArray(skills)) {
-      return res.status(400).json({
-        success: false,
-        error: "Skills must be an array"
-      });
-    }
-
-    // Create new engineer with approved status
-    const engineer = new Engineer({
-      engineerId: finalEngineerId ? finalEngineerId.trim() : undefined,
-      name: name.trim(),
-      mobile: mobile.trim(),
-      email: email ? email.trim().toLowerCase() : undefined,
-      skills: skills || [],
-      address: address ? address.trim() : undefined,
-      currentLocation: currentLocation ? currentLocation.trim() : undefined,
-      location: location || undefined,
-      pincode: pincode ? pincode.trim() : undefined,
-      categories: categories || [],
-      isActive: isActive,
-      isAvailable: isAvailable,
-      isDeleted: false,
-      isBlocked: false,
-      isSuspended: false,
-      rating: rating || 0,
-      totalJobs: 0,
-      completedJobs: 0
-    });
-
-    await engineer.save();
+    const engineer = result.value || result;
+    const isNew = !result.lastErrorObject?.updatedExisting;
 
     // Generate JWT token for immediate use if needed
     const token = jwt.sign(
@@ -289,9 +263,9 @@ export const onboardEngineer = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    res.status(201).json({
+    res.status(isNew ? 201 : 200).json({
       success: true,
-      message: "Engineer onboarded successfully",
+      message: isNew ? "Engineer onboarded successfully" : "Engineer profile synced successfully",
       engineer: {
         id: engineer._id,
         engineerId: engineer.engineerId,
