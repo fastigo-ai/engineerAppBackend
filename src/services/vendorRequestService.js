@@ -29,6 +29,8 @@ export const createAndMatchVendorOrder = async (payload) => {
     location
   } = payload;
 
+
+
   /* 1️⃣ ATOMIC UPSERT (IDEMPOTENT) */
 
   const [orderLng, orderLat] = location.coordinates;
@@ -63,9 +65,9 @@ export const createAndMatchVendorOrder = async (payload) => {
         contact_phone: payload.contact_phone,
 
         order_price: payload.order_price || 0,
-        sla: payload.sla,
         sla_priority: payload.sla_priority,
         sla_response_time_minutes: payload.sla_response_time_minutes || 0,
+        description: payload.description,
 
         location,
         status: "PENDING",

@@ -120,15 +120,15 @@ const VendorOrderSchema = new mongoose.Schema(
     },
     image_url: [String],
     completion_images: [String],
-    sla: {
-      type: String,
-    },
     sla_priority: {
       type: String,
     },
     sla_response_time_minutes: {
       type: Number,
     },
+    description: {
+      type: String,
+    }
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

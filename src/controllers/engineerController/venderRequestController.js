@@ -1,6 +1,6 @@
 import { Engineer } from "../../models/engineersModal.js";
 import VendorOrder from "../../models/vendorOrderModal.js";
-import { createAndMatchVendorOrder, acceptOrderService,rejectOrderService } from "../../services/vendorRequestService.js";
+import { createAndMatchVendorOrder, acceptOrderService, rejectOrderService } from "../../services/vendorRequestService.js";
 import { getDistanceInMeters } from "../../utils/distance.js";
 import { latLngToCell, gridDisk } from "h3-js";
 import { getIO } from "../../config/socket.js";
@@ -143,6 +143,8 @@ export const getVendorRequests = async (req, res) => {
   try {
     const { vendor_id, call_id, location } = req.body;
 
+    console.log("All Order Is", req.body);
+
     if (!vendor_id || !call_id) {
       return res.status(400).json({
         success: false,
@@ -196,9 +198,9 @@ export const acceptVendorOrder = async (req, res) => {
     const engineerId = req.user.id;
 
     if (!orderId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "OrderId is required" 
+      return res.status(400).json({
+        success: false,
+        message: "OrderId is required"
       });
     }
 
@@ -215,23 +217,23 @@ export const acceptVendorOrder = async (req, res) => {
     const orderRoom = `order_${order._id}`;
 
     // Notify winner
-    io.to(engineerId.toString()).emit("ORDER_CONFIRMED", { 
-      order_id: order._id 
+    io.to(engineerId.toString()).emit("ORDER_CONFIRMED", {
+      order_id: order._id
     });
 
     // Close for everyone else
-    io.to(orderRoom).emit("ORDER_CLOSED", { 
-      order_id: order._id 
+    io.to(orderRoom).emit("ORDER_CLOSED", {
+      order_id: order._id
     });
 
-    return res.status(200).json({ 
-      success: true, 
-      order 
+    return res.status(200).json({
+      success: true,
+      order
     });
 
   } catch (err) {
     console.error("Accept Order Controller Error:", err);
-    
+
     // Send specific status code if thrown by service, else default to 500
     const statusCode = err.status || 500;
     return res.status(statusCode).json({
@@ -253,12 +255,12 @@ export const rejectVendorOrder = async (req, res) => {
     const io = getIO();
     const engineerRoom = engineerId.toString();
     const orderRoom = `order_${orderId}`;
-    
+
     io.in(engineerRoom).socketsLeave(orderRoom);
 
-    return res.status(200).json({ 
-      success: true, 
-      message: "Order rejected and removed from your feed" 
+    return res.status(200).json({
+      success: true,
+      message: "Order rejected and removed from your feed"
     });
 
   } catch (err) {
@@ -294,12 +296,12 @@ export const getNearbyVendorOrders = async (req, res) => {
     const nearbyOrders = await VendorOrder.find({
       status: "PENDING",
       h3Index: { $in: searchCells },
-      assigned_engineer_id: null,    
-      rejected_engineers: { $ne: engineerId } 
+      assigned_engineer_id: null,
+      rejected_engineers: { $ne: engineerId }
     })
-    .sort({ created_at: -1 }) 
-    .limit(20)
-    .lean();
+      .sort({ created_at: -1 })
+      .limit(20)
+      .lean();
 
     // 3. Map through orders to add calculated distance to each
     const ordersWithDistance = nearbyOrders.map(order => {
@@ -308,9 +310,9 @@ export const getNearbyVendorOrders = async (req, res) => {
       const orderLat = order.location.coordinates[1];
 
       const distanceInMeters = getDistanceInMeters(
-        latNum, 
-        lngNum, 
-        orderLat, 
+        latNum,
+        lngNum,
+        orderLat,
         orderLng
       );
 
@@ -343,13 +345,13 @@ export const updateVendorOrderWorkStatus = async (req, res) => {
     const { orderId } = req.params;
     const { workStatus } = req.body;
     const engineerId = req.user.id;
-    if (!["NOT_STARTED", "IN_PROGRESS", "COMPLETED","STARTED"].includes(workStatus)) {
+    if (!["NOT_STARTED", "IN_PROGRESS", "COMPLETED", "STARTED"].includes(workStatus)) {
       return res.status(400).json({
         success: false,
         message: "Invalid work status value"
       });
     }
-    
+
     const order = await VendorOrder.findOneAndUpdate(
       { _id: orderId, assigned_engineer_id: engineerId },
       { work_status: workStatus },
@@ -381,7 +383,7 @@ export const completeOrder = async (req, res) => {
   try {
     const { orderId } = req.body;
     const engineerId = req.user.id;
-    const files = req.files; 
+    const files = req.files;
 
     // 1. Basic Validation
     if (!orderId) return res.status(400).json({ success: false, message: "Order ID is required." });
@@ -400,26 +402,26 @@ export const completeOrder = async (req, res) => {
 
     // 3. Update Order Status and Save Image URLs
     const order = await VendorOrder.findOneAndUpdate(
-      { 
-        _id: orderId, 
-        assigned_engineer_id: engineerId, 
-        status: "ACCEPTED" 
+      {
+        _id: orderId,
+        assigned_engineer_id: engineerId,
+        status: "ACCEPTED"
       },
-      { 
-        $set: { 
-          status: "COMPLETED", 
+      {
+        $set: {
+          status: "COMPLETED",
           work_status: "COMPLETED",
           completed_at: new Date(),
           completion_images: imageUrls // Store the array of Cloudinary URLs
-        } 
+        }
       },
       { new: true }
     );
 
     if (!order) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Order not found or you aren't authorized to complete it." 
+      return res.status(404).json({
+        success: false,
+        message: "Order not found or you aren't authorized to complete it."
       });
     }
 
