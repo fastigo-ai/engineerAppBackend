@@ -31,7 +31,7 @@ export const createAndMatchVendorOrder = async (payload) => {
 
   /* 1️⃣ ATOMIC UPSERT (IDEMPOTENT) */
 
-    const [orderLng, orderLat] = location.coordinates;
+  const [orderLng, orderLat] = location.coordinates;
   const orderCell = latLngToCell(orderLat, orderLng, H3_RESOLUTION);
 
   console.log('Creating order with H3 index:', orderCell);
@@ -63,6 +63,9 @@ export const createAndMatchVendorOrder = async (payload) => {
         contact_phone: payload.contact_phone,
 
         order_price: payload.order_price || 0,
+        sla: payload.sla,
+        sla_priority: payload.sla_priority,
+        sla_response_time_minutes: payload.sla_response_time_minutes || 0,
 
         location,
         status: "PENDING",
@@ -76,7 +79,7 @@ export const createAndMatchVendorOrder = async (payload) => {
   const matchedEngineers = await matchEngineersByLocation({
     location: order.location
   });
-  if(matchedEngineers){
+  if (matchedEngineers) {
     await VendorOrder.findByIdAndUpdate(order._id, {
       h3Index: latLngToCell(location.coordinates[1], location.coordinates[0], H3_RESOLUTION)
     });
@@ -150,11 +153,11 @@ export const acceptOrderService = async ({ orderId, engineerId, distance }) => {
 
   console.log("Notifying Vendor of acceptance with payload:", payload);
 
-    await axios.post(
-      "https://door2fyvendor-gv4g4.ondigitalocean.app/calls/engineer/assignment-result",
-      payload,
-    );
-  
+  await axios.post(
+    "https://door2fyvendor-gv4g4.ondigitalocean.app/calls/engineer/assignment-result",
+    payload,
+  );
+
 
   return order;
 };
@@ -170,8 +173,8 @@ export const rejectOrderService = async ({ orderId, engineerId }) => {
   // 2. Persist the rejection in our DB
   const order = await VendorOrder.findOneAndUpdate(
     { _id: orderId },
-    { 
-      $addToSet: { rejected_engineers: engineerId } 
+    {
+      $addToSet: { rejected_engineers: engineerId }
     },
     { new: true }
   );

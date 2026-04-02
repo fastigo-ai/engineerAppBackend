@@ -50,13 +50,13 @@ const VendorOrderSchema = new mongoose.Schema(
     /* -------- Assignment -------- */
     status: {
       type: String,
-      enum: ["PENDING", "MATCHING", "ACCEPTED", "EXPIRED", "CANCELLED","COMPLETED"],
+      enum: ["PENDING", "MATCHING", "ACCEPTED", "EXPIRED", "CANCELLED", "COMPLETED"],
       default: "PENDING",
       index: true,
     },
     work_status: {
       type: String,
-      enum: ["NOT_STARTED", "IN_PROGRESS", "COMPLETED","STARTED"],
+      enum: ["NOT_STARTED", "IN_PROGRESS", "COMPLETED", "STARTED"],
       default: "NOT_STARTED",
       index: true,
     },
@@ -111,15 +111,24 @@ const VendorOrderSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
-    h3Index:{
+    h3Index: {
       type: String,
       index: true,
     },
-    sop:{
+    sop: {
       type: String,
     },
-    image_url:[String],
-    completion_images:[String],
+    image_url: [String],
+    completion_images: [String],
+    sla: {
+      type: String,
+    },
+    sla_priority: {
+      type: String,
+    },
+    sla_response_time_minutes: {
+      type: Number,
+    },
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
