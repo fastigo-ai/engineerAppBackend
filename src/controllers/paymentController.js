@@ -3,8 +3,8 @@ import razorpay from '../config/razorpay.js';
 import { ServicePlan } from '../models/serviceModal.js';
 import { Order } from '../models/orderSchema.js';
 import { Payment } from '../models/paymentSchema.js';
+import { getGeoCacheService } from '../services/map/geoCacheService.js';
 import User from '../models/user.js';
-import axios from 'axios';
 import { createCheckoutService } from '../services/user/paymentService.js';
 import { matchEngineersByLocation, notifyMatchedEngineers } from '../services/notificationEngineerService.js';
 
@@ -116,7 +116,7 @@ export const verifyPayment = async (req, res) => {
       });
     }
 
-    // 1️⃣ Verify Razorpay signature
+    // 1️ Verify Razorpay signature
     if (razorpay_signature !== 'demo_bypass_signature') {
       const sign = razorpay_order_id + '|' + razorpay_payment_id;
       const expectedSign = crypto
@@ -137,7 +137,7 @@ export const verifyPayment = async (req, res) => {
       }
     }
 
-    // 2️⃣ Fetch payment details from Razorpay
+    // 2️ Fetch payment details from Razorpay
     let paymentDetails;
     if (razorpay_signature === 'demo_bypass_signature') {
       paymentDetails = {
@@ -155,11 +155,11 @@ export const verifyPayment = async (req, res) => {
       paymentDetails = await razorpay.payments.fetch(razorpay_payment_id);
     }
 
-    // 3️⃣ Update the corresponding order
+    // 3️ Update the corresponding order
     const order = await Order.findOneAndUpdate(
       { razorpayOrderId: razorpay_order_id },
       {
-        status: 'paid',
+        status: 'Searching',
         paymentStatus: 'paid',
         orderStatus: 'Upcoming',
         work_status: 'Upcoming',
@@ -644,7 +644,6 @@ export const getUserOrders = async (req, res) => {
 };
 
 
-
 export const createCheckoutController = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -659,33 +658,17 @@ export const createCheckoutController = async (req, res) => {
 
     let latitude = null;
     let longitude = null;
+    let location = null;
 
-    //  Convert address → lat/lng
+    //  Use GeoCache Service instead of direct API
     if (addressText) {
-      const geoResponse = await axios.get(
-        "https://maps.googleapis.com/maps/api/geocode/json",
-        {
-          params: {
-            address: addressText,
-            key: process.env.GOOGLE_MAPS_API_KEY
-          }
-        }
-      );
+      const geoData = await getGeoCacheService(addressText);
 
-      if (
-        !geoResponse.data.results ||
-        geoResponse.data.results.length === 0
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid address. Could not geocode."
-        });
-      }
+      // GeoJSON → extract lat/lng
+      longitude = geoData.location.coordinates[0];
+      latitude = geoData.location.coordinates[1];
 
-      const location = geoResponse.data.results[0].geometry.location;
-
-      latitude = location.lat;
-      longitude = location.lng;
+      location = geoData.location; // full GeoJSON
     }
 
     //  Call service
@@ -696,6 +679,7 @@ export const createCheckoutController = async (req, res) => {
         servicePlanIds,
         latitude,
         longitude,
+        location,
         scheduledAt,
         addressText,
         paymentMode
@@ -720,24 +704,23 @@ export const createCheckoutController = async (req, res) => {
 
         totalDuration: order.totalDuration,
 
-        servicePlans: servicePlans.map(p => ({
+        servicePlans: servicePlans.map((p) => ({
           id: p._id,
           name: p.name,
           price: p.price,
-          duration: p.duration
+          duration: p.duration,
         })),
 
         location: order.location,
-        addressText: order.addressText
-      }
+        addressText: order.addressText,
+      },
     });
-
   } catch (error) {
     console.error("Checkout controller error:", error);
 
     return res.status(500).json({
       success: false,
-      message: error.message || "Internal Server Error"
+      message: error.message || "Internal Server Error",
     });
   }
 };

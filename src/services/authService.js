@@ -5,11 +5,11 @@ const authRepo = new AuthRepository();
 export const sendOTPService = async (phone) => {
   if (!phone) throw new Error("Phone number is required");
 
-  const otp = "1234"; 
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000); 
+  const otp = "1234";
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
   await authRepo.saveOTP(phone, otp, expiresAt);
-  return { phone, otp }; 
+  return { phone, otp };
 };
 
 export const verifyOTPService = async (phone, otp) => {

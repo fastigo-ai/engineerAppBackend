@@ -1,4 +1,4 @@
-import { 
+import {
   addServiceToPlanRepository,
   bulkAddServicesAllTypesRepository,
   getAllServicesRepository,
@@ -23,7 +23,7 @@ export const addServiceToPlanService = async (planType, serviceData) => {
   }
 
   const { name, subtitle, price, features, category } = serviceData;
-  
+
   if (!name || !subtitle || price === undefined || !features || !category) {
     throw new Error('Service name, subtitle, price, features, and category are required');
   }
@@ -126,7 +126,7 @@ export const bulkAddServicesAllTypesService = async (servicesData) => {
 
 export const getAllServicesService = async () => {
   const result = await getAllServicesRepository();
-  console.log(result , "result");
+  console.log(result, "result");
   if (!result || result.length === 0 || !result) {
     throw new Error('No services found');
   }
@@ -173,7 +173,7 @@ export const getServicesByCategoryService = async (categoryInput) => {
   }
 
   let categoryId;
-  
+
   // Check if input is already an ObjectId
   if (mongoose.Types.ObjectId.isValid(categoryInput)) {
     categoryId = categoryInput;

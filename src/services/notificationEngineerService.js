@@ -102,8 +102,8 @@ export async function matchEngineersByLocation({ location }) {
       { h3Index: null }
     ]
   })
-  .select("_id name mobile location rating totalJobs completedJobs h3Index isAvailable isActive fcmToken")
-  .lean();
+    .select("_id name mobile location rating totalJobs completedJobs h3Index isAvailable isActive fcmToken")
+    .lean();
 
   if (!engineers.length) {
     return [];

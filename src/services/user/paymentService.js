@@ -33,11 +33,11 @@ export const createCheckoutService = async ({
   if (!user) throw new Error("User not found");
 
   // Fetch plans
-  console.log("DEBUG: Attempting to find service plans for IDs:", planIds);
+  // console.log("DEBUG: Attempting to find service plans for IDs:", planIds);
   const servicePlans = await ServicePlan.find({
     _id: { $in: planIds }
   });
-  console.log("DEBUG: Found service plans count:", servicePlans.length);
+  // console.log("DEBUG: Found service plans count:", servicePlans.length);
 
   if (servicePlans.length !== planIds.length) {
     console.error("DEBUG: Plan mismatch detected!", {
@@ -181,6 +181,4 @@ export const createCheckoutService = async ({
     servicePlans
   };
 };
-
-
 

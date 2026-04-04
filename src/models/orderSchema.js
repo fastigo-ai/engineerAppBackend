@@ -93,7 +93,7 @@ const OrderSchema = new mongoose.Schema(
         "refunded",
         "completed",
         "cancelled",
-        "SEARCHING",
+        "Searching",
       ],
       default: "created",
       index: true,
