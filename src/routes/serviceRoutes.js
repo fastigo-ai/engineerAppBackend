@@ -23,7 +23,9 @@ import {
   getUserOrders,
   getAllBookings,
   updateOrderStatus,
-  } from '../controllers/serviceController.js';
+  cancelBooking,
+  rescheduleBooking,
+} from '../controllers/serviceController.js';
 import upload from '../middleware/multer.js';
 import { bulkImportServices } from '../repositories/serviceRepository.js';
 import { authenticate } from '../middleware/authMiddleWare.js';
@@ -42,7 +44,7 @@ router.get('/service/:serviceId', getServiceByIdController);
 
 router.get('/category/:category', getServicesByCategoryController);
 
-router.post('/category', upload.single("image"),  createCategoryController);
+router.post('/category', upload.single("image"), createCategoryController);
 
 router.post('/createService', upload.single("image"), createServicePlanController);
 
@@ -65,7 +67,7 @@ router.post('/createCategory', upload.single("image"), createCategory);
 
 router.get('/planTypes', getPlanTypes);
 
-router.get('/allServicesDashboard',   getAllServicePlans);
+router.get('/allServicesDashboard', getAllServicePlans);
 
 router.put('/editServicePlan/:id', upload.single("image"), editServicePlan);
 
@@ -80,5 +82,9 @@ router.get('/userOrders', authenticate, getUserOrders);
 router.get('/allBookings', getAllBookings);
 
 router.put('/updateOrderStatus/:id', updateOrderStatus);
+
+router.put('/cancelBooking/:id', cancelBooking);
+
+router.put('/rescheduleBooking/:id', rescheduleBooking);
 
 export default router;

@@ -766,6 +766,15 @@ export const getUserOrders = async (req, res) => {
           select: 'name description image'
         }
       })
+      .populate({
+        path: 'servicePlans',
+        select: 'name subtitle price image features featuresFormatted category',
+        populate: {
+          path: 'category',
+          select: 'name description image'
+        }
+      })
+      .populate('assignedEngineer', 'name mobile rating')
       .sort({ createdAt: -1 }) // Newest first
       .lean();
 
@@ -794,6 +803,63 @@ export const getUserOrders = async (req, res) => {
       message: 'Failed to retrieve user orders',
       error: error.message
     });
+  }
+};
+
+export const cancelBooking = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await Order.findByIdAndUpdate(
+      id,
+      { orderStatus: 'Cancelled', work_status: 'Cancelled', status: 'cancelled' },
+      { new: true }
+    );
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Booking cancelled successfully',
+      data: order
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const rescheduleBooking = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { scheduledAt, bookingDetails } = req.body;
+
+    if (!scheduledAt) {
+      return res.status(400).json({ success: false, message: 'New schedule time is required' });
+    }
+
+    const updateData = { scheduledAt };
+    if (bookingDetails) {
+      updateData.bookingDetails = bookingDetails;
+    }
+
+    const order = await Order.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true }
+    );
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Booking rescheduled successfully',
+      data: order
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -900,3 +966,4 @@ export const updateOrderStatus = async (req, res) => {
     });
   }
 };
+

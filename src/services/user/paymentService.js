@@ -33,20 +33,27 @@ export const createCheckoutService = async ({
   if (!user) throw new Error("User not found");
 
   // Fetch plans
+  console.log("DEBUG: Attempting to find service plans for IDs:", planIds);
   const servicePlans = await ServicePlan.find({
-    _id: { $in: planIds },
-    isActive: true
+    _id: { $in: planIds }
   });
+  console.log("DEBUG: Found service plans count:", servicePlans.length);
 
   if (servicePlans.length !== planIds.length) {
-    throw new Error("Some service plans not found or inactive");
+    console.error("DEBUG: Plan mismatch detected!", {
+      providedCount: planIds.length,
+      foundCount: servicePlans.length,
+      providedIds: planIds,
+      foundIds: servicePlans.map(p => p._id.toString())
+    });
+    throw new Error(`Some service plans not found or inactive. Found ${servicePlans.length} out of ${planIds.length}`);
   }
 
   // Price & Duration
-  const totalAmount = servicePlans.reduce((sum, p) => sum + p.price, 0);
+  const totalAmount = servicePlans.reduce((sum, p) => sum + (p.price || 0), 0);
 
   const totalDuration = servicePlans.reduce(
-    (sum, p) => sum + p.duration + (p.bufferTime || 0),
+    (sum, p) => sum + (p.duration || 0) + (p.bufferTime || 0),
     0
   );
 
@@ -118,7 +125,7 @@ export const createCheckoutService = async ({
   }
 
   //  Order Status Logic (IMPORTANT)
-  let status = "CREATED";
+  let status = "created";
 
   if (paymentMode === "Payment After Service") {
     status = "SEARCHING"; // directly dispatch

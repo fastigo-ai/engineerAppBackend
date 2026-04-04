@@ -93,9 +93,39 @@ const OrderSchema = new mongoose.Schema(
         "refunded",
         "completed",
         "cancelled",
+        "SEARCHING",
       ],
       default: "created",
       index: true,
+    },
+    paymentMode: {
+      type: String,
+      enum: ["ONLINE", "Payment After Service"],
+      default: "ONLINE",
+    },
+    paymentStatus: {
+      type: String,
+      default: "PENDING",
+    },
+    orderType: {
+      type: String,
+      enum: ["INSTANT", "SCHEDULED"],
+      default: "INSTANT",
+    },
+    scheduledAt: {
+      type: Date,
+      default: null,
+    },
+    totalDuration: {
+      type: Number,
+      default: 0,
+    },
+    h3Index: {
+      type: String,
+      index: true,
+    },
+    addressText: {
+      type: String,
     },
     razorpayOrderId: {
       type: String,
@@ -183,10 +213,6 @@ const OrderSchema = new mongoose.Schema(
       status: String,
       refundedAt: Date,
     },
-    h3Index: {
-      type: String,
-      trim: true,
-    },
   },
   {
     timestamps: true,
@@ -200,3 +226,4 @@ OrderSchema.index({ createdAt: -1 });
 OrderSchema.index({ location: "2dsphere" });
 
 export const Order = mongoose.model("Order", OrderSchema);
+
