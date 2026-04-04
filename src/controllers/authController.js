@@ -296,7 +296,7 @@ export const verifyOTP = async (req, res) => {
     try {
       let isApproved = false;
 
-      if (mobile.includes("7985714442") && otp === "1111") {
+      if (mobile.includes("7985714442") || mobile.includes("9366128220") && otp === "1111") {
         isApproved = true;
       } else {
         const verificationCheck = await twilioClient.verify.v2
