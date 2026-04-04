@@ -2,6 +2,7 @@ import { Order } from "../../models/orderSchema.js"
 import { ServicePlan } from '../../models/serviceModal.js';
 import User from "../../models/user.js";
 import { latLngToCell } from "h3-js";
+import { dispatchOrder } from "../dispatch/dispatchService.js";
 import razorpay from "../../config/razorpay.js";
 
 const H3_RESOLUTION = 8;
@@ -172,7 +173,7 @@ export const createCheckoutService = async ({
 
   //  Trigger dispatch ONLY for PAS or already paid
   if (paymentMode === "Payment After Service") {
-    // dispatchOrder(order._id);
+    dispatchOrder(order._id);
   }
 
   return {
