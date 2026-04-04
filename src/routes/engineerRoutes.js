@@ -7,10 +7,14 @@ import {
   AssignEngineerToOrderController,
   unAssignEngineerFromOrderController,
   getEngineerDashboard,
+  goOnlineController,
+  goOfflineController,
+  heartbeatController,
+  updateLocationController,
 } from "../controllers/engineerController.js";
-import { 
-  getProfile, 
-  updateProfile 
+import {
+  getProfile,
+  updateProfile
 } from "../controllers/engineerController/authController.js";
 import {
   updateEngineerLocation,
@@ -26,16 +30,16 @@ import {
 } from "../controllers/engineerController/requestController.js";
 
 import {
-    getVendorRequests,
-    servicableLocation,
-    acceptVendorOrder,
-    getNearbyVendorOrders,
-    rejectVendorOrder,
-    updateVendorOrderWorkStatus,
-    completeOrder,
-    getAcceptedVendorOrders,
-    getRejectedVendorOrders,
-    getCompletedVendorOrders,
+  servicableLocation,
+  acceptVendorOrder,
+  getNearbyVendorOrders,
+  rejectVendorOrder,
+  updateVendorOrderWorkStatus,
+  completeOrder,
+  getAcceptedVendorOrders,
+  getRejectedVendorOrders,
+  getCompletedVendorOrders,
+  createVendorRequests,
 } from "../controllers/engineerController/venderRequestController.js";
 import {
   authenticate,
@@ -57,6 +61,10 @@ router.put(
 
 // Location based routes (Engineer-specific)
 router.put("/updateLocation", authenticateEngineer, updateEngineerLocation);
+router.put("/goOnline", authenticateEngineer, goOnlineController);
+router.put("/goOffline", authenticateEngineer, goOfflineController);
+router.post("heartbeat", authenticateEngineer, heartbeatController);
+router.post("/update/location", authenticateEngineer, updateLocationController);
 router.get("/requests/nearby", authenticateEngineer, getNearbyRequests);
 
 // Request status routes (Engineer-specific) - New dedicated endpoints
@@ -79,14 +87,14 @@ router.get("/requests/completed", authenticateEngineer, getCompletedRequests);
 
 // Vender-specific routes can be added here
 
-router.post("/vendorOrder/request", getVendorRequests);
+router.post("/vendorOrder/request", createVendorRequests);
 router.get("/vendorOrder/serviceable", servicableLocation);
 router.post("/vendorOrder/accept", authenticateEngineer, acceptVendorOrder);
 router.post("/vendorOrder/reject", authenticateEngineer, rejectVendorOrder);
 router.get("/vendorOrder/nearby", authenticateEngineer, getNearbyVendorOrders);
 router.post("/vendorOrder/updateVendorOrderStatus/:orderId", authenticateEngineer, updateVendorOrderWorkStatus);
 
-router.post("/vendorOrder/complete", upload.array("images", 20),authenticateEngineer ,completeOrder);
+router.post("/vendorOrder/complete", upload.array("images", 20), authenticateEngineer, completeOrder);
 
 router.get("/vendorOrder/accepted", authenticateEngineer, getAcceptedVendorOrders);
 router.get("/vendorOrder/rejected", authenticateEngineer, getRejectedVendorOrders);

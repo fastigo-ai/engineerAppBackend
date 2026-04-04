@@ -7,6 +7,7 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true },
   password: { type: String, required: true },
 
+
   userType: {
     type: String,
     required: true,
@@ -58,6 +59,10 @@ const userSchema = new mongoose.Schema({
       type: [Number],
       default: [0, 0] // [longitude, latitude]
     }
+  },
+  refreshToken: {
+    type: String,
+    default: null
   }
 }, {
   timestamps: true,

@@ -139,7 +139,7 @@ export const servicableLocation = async (req, res) => {
   }
 };
 
-export const getVendorRequests = async (req, res) => {
+export const createVendorRequests = async (req, res) => {
   try {
     const { vendor_id, call_id, location } = req.body;
 
@@ -365,6 +365,19 @@ export const updateVendorOrderWorkStatus = async (req, res) => {
       });
     }
 
+    const payload = {
+      call_id: order.call_id,
+      status: order.work_status,
+      engineer_id: engineerId
+    };
+
+    console.log("Notifying Vendor of acceptance with payload:", payload);
+
+    await axios.post(
+      "https://door2fyvendor-gv4g4.ondigitalocean.app/calls/engineer/assignment-result",
+      payload,
+    );
+
     return res.status(200).json({
       success: true,
       message: "Work status updated successfully",
@@ -412,7 +425,7 @@ export const completeOrder = async (req, res) => {
           status: "COMPLETED",
           work_status: "COMPLETED",
           completed_at: new Date(),
-          completion_images: imageUrls // Store the array of Cloudinary URLs
+          completion_images: imageUrls
         }
       },
       { new: true }

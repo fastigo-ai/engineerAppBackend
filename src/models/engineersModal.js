@@ -8,7 +8,7 @@ const EngineerSchema = new mongoose.Schema({
   engineerId: {
     type: String,
     trim: true,
-    sparse: true 
+    sparse: true
   },
   name: {
     type: String,
@@ -31,7 +31,7 @@ const EngineerSchema = new mongoose.Schema({
     type: [String],
     default: []
   },
-  pincode : {
+  pincode: {
     type: String,
     trim: true
   },
@@ -92,12 +92,27 @@ const EngineerSchema = new mongoose.Schema({
   },
   h3Index: {
     type: String,
-    index: true 
+    index: true
   },
   fcmToken: {
     type: String,
     trim: true
   },
+  status: {
+    type: String,
+    enum: ["OFFLINE", "ONLINE", "BUSY"],
+    default: "OFFLINE",
+    index: true
+  },
+
+  lastHeartbeat: {
+    type: Date,
+    index: true
+  },
+
+  lastLocationUpdate: {
+    type: Date
+  }
 }, {
   timestamps: true,
   collection: 'engineers'
@@ -106,47 +121,79 @@ const EngineerSchema = new mongoose.Schema({
 EngineerSchema.pre("save", function () {
   if (
     this.isModified("location") &&
-    this.location?.coordinates?.length === 2
+    this.location &&
+    this.location.coordinates &&
+    this.location.coordinates.length === 2
   ) {
     const [lng, lat] = this.location.coordinates;
 
-    this.h3Index = latLngToCell(lat, lng, H3_RESOLUTION);
+    // ✅ validate coordinates
+    if (
+      typeof lat === "number" &&
+      typeof lng === "number" &&
+      lat >= -90 && lat <= 90 &&
+      lng >= -180 && lng <= 180
+    ) {
+      this.h3Index = latLngToCell(lat, lng, H3_RESOLUTION);
+      this.lastLocationUpdate = new Date(); // ✅ auto update timestamp
+    }
   }
-
-  
 });
+
 
 EngineerSchema.pre(
   ["findOneAndUpdate", "updateOne", "updateMany"],
   function () {
-    const update = this.getUpdate();
+    let update = this.getUpdate();
 
-    const location =
-      update?.location ||
-      update?.$set?.location;
+    const set = update.$set || {};
+    const location = update.location || set.location;
 
+    let newSet = { ...set };
+
+    // ✅ LOCATION LOGIC
     if (
-      location?.coordinates &&
+      location &&
+      location.coordinates &&
       location.coordinates.length === 2
     ) {
       const [lng, lat] = location.coordinates;
 
-      this.setUpdate({
-        ...update,
-        $set: {
-          ...update.$set,
-          h3Index: latLngToCell(lat, lng, H3_RESOLUTION),
-        },
-      });
+      if (
+        typeof lat === "number" &&
+        typeof lng === "number" &&
+        lat >= -90 && lat <= 90 &&
+        lng >= -180 && lng <= 180
+      ) {
+        newSet.location = location;
+        newSet.h3Index = latLngToCell(lat, lng, H3_RESOLUTION);
+        newSet.lastLocationUpdate = new Date();
+
+        delete update.location; // prevent conflict
+      }
     }
 
-    
+    // ✅ HEARTBEAT LOGIC
+    if (newSet.status === "ONLINE") {
+      newSet.lastHeartbeat = new Date();
+    }
+
+    // ✅ SINGLE FINAL UPDATE (IMPORTANT)
+    this.setUpdate({
+      ...update,
+      $set: newSet
+    });
   }
 );
 
 
 // Index for geospatial queries
 EngineerSchema.index({ location: '2dsphere' });
-EngineerSchema.index({ engineerId: 1 });
+EngineerSchema.index({
+  h3Index: 1,
+  status: 1,
+  lastHeartbeat: 1,
+  engineerId: 1
+});
 
 export const Engineer = mongoose.model('Engineer', EngineerSchema);

@@ -13,4 +13,3 @@ const ServicePlansSchema = new mongoose.Schema({
 });
 
 export const ServicePlans = mongoose.model('plantype', ServicePlansSchema);
-    

@@ -33,7 +33,11 @@ const ServicePlanSchema = new mongoose.Schema({
     ref: 'Category',
     required: true,
     trim: true,
-  }
+  }, duration: {
+    type: Number,
+    required: true,
+    min: 0
+  },
 }, {
   timestamps: true,
   collection: 'servicePlan'

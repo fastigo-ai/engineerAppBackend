@@ -1,7 +1,7 @@
 import { Order } from "../../models/orderSchema.js";
 import User from "../../models/user.js";
 import { Engineer } from "../../models/engineersModal.js";
-import STATUS_CODES from "../../constants/statusCodes.js"; 
+import STATUS_CODES from "../../constants/statusCodes.js";
 import vendorOrderModal from "../../models/vendorOrderModal.js";
 import mongoose from "mongoose";
 import { getDistanceInMeters } from "../../utils/distance.js"; // Ensure you import your distance helper
@@ -154,13 +154,13 @@ export const getNearbyRequests = async (req, res) => {
                     customerDetails: {
                         name: { $ifNull: ["$contact_name", "$l1_support_name"] },
                         phone: { $ifNull: ["$contact_phone", "$l1_support_number"] },
-                        email: { $literal: "vendor@order.com" } 
+                        email: { $literal: "vendor@order.com" }
                     },
                     servicePlan: { name: "$support_type" },
                     amount: "$order_price",
                     orderStatus: "Upcoming",
                     work_status: "$work_status",
-                    location: "$location", 
+                    location: "$location",
                     createdAt: "$created_at",
                     updatedAt: "$updated_at",
                     address: "$complete_address",
@@ -306,7 +306,7 @@ export const acceptRequest = async (req, res) => {
             error: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
-}; 
+};
 
 // Reject Request
 export const rejectRequest = async (req, res) => {
@@ -703,9 +703,9 @@ export const getAcceptedRequests = async (req, res) => {
             assignedEngineer: engineerId,
             orderStatus: 'Accepted'
         })
-        .populate('userId', 'name phone address')
-        .populate('servicePlan', 'name')
-        .lean();
+            .populate('userId', 'name phone address')
+            .populate('servicePlan', 'name')
+            .lean();
 
         // 5. Final Sort (Closest distance first)
         requests.sort((a, b) => (a.distance || 0) - (b.distance || 0));
@@ -796,18 +796,18 @@ export const updateWorkStatus = async (req, res) => {
 
         // 2. Try updating Vendor Order if regular Order not found
         // Convert to vendor format if needed, e.g., "In Progress" -> "IN_PROGRESS"
-        const vendorWorkStatus = work_status.toUpperCase().replace(/\s+/g, '_'); 
+        const vendorWorkStatus = work_status.toUpperCase().replace(/\s+/g, '_');
         const vendorOrder = await vendorOrderModal.findOneAndUpdate(
             { _id: id, assigned_engineer_id: engineerId },
-            { work_status: vendorWorkStatus }, 
+            { work_status: vendorWorkStatus },
             { new: true }
         );
 
         if (vendorOrder) {
-             // If completed, sync main status too
-             if (work_status === 'Completed') {
+            // If completed, sync main status too
+            if (work_status === 'Completed') {
                 await vendorOrderModal.findByIdAndUpdate(id, { status: 'COMPLETED' });
-             }
+            }
 
             return res.status(STATUS_CODES.SUCCESS).json({
                 success: true,

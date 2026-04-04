@@ -183,6 +183,10 @@ const OrderSchema = new mongoose.Schema(
       status: String,
       refundedAt: Date,
     },
+    h3Index: {
+      type: String,
+      trim: true,
+    },
   },
   {
     timestamps: true,

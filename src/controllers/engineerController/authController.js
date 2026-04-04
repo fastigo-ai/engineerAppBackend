@@ -241,9 +241,9 @@ export const onboardEngineer = async (req, res) => {
           createdAt: new Date()
         }
       },
-      { 
-        new: true, 
-        upsert: true, 
+      {
+        new: true,
+        upsert: true,
         rawResult: true // returns the raw mongo result to check updatedExisting
       }
     );

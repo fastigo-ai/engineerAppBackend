@@ -4,6 +4,8 @@ import { ServicePlan } from '../models/serviceModal.js';
 import { Order } from '../models/orderSchema.js';
 import { Payment } from '../models/paymentSchema.js';
 import User from '../models/user.js';
+import axios from 'axios';
+import { createCheckoutService } from '../services/user/paymentService.js';
 import { matchEngineersByLocation, notifyMatchedEngineers } from '../services/notificationEngineerService.js';
 
 // Helper to notify engineers for a regular order
@@ -17,7 +19,7 @@ const notifyEngineersForOrder = async (order) => {
       if (matchedEngineers && matchedEngineers.length > 0) {
         // Populate service plans if not already populated
         if (!order.servicePlan && !order.servicePlans?.length) {
-            await order.populate('servicePlan servicePlans');
+          await order.populate('servicePlan servicePlans');
         }
 
         const orderData = {
@@ -28,7 +30,7 @@ const notifyEngineersForOrder = async (order) => {
           price: order.amount ? `₹${order.amount}` : "To Be Decided",
           location: order.location
         };
-        
+
         await notifyMatchedEngineers(matchedEngineers, orderData);
       }
     }
@@ -132,12 +134,14 @@ export const createCheckoutSession = async (req, res) => {
     const orderData = {
       orderId,
       userId,
-      servicePlans: planIds, // Store all service plan IDs
-      servicePlan: planIds[0], // Keep first one for backward compatibility
+      servicePlans: planIds,
+      servicePlan: planIds[0],
       amount: totalAmount,
       currency: 'INR',
       status: 'created',
       razorpayOrderId: razorpayOrder.id,
+      razorpaySignature: razorpayOrder.signature,
+      razorpayPaymentId: razorpayOrder.payment_id,
       customerDetails: {
         name: user.name,
         email: user.email,
@@ -176,7 +180,7 @@ export const createCheckoutSession = async (req, res) => {
         serviceCount: servicePlans.length,
         customerDetails: order.customerDetails,
         receipt,
-        location: order.location || null, // Include location in response
+        location: order.location || null,
       },
     });
   } catch (error) {
@@ -594,7 +598,7 @@ const handleOrderPaid = async (payload) => {
     });
 
     console.log(`Order paid: ${orderEntity.id}`);
-    
+
     // Trigger notification
     await notifyEngineersForOrder(order);
 
@@ -711,6 +715,105 @@ export const getUserOrders = async (req, res) => {
       success: false,
       message: 'Failed to fetch orders',
       error: error.message
+    });
+  }
+};
+
+
+
+export const createCheckoutController = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    let {
+      servicePlanId,
+      servicePlanIds,
+      addressText,
+      scheduledAt,
+      paymentMode
+    } = req.body;
+
+    let latitude = null;
+    let longitude = null;
+
+    //  Convert address → lat/lng
+    if (addressText) {
+      const geoResponse = await axios.get(
+        "https://maps.googleapis.com/maps/api/geocode/json",
+        {
+          params: {
+            address: addressText,
+            key: process.env.GOOGLE_MAPS_API_KEY
+          }
+        }
+      );
+
+      if (
+        !geoResponse.data.results ||
+        geoResponse.data.results.length === 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid address. Could not geocode."
+        });
+      }
+
+      const location = geoResponse.data.results[0].geometry.location;
+
+      latitude = location.lat;
+      longitude = location.lng;
+    }
+
+    //  Call service
+    const { order, razorpayOrder, servicePlans } =
+      await createCheckoutService({
+        userId,
+        servicePlanId,
+        servicePlanIds,
+        latitude,
+        longitude,
+        scheduledAt,
+        addressText,
+        paymentMode
+      });
+
+    return res.status(201).json({
+      success: true,
+      message: "Checkout session created successfully",
+      data: {
+        orderId: order.orderId,
+        amount: order.amount,
+        currency: order.currency,
+
+        orderType: order.orderType,
+        scheduledAt: order.scheduledAt,
+
+        paymentMode: order.paymentMode,
+        paymentStatus: order.paymentStatus,
+
+        razorpayOrderId: razorpayOrder?.id || null,
+        keyId: process.env.RAZORPAY_KEY_ID,
+
+        totalDuration: order.totalDuration,
+
+        servicePlans: servicePlans.map(p => ({
+          id: p._id,
+          name: p.name,
+          price: p.price,
+          duration: p.duration
+        })),
+
+        location: order.location,
+        addressText: order.addressText
+      }
+    });
+
+  } catch (error) {
+    console.error("Checkout controller error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Internal Server Error"
     });
   }
 };

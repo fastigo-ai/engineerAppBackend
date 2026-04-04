@@ -1,11 +1,11 @@
 import express from 'express';
 import { authenticate } from '../middleware/authMiddleWare.js';
-import { createCheckoutSession, verifyPayment, getOrderStatus, getUserOrders, handleRazorpayWebhook } from '../controllers/paymentController.js';
+import { createCheckoutSession, verifyPayment, getOrderStatus, getUserOrders, handleRazorpayWebhook, createCheckoutController } from '../controllers/paymentController.js';
 
 const router = express.Router();
 
 // Payment routes (protected)
-router.post('/checkout/session', authenticate, createCheckoutSession);
+router.post('/checkout/session', authenticate, createCheckoutController);
 router.post('/verify', authenticate, verifyPayment);
 router.get('/order/:orderId', authenticate, getOrderStatus);
 router.get('/orders', authenticate, getUserOrders);

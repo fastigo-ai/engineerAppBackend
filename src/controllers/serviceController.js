@@ -10,54 +10,54 @@ import {
   createServicePlanService,
   getAllCategoryService,
 } from '../services/servicePlanService.js';
- import {Category} from "../models/categoryModal.js"
+import { Category } from "../models/categoryModal.js"
 import { uploadToCloudinary } from '../utils/uploadToCloudinary.js';
 import { ServicePlan } from '../models/serviceModal.js';
 import { ServicePlans } from '../models/planModal.js';
 import { Order } from '../models/orderSchema.js';
- 
+
 
 
 export const addServiceToPlanController = async (req, res) => {
   try {
     const { planType } = req.params;
     const updated = await addServiceToPlanService(planType, req.body);
-    res.status(STATUS_CODES.CREATED).json({ 
-      success: true, 
-      data: updated, 
-      message: 'Service added to plan successfully' 
+    res.status(STATUS_CODES.CREATED).json({
+      success: true,
+      data: updated,
+      message: 'Service added to plan successfully'
     });
   } catch (error) {
-    const code = error.message.includes('required') || 
-                 error.message.includes('Invalid') || 
-                 error.message.includes('must be') ||
-                 error.message.includes('not found') ||
-                 error.message.includes('format')
-      ? STATUS_CODES.BAD_REQUEST 
-      : error.message.includes('already exists') 
-      ? STATUS_CODES.CONFLICT 
-      : STATUS_CODES.INTERNAL_SERVER_ERROR;
+    const code = error.message.includes('required') ||
+      error.message.includes('Invalid') ||
+      error.message.includes('must be') ||
+      error.message.includes('not found') ||
+      error.message.includes('format')
+      ? STATUS_CODES.BAD_REQUEST
+      : error.message.includes('already exists')
+        ? STATUS_CODES.CONFLICT
+        : STATUS_CODES.INTERNAL_SERVER_ERROR;
     res.status(code).json({ success: false, message: error.message });
   }
 };
 
 export const bulkAddServicesAllTypesController = async (req, res) => {
   try {
-    
+
     const results = await bulkAddServicesAllTypesService(req.body);
-    res.status(STATUS_CODES.CREATED).json({ 
-      success: true, 
-      data: results, 
-      message: 'Services added to plan types successfully' 
+    res.status(STATUS_CODES.CREATED).json({
+      success: true,
+      data: results,
+      message: 'Services added to plan types successfully'
     });
   } catch (error) {
-    const code = error.message.includes('required') || 
-                 error.message.includes('must have') || 
-                 error.message.includes('must be') ||
-                 error.message.includes('Invalid') ||
-                 error.message.includes('not found') ||
-                 error.message.includes('format')
-      ? STATUS_CODES.BAD_REQUEST 
+    const code = error.message.includes('required') ||
+      error.message.includes('must have') ||
+      error.message.includes('must be') ||
+      error.message.includes('Invalid') ||
+      error.message.includes('not found') ||
+      error.message.includes('format')
+      ? STATUS_CODES.BAD_REQUEST
       : STATUS_CODES.INTERNAL_SERVER_ERROR;
     res.status(code).json({ success: false, message: error.message });
   }
@@ -66,15 +66,15 @@ export const bulkAddServicesAllTypesController = async (req, res) => {
 export const getAllServicesController = async (req, res) => {
   try {
     const services = await getAllServicesService();
-    console.log(services , "services");
-    res.status(STATUS_CODES.SUCCESS).json({ 
-      success: true, 
-      data: services, 
-      message: 'All services retrieved successfully' 
+    console.log(services, "services");
+    res.status(STATUS_CODES.SUCCESS).json({
+      success: true,
+      data: services,
+      message: 'All services retrieved successfully'
     });
   } catch (error) {
-    const code = error.message.includes('not found') 
-      ? STATUS_CODES.NOT_FOUND 
+    const code = error.message.includes('not found')
+      ? STATUS_CODES.NOT_FOUND
       : STATUS_CODES.INTERNAL_SERVER_ERROR;
     res.status(code).json({ success: false, message: error.message });
   }
@@ -84,18 +84,18 @@ export const getServicesByPlanTypeController = async (req, res) => {
   try {
     const { planType } = req.params;
     const plan = await getServicesByPlanTypeService(planType);
-    res.status(STATUS_CODES.SUCCESS).json({ 
-      success: true, 
-      data: plan, 
-      message: `${planType} services retrieved successfully` 
+    res.status(STATUS_CODES.SUCCESS).json({
+      success: true,
+      data: plan,
+      message: `${planType} services retrieved successfully`
     });
   } catch (error) {
-    const code = error.message.includes('Invalid') || 
-                 error.message.includes('required') 
-      ? STATUS_CODES.BAD_REQUEST 
-      : error.message.includes('not found') 
-      ? STATUS_CODES.NOT_FOUND 
-      : STATUS_CODES.INTERNAL_SERVER_ERROR;
+    const code = error.message.includes('Invalid') ||
+      error.message.includes('required')
+      ? STATUS_CODES.BAD_REQUEST
+      : error.message.includes('not found')
+        ? STATUS_CODES.NOT_FOUND
+        : STATUS_CODES.INTERNAL_SERVER_ERROR;
     res.status(code).json({ success: false, message: error.message });
   }
 };
@@ -104,19 +104,19 @@ export const getServiceByIdController = async (req, res) => {
   try {
     const { serviceId } = req.params;
     const service = await getServiceByIdService(serviceId);
-    res.status(STATUS_CODES.SUCCESS).json({ 
-      success: true, 
-      data: service, 
-      message: 'Service retrieved successfully' 
+    res.status(STATUS_CODES.SUCCESS).json({
+      success: true,
+      data: service,
+      message: 'Service retrieved successfully'
     });
   } catch (error) {
     const code = error.message.includes('required') ||
-                 error.message.includes('Invalid') ||
-                 error.message.includes('format')
-      ? STATUS_CODES.BAD_REQUEST 
-      : error.message.includes('not found') 
-      ? STATUS_CODES.NOT_FOUND 
-      : STATUS_CODES.INTERNAL_SERVER_ERROR;
+      error.message.includes('Invalid') ||
+      error.message.includes('format')
+      ? STATUS_CODES.BAD_REQUEST
+      : error.message.includes('not found')
+        ? STATUS_CODES.NOT_FOUND
+        : STATUS_CODES.INTERNAL_SERVER_ERROR;
     res.status(code).json({ success: false, message: error.message });
   }
 };
@@ -125,17 +125,17 @@ export const getServicesByCategoryController = async (req, res) => {
   try {
     const { category } = req.params;
     const services = await getServicesByCategoryService(category);
-    res.status(STATUS_CODES.SUCCESS).json({ 
-      success: true, 
-      data: services, 
-      message: `Services for category '${category}' retrieved successfully` 
+    res.status(STATUS_CODES.SUCCESS).json({
+      success: true,
+      data: services,
+      message: `Services for category '${category}' retrieved successfully`
     });
   } catch (error) {
-    const code = error.message.includes('required') 
-      ? STATUS_CODES.BAD_REQUEST 
-      : error.message.includes('not found') 
-      ? STATUS_CODES.NOT_FOUND 
-      : STATUS_CODES.INTERNAL_SERVER_ERROR;
+    const code = error.message.includes('required')
+      ? STATUS_CODES.BAD_REQUEST
+      : error.message.includes('not found')
+        ? STATUS_CODES.NOT_FOUND
+        : STATUS_CODES.INTERNAL_SERVER_ERROR;
     res.status(code).json({ success: false, message: error.message });
   }
 };
@@ -172,14 +172,14 @@ export const createServicePlanController = async (req, res) => {
 export const getAllCategoryController = async (req, res) => {
   try {
     const categories = await getAllCategoryService();
-    res.status(STATUS_CODES.SUCCESS).json({ 
-      success: true, 
-      data: categories, 
-      message: 'All categories retrieved successfully' 
+    res.status(STATUS_CODES.SUCCESS).json({
+      success: true,
+      data: categories,
+      message: 'All categories retrieved successfully'
     });
   } catch (error) {
-    const code = error.message.includes('not found') 
-      ? STATUS_CODES.NOT_FOUND 
+    const code = error.message.includes('not found')
+      ? STATUS_CODES.NOT_FOUND
       : STATUS_CODES.INTERNAL_SERVER_ERROR;
     res.status(code).json({ success: false, message: error.message });
   }
@@ -217,7 +217,7 @@ export const getAllServices = async (req, res) => {
         $addFields: {
           planTypes: {
             $map: {
-              input: { 
+              input: {
                 $setUnion: [
                   { $map: { input: '$allServices', as: 'service', in: '$$service.planType' } }
                 ]
@@ -323,7 +323,7 @@ export const getAllServices = async (req, res) => {
 
   } catch (error) {
     console.error('Get all services error:', error);
-    
+
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve all services',
@@ -337,15 +337,15 @@ export const updateCategoryImages = async (req, res) => {
   try {
     let { ids } = req.body; // array of category IDs
     const files = req.files;
-  
-      // If ids is stringified JSON, parse it
-      if (typeof ids === "string") {
-        ids = JSON.parse(ids);
-      }
-  
-      console.log(ids[1]);
-      console.log(files.length);
-    
+
+    // If ids is stringified JSON, parse it
+    if (typeof ids === "string") {
+      ids = JSON.parse(ids);
+    }
+
+    console.log(ids[1]);
+    console.log(files.length);
+
 
     if (!ids || !Array.isArray(ids) || ids.length !== files.length) {
       return res.status(400).json({ message: "IDs and images must match in length" });
@@ -439,9 +439,9 @@ export const createCategory = async (req, res) => {
     });
   } catch (error) {
     console.error("Error creating category:", error);
-    return res.status(500).json({ 
-      message: "Internal server error", 
-      error: error.message 
+    return res.status(500).json({
+      message: "Internal server error",
+      error: error.message
     });
   }
 };
@@ -465,9 +465,9 @@ export const createServicePlan = async (req, res) => {
     }
 
     const parsedFeatures = features ? JSON.parse(features) : [];
-    
+
     // Format features with bullet points
-    const featuresFormatted = parsedFeatures.map(feature => 
+    const featuresFormatted = parsedFeatures.map(feature =>
       feature.startsWith('•') ? feature : `• ${feature}`
     );
 
@@ -488,9 +488,9 @@ export const createServicePlan = async (req, res) => {
     });
   } catch (error) {
     console.error("Error creating service plan:", error);
-    return res.status(500).json({ 
-      message: "Internal server error", 
-      error: error.message 
+    return res.status(500).json({
+      message: "Internal server error",
+      error: error.message
     });
   }
 };
@@ -505,8 +505,8 @@ export const createServicePlanType = async (req, res) => {
 
     const validTypes = ["Booking", "Quick"];
     if (!validTypes.includes(planType)) {
-      return res.status(400).json({ 
-        message: "Invalid plan type. Use 'Booking' or 'Quick'." 
+      return res.status(400).json({
+        message: "Invalid plan type. Use 'Booking' or 'Quick'."
       });
     }
 
@@ -523,9 +523,9 @@ export const createServicePlanType = async (req, res) => {
     });
   } catch (error) {
     console.error("Error creating service plan type:", error);
-    return res.status(500).json({ 
-      message: "Internal server error", 
-      error: error.message 
+    return res.status(500).json({
+      message: "Internal server error",
+      error: error.message
     });
   }
 };
@@ -601,20 +601,20 @@ export const editServicePlan = async (req, res) => {
     const { id } = req.params;
     const { name, subtitle, price, features, planType, category } = req.body;
     const file = req.file;
-    
+
     // Prepare update object
     const updateData = { name, subtitle, price, features, planType, category };
-    
+
     // Format features with bullet points if features are provided
     if (features) {
       const parsedFeatures = JSON.parse(features);
-      const featuresFormatted = parsedFeatures.map(feature => 
+      const featuresFormatted = parsedFeatures.map(feature =>
         feature.startsWith('•') ? feature : `• ${feature}`
       );
       updateData.features = parsedFeatures;
       updateData.featuresFormatted = featuresFormatted;
     }
-    
+
     // Only update image if a new file is provided
     if (file) {
       const uploadResult = await uploadToCloudinary(file.buffer, "servicePlans");
@@ -634,9 +634,9 @@ export const editServicePlan = async (req, res) => {
     });
   } catch (error) {
     console.error("Error updating service plan:", error);
-    return res.status(500).json({ 
-      message: "Internal server error", 
-      error: error.message 
+    return res.status(500).json({
+      message: "Internal server error",
+      error: error.message
     });
   }
 };
@@ -651,9 +651,9 @@ export const deleteService = async (req, res) => {
     });
   } catch (error) {
     console.error("Error deleting service plan:", error);
-    return res.status(500).json({ 
-      message: "Internal server error", 
-      error: error.message 
+    return res.status(500).json({
+      message: "Internal server error",
+      error: error.message
     });
   }
 };
@@ -675,25 +675,25 @@ export const editCategory = async (req, res) => {
     const { id } = req.params;
     const file = req.file;
     const { name, description } = req.body;
-    
+
     // Check if category exists
     const existingCategory = await Category.findById(id);
     if (!existingCategory) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Category not found" 
+      return res.status(404).json({
+        success: false,
+        message: "Category not found"
       });
     }
-    
+
     // Build update object dynamically
     const updateData = {};
-    
+
     // Handle image upload if file is provided
     if (file) {
       const uploadResult = await uploadToCloudinary(file.buffer, "categories");
       updateData.image = uploadResult.url;
     }
-    
+
     // Add fields to update only if they are provided in request body
     if (name !== undefined) {
       updateData.name = name;
@@ -701,52 +701,52 @@ export const editCategory = async (req, res) => {
     if (description !== undefined) {
       updateData.description = description;
     }
-    
+
     // Check if at least one field is being updated
     if (Object.keys(updateData).length === 0) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "At least one field must be provided for update" 
+      return res.status(400).json({
+        success: false,
+        message: "At least one field must be provided for update"
       });
     }
-    
+
     // Update the category
     const updatedCategory = await Category.findByIdAndUpdate(
-      id, 
-      updateData, 
+      id,
+      updateData,
       { new: true, runValidators: true }
     );
-    
-    return res.status(200).json({ 
-      success: true, 
+
+    return res.status(200).json({
+      success: true,
       message: "Category updated successfully",
-      data: updatedCategory 
+      data: updatedCategory
     });
   }
   catch (error) {
     console.error("Error editing category:", error);
-    
+
     // Handle specific validation errors
     if (error.name === 'ValidationError') {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "Validation error", 
-        error: error.message 
+        message: "Validation error",
+        error: error.message
       });
     }
-    
+
     // Handle duplicate key error (for unique fields)
     if (error.code === 11000) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "Category name already exists" 
+        message: "Category name already exists"
       });
     }
-    
-    return res.status(500).json({ 
+
+    return res.status(500).json({
       success: false,
-      message: "Internal server error", 
-      error: error.message 
+      message: "Internal server error",
+      error: error.message
     });
   }
 };
@@ -754,7 +754,7 @@ export const editCategory = async (req, res) => {
 export const getUserOrders = async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log(userId , "userId");
+    console.log(userId, "userId");
 
     // Fetch only orders for the specific user
     const orders = await Order.find({ userId: userId })
@@ -809,7 +809,7 @@ export const getAllBookings = async (req, res) => {
         }
       })
       .sort({ createdAt: -1 }) // Newest first
-      .lean();  
+      .lean();
 
     // Check if any orders found
     if (!orders || orders.length === 0) {
@@ -845,17 +845,17 @@ export const updateOrderStatus = async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    console.log(id , "id");
-    console.log(status , "status");
-    
+    console.log(id, "id");
+    console.log(status, "status");
+
     // Update the order status
     const updatedOrder = await Order.findByIdAndUpdate(
       id,
       { orderStatus: status },
       { new: true }
     ).populate('servicePlan', 'name subtitle price image features category')
-     .populate('servicePlan.category', 'name description image')
-     .populate('userId', 'name email mobile');
+      .populate('servicePlan.category', 'name description image')
+      .populate('userId', 'name email mobile');
 
     if (!updatedOrder) {
       return res.status(404).json({
@@ -893,10 +893,10 @@ export const updateOrderStatus = async (req, res) => {
     });
   } catch (error) {
     console.error("Error updating order status:", error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       success: false,
-      message: "Internal server error", 
-      error: error.message 
+      message: "Internal server error",
+      error: error.message
     });
   }
 };
