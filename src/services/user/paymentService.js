@@ -128,7 +128,7 @@ export const createCheckoutService = async ({
   let status = "created";
 
   if (paymentMode === "Payment After Service") {
-    status = "SEARCHING"; // directly dispatch
+    status = "Searching";
   }
 
   // Create Order
