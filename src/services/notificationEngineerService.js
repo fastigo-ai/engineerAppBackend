@@ -26,6 +26,8 @@ export const notifyMatchedEngineers = async (engineers, orderData) => {
     //user                   // vendor
     const engineerRoom = eng._id.toString() || eng.engineer_id.toString();
 
+    console.log("engineerRoom", orderData.type);
+
     // 1. Send order request via Socket.io
     if (orderData.type !== "User Order") {
       io.to(engineerRoom).emit("NEW_VENDOR_ORDER_REQUEST", {
