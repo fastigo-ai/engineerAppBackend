@@ -48,9 +48,9 @@ export const dispatchOrder = async (orderId) => {
                 isActive: true,
                 isBlocked: false,
                 isSuspended: false,
-                lastHeartbeat: {
-                    $gte: new Date(Date.now() - HEARTBEAT_TIMEOUT)
-                }
+                // lastHeartbeat: {
+                //     $gte: new Date(Date.now() - HEARTBEAT_TIMEOUT)
+                // }
             }).select("_id rating h3Index");
 
             if (!engineers.length) continue;
@@ -99,9 +99,11 @@ export const dispatchOrder = async (orderId) => {
         // }
 
         // 7️ Send order request
-        for (let eng of selectedEngineers) {
-            await sendOrderRequest(eng, order);
-        }
+        // for (let eng of selectedEngineers) {
+        //     await sendOrderRequest(eng, order);
+        // }
+
+        await notifyMatchedEngineers(selectedEngineers);
 
         return selectedEngineers;
 
