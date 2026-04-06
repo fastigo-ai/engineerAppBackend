@@ -1,6 +1,7 @@
 import { Order } from "../../models/orderSchema.js";
 import { Engineer } from "../../models/engineersModal.js";
 import { EngineerSchedule } from "../../models/engineerSchedule.js";
+import { notifyMatchedEngineers } from "../notificationEngineerService.js"
 import { gridDisk } from "h3-js";
 
 const MAX_ENGINEERS = 5;
@@ -86,16 +87,16 @@ export const dispatchOrder = async (orderId) => {
             break; //  STOP when found
         }
 
-        if (!selectedEngineers.length) {
-            console.log(" No engineers found after max radius");
+        // if (!selectedEngineers.length) {
+        //     console.log(" No engineers found after max radius");
 
-            //  Optional retry (production: use queue like BullMQ)
-            setTimeout(() => {
-                dispatchOrder(orderId);
-            }, 10000);
+        //     //  Optional retry (production: use queue like BullMQ)
+        //     setTimeout(() => {
+        //         dispatchOrder(orderId);
+        //     }, 10000);
 
-            return;
-        }
+        //     return;
+        // }
 
         // 7️ Send order request
         for (let eng of selectedEngineers) {
