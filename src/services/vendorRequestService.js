@@ -100,7 +100,7 @@ export const createAndMatchVendorOrder = async (payload) => {
     };
   }
   await VendorOrder.findByIdAndUpdate(order._id, {
-    notified_engineers: matchedEngineers.map(e => e.engineer_id)
+    notified_engineers: matchedEngineers.map(e => e._id)
   });
 
   /* 3️⃣ SOCKET NOTIFY (ASYNC, NON BLOCKING) */
