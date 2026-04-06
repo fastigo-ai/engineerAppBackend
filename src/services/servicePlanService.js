@@ -126,7 +126,7 @@ export const bulkAddServicesAllTypesService = async (servicesData) => {
 
 export const getAllServicesService = async () => {
   const result = await getAllServicesRepository();
-  console.log(result, "result");
+  // console.log(result, "result");
   if (!result || result.length === 0 || !result) {
     throw new Error('No services found');
   }
