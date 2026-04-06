@@ -105,7 +105,7 @@ export const dispatchOrder = async (orderId) => {
         //     await sendOrderRequest(eng, order);
         // }
 
-        await notifyMatchedEngineers(selectedEngineers);
+        await notifyMatchedEngineers(selectedEngineers, order);
 
         return selectedEngineers;
 
