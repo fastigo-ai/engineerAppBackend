@@ -21,7 +21,8 @@ export const notifyMatchedEngineers = async (engineers, orderData) => {
   console.log(`Notifying ${engineers.length} engineers for Order ${orderData.id}`);
 
   for (const eng of engineers) {
-    const engineerRoom = eng.engineer_id.toString();
+    // const engineerRoom = eng.engineer_id.toString();
+    const engineerRoom = eng._id.toString();
 
     // 1. Send order request via Socket.io
     io.to(engineerRoom).emit("NEW_ORDER_REQUEST", {
