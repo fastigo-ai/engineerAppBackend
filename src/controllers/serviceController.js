@@ -66,7 +66,7 @@ export const bulkAddServicesAllTypesController = async (req, res) => {
 export const getAllServicesController = async (req, res) => {
   try {
     const services = await getAllServicesService();
-    console.log(services, "services");
+    // console.log(services, "services");
     res.status(STATUS_CODES.SUCCESS).json({
       success: true,
       data: services,

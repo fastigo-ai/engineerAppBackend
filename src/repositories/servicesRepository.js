@@ -1,5 +1,5 @@
 // repository/servicePlansRepository.js
-import { Category } from "../models/categoryModal.js";  
+import { Category } from "../models/categoryModal.js";
 import ServicePlans from "../models/servicePlans.js";
 
 export const findLatest = async () => {

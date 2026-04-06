@@ -293,12 +293,12 @@ export const getAllCategoryRepository = async () => {
 
 export const bulkImportServices = async (req, res) => {
   const session = await mongoose.startSession();
-  
+
   try {
     await session.startTransaction();
-    
+
     const serviceData = req.body;
-    
+
     // Validate input
     if (!Array.isArray(serviceData) || serviceData.length === 0) {
       return res.status(400).json({
@@ -319,7 +319,7 @@ export const bulkImportServices = async (req, res) => {
       try {
         // Create or find category
         let category = await Category.findOne({ name: categoryData.name }).session(session);
-        
+
         if (!category) {
           category = new Category({
             name: categoryData.name,
@@ -335,10 +335,10 @@ export const bulkImportServices = async (req, res) => {
           for (const planTypeData of categoryData.planTypes) {
             try {
               // Create or find plan type
-              let planType = await ServicePlans.findOne({ 
-                planType: planTypeData.planType 
+              let planType = await ServicePlans.findOne({
+                planType: planTypeData.planType
               }).session(session);
-              
+
               if (!planType) {
                 planType = new ServicePlans({
                   planType: planTypeData.planType
@@ -368,7 +368,7 @@ export const bulkImportServices = async (req, res) => {
                         planType: planType._id,
                         category: category._id
                       });
-                      
+
                       await service.save({ session });
                       results.servicesCreated++;
                     }
@@ -419,7 +419,7 @@ export const bulkImportServices = async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     console.error('Bulk import error:', error);
-    
+
     res.status(500).json({
       success: false,
       message: 'Failed to import data',
