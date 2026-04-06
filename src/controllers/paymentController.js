@@ -4,6 +4,7 @@ import { ServicePlan } from '../models/serviceModal.js';
 import { Order } from '../models/orderSchema.js';
 import { Payment } from '../models/paymentSchema.js';
 import { getGeoCacheService } from '../services/map/geoCacheService.js';
+import { dispatchOrder } from '../services/dispatch/dispatchService.js';
 import User from '../models/user.js';
 import { createCheckoutService } from '../services/user/paymentService.js';
 import { matchEngineersByLocation, notifyMatchedEngineers } from '../services/notificationEngineerService.js';
@@ -875,7 +876,7 @@ export const verifyPayment = async (req, res) => {
         : null,
     });
 
-    // 7️ Trigger dispatch (🔥 NON-BLOCKING)
+    // 7️ Trigger dispatch ( NON-BLOCKING)
     if (order.status === "Searching") {
       dispatchOrder(order._id); // DO NOT await
     }
