@@ -27,18 +27,36 @@ export const notifyMatchedEngineers = async (engineers, orderData) => {
     const engineerRoom = eng._id.toString() || eng.engineer_id.toString();
 
     // 1. Send order request via Socket.io
-    io.to(engineerRoom).emit("NEW_ORDER_REQUEST", {
-      order_id: orderData.id,
-      call_id: orderData.call_id || orderData.id,
-      address: orderData.address,
-      branch_name: orderData.branch_name,
-      state_name: orderData.state_name,
-      distance: eng.distanceKm,
-      support_type: orderData.type,
-      order_price: orderData.price || "To Be Decided",
-      timer: 30,
-      location: orderData.location
-    });
+    if (orderData.type !== "User Order") {
+      io.to(engineerRoom).emit("NEW_VENDOR_ORDER_REQUEST", {
+        order_id: orderData._id,
+        call_id: orderData.call_id || null,
+        address: orderData.address || orderData.addressText,
+        branch_name: orderData.branch_name || null,
+        state_name: orderData.state_name || null,
+        distance: eng.distanceKm,
+        support_type: orderData.type,
+        order_price: orderData.price,
+        timer: 30,
+        location: orderData.location
+      });
+    } else {
+      io.to(engineerRoom).emit("NEW_USER_ORDER_REQUEST", {
+        order_id: orderData._id,
+        address: orderData.addressText,
+        paymentMode: orderData.paymentMode,
+        servicePlan: orderData.notes.servicePlanNames,
+        userDetail: orderData.userDetail,
+        scheduledAt: orderData.scheduledAt,
+        totalDuration: orderData.totalDuration,
+        distance: eng.distanceKm,
+        support_type: orderData.type,
+        order_price: orderData.amount,
+        timer: 30,
+        location: orderData.location
+      });
+    }
+
 
     // 2. Send push notification via FCM if fcmToken exists
     if (eng.fcmToken) {

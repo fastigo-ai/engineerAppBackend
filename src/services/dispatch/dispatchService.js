@@ -2,6 +2,7 @@ import { Order } from "../../models/orderSchema.js";
 import { Engineer } from "../../models/engineersModal.js";
 import { EngineerSchedule } from "../../models/engineerSchedule.js";
 import { notifyMatchedEngineers } from "../notificationEngineerService.js"
+import { getDistanceInMeters } from "../../utils/distance.js";
 import { gridDisk } from "h3-js";
 
 const MAX_ENGINEERS = 5;
@@ -53,7 +54,7 @@ export const dispatchOrder = async (orderId) => {
                 // lastHeartbeat: {
                 //     $gte: new Date(Date.now() - HEARTBEAT_TIMEOUT)
                 // }
-            }).select("_id rating h3Index");
+            }).select("_id rating h3Index location name email mobile");
 
             if (!engineers.length) continue;
 
@@ -105,6 +106,16 @@ export const dispatchOrder = async (orderId) => {
         //     await sendOrderRequest(eng, order);
         // }
 
+        selectedEngineers.forEach(eng => {
+            eng.distanceKm = getDistanceInMeters(
+                order.location.coordinates[1],
+                order.location.coordinates[0],
+                eng.location.coordinates[1],
+                eng.location.coordinates[0]
+            );
+        });
+
+        order.type = "User Order";
         await notifyMatchedEngineers(selectedEngineers, order);
 
         return selectedEngineers;
