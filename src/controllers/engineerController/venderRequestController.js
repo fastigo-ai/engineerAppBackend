@@ -5,6 +5,7 @@ import { getDistanceInMeters } from "../../utils/distance.js";
 import { latLngToCell, gridDisk } from "h3-js";
 import { getIO } from "../../config/socket.js";
 import { uploadToCloudinary } from "../../utils/uploadToCloudinary.js";
+import axios from 'axios';
 const H3_RESOLUTION = 8;
 const SEARCH_RING_SIZE = 30;
 
