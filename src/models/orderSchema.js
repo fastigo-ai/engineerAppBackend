@@ -135,6 +135,7 @@ const OrderSchema = new mongoose.Schema(
     razorpayPaymentId: {
       type: String,
       trim: true,
+      unique: true,
     },
     orderStatus: {
       type: String,
@@ -213,8 +214,13 @@ const OrderSchema = new mongoose.Schema(
       status: String,
       refundedAt: Date,
     },
+    isDispatched: {
+      type: Boolean,
+      default: false,
+    },
     completionOtp: {
       type: String,
+      trim: true,
       default: null,
     },
     isOtpVerified: {
@@ -232,6 +238,7 @@ const OrderSchema = new mongoose.Schema(
 OrderSchema.index({ userId: 1, status: 1 });
 OrderSchema.index({ createdAt: -1 });
 OrderSchema.index({ location: "2dsphere" });
+OrderSchema.index({ razorpayOrderId: 1 });
 
 export const Order = mongoose.model("Order", OrderSchema);
 

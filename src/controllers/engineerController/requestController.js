@@ -234,20 +234,20 @@ export const acceptRequest = async (req, res) => {
         const order = await Order.findById(id);
 
         if (!order) {
-            console.log('❌ Order not found:', id);
+            console.log(' Order not found:', id);
             return res.status(STATUS_CODES.NOT_FOUND).json({
                 success: false,
                 message: 'Order not found'
             });
         }
-        console.log('✅ Order found:', order._id);
+        console.log(' Order found:', order._id);
         console.log('Order acceptedBy:', order.acceptedBy);
         console.log('Order assignedEngineer:', order.assignedEngineer);
         console.log('Order rejectedBy:', order.rejectedBy);
 
         // Check if already assigned (accepted by someone)
         if (order.acceptedBy || order.assignedEngineer) {
-            console.log('❌ Order already assigned');
+            console.log(' Order already assigned');
             console.log('acceptedBy:', order.acceptedBy);
             console.log('assignedEngineer:', order.assignedEngineer);
             return res.status(STATUS_CODES.BAD_REQUEST).json({
@@ -259,9 +259,9 @@ export const acceptRequest = async (req, res) => {
                 }
             });
         }
-        console.log('✅ Order is available for assignment');
+        console.log(' Order is available for assignment');
 
-        console.log('📝 Processing ACCEPTANCE...');
+        console.log(' Processing ACCEPTANCE...');
 
         // Remove engineer from rejectedBy array if they previously rejected this order
         const rejectedByStrings = order.rejectedBy.map(id => id.toString());
@@ -269,7 +269,7 @@ export const acceptRequest = async (req, res) => {
 
         if (rejectedByStrings.includes(engineerIdString)) {
             order.rejectedBy = order.rejectedBy.filter(id => id.toString() !== engineerIdString);
-            console.log('✅ Engineer removed from rejectedBy array');
+            console.log(' Engineer removed from rejectedBy array');
         }
 
         // Update order status to accepted
@@ -278,29 +278,29 @@ export const acceptRequest = async (req, res) => {
         order.acceptedBy = engineerId;
         order.assignedEngineer = engineerId;
         order.work_status = 'Accepted';
-        console.log('✅ Order fields updated for acceptance');
-        console.log('✅ Engineer saved in acceptedBy:', engineerId);
+        console.log(' Order fields updated for acceptance');
+        console.log(' Engineer saved in acceptedBy:', engineerId);
 
-        console.log('💾 Saving order...');
+        console.log(' Saving order...');
         await order.save();
-        console.log('✅ Order saved successfully');
+        console.log(' Order saved successfully');
 
-        console.log('🔍 Fetching updated order with populated fields...');
+        console.log(' Fetching updated order with populated fields...');
         const updatedOrder = await Order.findById(id)
             .populate('userId', 'name phone address')
             .populate('servicePlan', 'name')
             .populate('assignedEngineer', 'name mobile email')
             .populate('acceptedBy', 'name mobile email');
-        console.log('✅ Updated order fetched');
+        console.log(' Updated order fetched');
 
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
             message: 'Order accepted successfully',
             data: updatedOrder
         });
-        console.log('✅ Response sent successfully');
+        console.log(' Response sent successfully');
     } catch (error) {
-        console.error('❌ ERROR in acceptRequest:', error);
+        console.error(' ERROR in acceptRequest:', error);
         console.error('Error name:', error.name);
         console.error('Error message:', error.message);
         console.error('Error stack:', error.stack);
@@ -1059,5 +1059,4 @@ export const generatePaymentQRCode = async (req, res) => {
         });
     }
 };
-
 

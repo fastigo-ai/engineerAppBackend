@@ -48,7 +48,7 @@ export const notifyMatchedEngineers = async (engineers, orderData) => {
         address: orderData.addressText,
         paymentMode: orderData.paymentMode,
         servicePlan: orderData.notes.servicePlanNames,
-        userDetail: orderData.customerDetails, // Added as alias for compatibility
+        userDetail: orderData.customerDetails,
         scheduledAt: orderData.scheduledAt,
         totalDuration: orderData.totalDuration,
         distance: eng.distanceKm,
