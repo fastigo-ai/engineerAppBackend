@@ -51,9 +51,7 @@ import upload from "../middleware/multer.js";
 
 const router = express.Router();
 
-// OTP verification for job completion
-router.post("/requests/otp/send/:id", authenticateEngineer, sendCompletionOTP);
-router.post("/requests/otp/verify/:id", authenticateEngineer, verifyCompletionOTP);
+
 
 router.post("/addEngineer", addengineerController);
 router.get("/getEngineers", getEngineersController);
@@ -90,6 +88,10 @@ router.put(
   updateWorkStatus,
 );
 router.get("/requests/completed", authenticateEngineer, getCompletedRequests);
+
+// OTP verification for job completion
+router.post("/requests/otp/send/:id", authenticateEngineer, sendCompletionOTP);
+router.post("/requests/otp/verify/:id", authenticateEngineer, verifyCompletionOTP);
 
 // Vender-specific routes can be added here
 
