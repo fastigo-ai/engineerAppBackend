@@ -217,7 +217,16 @@ const OrderSchema = new mongoose.Schema(
     isDispatched: {
       type: Boolean,
       default: false,
-    }
+    },
+    completionOtp: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    isOtpVerified: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

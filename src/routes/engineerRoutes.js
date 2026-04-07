@@ -27,6 +27,8 @@ import {
   getRejectedRequests,
   updateWorkStatus,
   getCompletedRequests,
+  sendCompletionOTP,
+  verifyCompletionOTP,
 } from "../controllers/engineerController/requestController.js";
 
 import {
@@ -48,6 +50,10 @@ import {
 import upload from "../middleware/multer.js";
 
 const router = express.Router();
+
+// OTP verification for job completion
+router.post("/requests/otp/send/:id", authenticateEngineer, sendCompletionOTP);
+router.post("/requests/otp/verify/:id", authenticateEngineer, verifyCompletionOTP);
 
 router.post("/addEngineer", addengineerController);
 router.get("/getEngineers", getEngineersController);

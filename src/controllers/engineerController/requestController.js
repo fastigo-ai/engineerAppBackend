@@ -467,6 +467,14 @@ export const completeRequest = async (req, res) => {
             });
         }
 
+        // For user orders, ensure OTP is verified before completion
+        if (!order.isOtpVerified) {
+            return res.status(STATUS_CODES.BAD_REQUEST).json({
+                success: false,
+                message: 'OTP must be verified before completing the request.'
+            });
+        }
+
         // Update order to completed
         order.status = 'paid'; // or 'completed' if that enum exists
         order.orderStatus = 'Completed';
@@ -850,6 +858,71 @@ export const getCompletedRequests = async (req, res) => {
         res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({
             success: false,
             message: error.message
+        });
+    }
+};
+
+// Send Completion OTP
+export const sendCompletionOTP = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const order = await Order.findById(id).populate('userId', 'phone');
+
+        if (!order) {
+            return res.status(STATUS_CODES.NOT_FOUND).json({
+                success: false, message: 'Order not found'
+            });
+        }
+
+        // Generate 4-digit OTP
+        const otp = Math.floor(1000 + Math.random() * 9000).toString();
+        order.completionOtp = otp;
+        await order.save();
+
+        // Simulated SMS sending
+        console.log(`[SIMULATED SMS] OTP for Order ${order.orderId} sent to ${order.userId?.phone}: ${otp}`);
+
+        res.status(STATUS_CODES.SUCCESS).json({
+            success: true,
+            message: 'OTP sent to user successfully'
+        });
+    } catch (error) {
+        res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({
+            success: false, message: error.message
+        });
+    }
+};
+
+// Verify Completion OTP
+export const verifyCompletionOTP = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { otp } = req.body;
+        const order = await Order.findById(id);
+
+        if (!order) {
+            return res.status(STATUS_CODES.NOT_FOUND).json({
+                success: false, message: 'Order not found'
+            });
+        }
+
+        if (order.completionOtp === otp) {
+            order.isOtpVerified = true;
+            order.completionOtp = null; // Clear OTP after verification
+            await order.save();
+            return res.status(STATUS_CODES.SUCCESS).json({
+                success: true,
+                message: 'OTP verified successfully'
+            });
+        } else {
+            return res.status(STATUS_CODES.BAD_REQUEST).json({
+                success: false,
+                message: 'Invalid OTP'
+            });
+        }
+    } catch (error) {
+        res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({
+            success: false, message: error.message
         });
     }
 };
