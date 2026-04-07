@@ -201,13 +201,14 @@ export const getTransactionHistory = async (req, res) => {
  */
 export const getBankAccount = async (req, res) => {
     try {
-        const engineerId = req.user.id;
+        const engineerId = req.user.id || req.user.userId;
         const bankAccount = await BankAccount.findOne({ engineerId });
 
         if (!bankAccount) {
-            return res.status(STATUS_CODES.NOT_FOUND).json({
-                success: false,
-                message: "Bank account details not found."
+            return res.status(STATUS_CODES.SUCCESS).json({
+                success: true,
+                message: "No bank account found.",
+                data: null
             });
         }
 
@@ -220,11 +221,12 @@ export const getBankAccount = async (req, res) => {
             data: {
                 bankName: bankAccount.bankName,
                 maskedAccountNumber: maskedAcc,
-                ifscCode: bankAccount.ifscCode,
+                ifscCode: bankAccount.ifsc, // Fixed mapping to match model
                 isVerified: bankAccount.isVerified
             }
         });
     } catch (error) {
+        console.error("Get Bank Account Error:", error);
         return res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({
             success: false,
             message: error.message
