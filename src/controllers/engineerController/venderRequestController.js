@@ -442,6 +442,23 @@ export const completeOrder = async (req, res) => {
     // 4. Update Engineer Availability
     await Engineer.findByIdAndUpdate(engineerId, { isAvailable: true });
 
+    // --- NEW: CREDIT WALLET FOR VENDOR WORK ---
+    try {
+      const { creditEngineerWallet } = await import('../../services/walletService.js');
+      if (order.order_price > 0) {
+        await creditEngineerWallet({
+          engineerId,
+          amount: order.order_price,
+          orderId: order._id.toString(),
+          category: 'earning'
+        });
+        console.log(`Credited ₹${order.order_price} to wallet for vendor job ${order._id}`);
+      }
+    } catch (creditError) {
+      console.error("Failed to credit wallet for vendor job:", creditError);
+    }
+    // ------------------------------------------
+
     // 5. Notify Vendor Webhook (Standard Payload)
     const webhookPayload = {
       call_id: order.call_id,

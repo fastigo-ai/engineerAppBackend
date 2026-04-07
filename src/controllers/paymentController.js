@@ -6,38 +6,7 @@ import { Payment } from '../models/paymentSchema.js';
 import { getGeoCacheService } from '../services/map/geoCacheService.js';
 import User from '../models/user.js';
 import { createCheckoutService } from '../services/user/paymentService.js';
-import { matchEngineersByLocation, notifyMatchedEngineers } from '../services/notificationEngineerService.js';
-
-// Helper to notify engineers for a regular order
-const notifyEngineersForOrder = async (order) => {
-  try {
-    if (order.location && order.location.coordinates) {
-      const matchedEngineers = await matchEngineersByLocation({
-        location: order.location
-      });
-
-      if (matchedEngineers && matchedEngineers.length > 0) {
-        // Populate service plans if not already populated
-        if (!order.servicePlan && !order.servicePlans?.length) {
-          await order.populate('servicePlan servicePlans');
-        }
-
-        const orderData = {
-          id: order._id,
-          call_id: order.orderId,
-          address: order.bookingDetails?.address || 'nearby location',
-          type: order.servicePlan?.name || (order.servicePlans?.[0]?.name) || 'New Job',
-          price: order.amount ? `₹${order.amount}` : "To Be Decided",
-          location: order.location
-        };
-
-        await notifyMatchedEngineers(matchedEngineers, orderData);
-      }
-    }
-  } catch (notifyError) {
-    console.error('Error notifying engineers for regular order:', notifyError);
-  }
-};
+import { notifyEngineersForOrder } from '../services/notificationEngineerService.js';
 
 
 // Create Checkout Session

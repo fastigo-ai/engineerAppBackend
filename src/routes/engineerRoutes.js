@@ -27,7 +27,17 @@ import {
   getRejectedRequests,
   updateWorkStatus,
   getCompletedRequests,
+  sendCompletionOTP,
+  verifyCompletionOTP,
+  generatePaymentQRCode,
 } from "../controllers/engineerController/requestController.js";
+import { getNearbyOrdersController } from "../controllers/engineerController/nearbyController.js";
+import { 
+  getWalletBalance, 
+  requestWithdrawal, 
+  getTransactionHistory,
+  getBankAccount
+} from "../controllers/engineerController/walletController.js";
 
 import {
   servicableLocation,
@@ -66,6 +76,7 @@ router.put("/goOffline", authenticateEngineer, goOfflineController);
 router.post("heartbeat", authenticateEngineer, heartbeatController);
 router.post("/update/location", authenticateEngineer, updateLocationController);
 router.get("/requests/nearby", authenticateEngineer, getNearbyRequests);
+router.get("/requests/fetching-nearby", authenticateEngineer, getNearbyOrdersController);
 
 // Request status routes (Engineer-specific) - New dedicated endpoints
 router.put("/requests/accept/:id", authenticateEngineer, acceptRequest);
@@ -84,6 +95,11 @@ router.put(
   updateWorkStatus,
 );
 router.get("/requests/completed", authenticateEngineer, getCompletedRequests);
+
+// OTP verification for job completion
+router.post("/requests/otp/send/:id", authenticateEngineer, sendCompletionOTP);
+router.post("/requests/otp/verify/:id", authenticateEngineer, verifyCompletionOTP);
+router.get("/requests/payment-qr/:id", authenticateEngineer, generatePaymentQRCode);
 
 // Vender-specific routes can be added here
 
@@ -107,5 +123,11 @@ router.get("/dashboard", authenticateEngineer, getEngineerDashboard);
 // Profile routes
 router.get("/profile", authenticateEngineer, getProfile);
 router.put("/profile/update", authenticateEngineer, updateProfile);
+
+// Wallet & Withdrawal routes
+router.get("/wallet", authenticateEngineer, getWalletBalance);
+router.post("/withdraw", authenticateEngineer, requestWithdrawal);
+router.get("/transactions", authenticateEngineer, getTransactionHistory);
+router.get("/bank-account", authenticateEngineer, getBankAccount);
 
 export default router;

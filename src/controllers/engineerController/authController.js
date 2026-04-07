@@ -1,4 +1,6 @@
 import { Engineer } from "../../models/engineersModal.js";
+import { BankAccount } from "../../models/BankAccount.js";
+import * as payoutService from "../../services/payoutService.js";
 import jwt from "jsonwebtoken";
 
 export const login = async (req, res) => {
@@ -179,7 +181,11 @@ export const onboardEngineer = async (req, res) => {
       categories,
       rating,
       isActive = true,
-      isAvailable = true
+      isAvailable = true,
+      bank_name,
+      account_number,
+      ifsc_code,
+      isverifed = true
     } = req.body;
 
     // Use engineer_id from payload
@@ -250,6 +256,49 @@ export const onboardEngineer = async (req, res) => {
 
     const engineer = result.value || result;
     const isNew = !result.lastErrorObject?.updatedExisting;
+
+    // Handle Bank Account Storage & Razorpay Registration
+    if (account_number && ifsc_code) {
+      try {
+        let bankAccount = await BankAccount.findOne({ engineerId: engineer._id });
+
+        if (!bankAccount) {
+          // 1. Create Razorpay Contact
+          const contact = await payoutService.createContact(engineer);
+          
+          // 2. Create Razorpay Fund Account
+          const fundAccount = await payoutService.createFundAccount(contact.id, {
+            accountHolderName: name,
+            accountNumber: account_number,
+            ifsc: ifsc_code
+          });
+
+          // 3. Save to our BankAccount collection
+          bankAccount = new BankAccount({
+            engineerId: engineer._id,
+            accountNumber: account_number,
+            ifsc: ifsc_code,
+            bankName: bank_name,
+            accountHolderName: name,
+            fundAccountId: fundAccount.id,
+            isVerified: isverifed
+          });
+          await bankAccount.save();
+          console.log(`Razorpay Payouts initialized for Engineer: ${name}`);
+        } else {
+          // Update existing bank record if needed (logic can be expanded here)
+          bankAccount.accountNumber = account_number;
+          bankAccount.ifsc = ifsc_code;
+          bankAccount.bankName = bank_name;
+          bankAccount.isVerified = isverifed;
+          await bankAccount.save();
+        }
+      } catch (bankError) {
+        console.error("Failed to initialize Razorpay Bank Account for Onboarding:", bankError.message);
+        // We don't fail the whole onboarding if bank registration fails, 
+        // but we log it for manual intervention/retry.
+      }
+    }
 
     // Generate JWT token for immediate use if needed
     const token = jwt.sign(

@@ -213,6 +213,14 @@ const OrderSchema = new mongoose.Schema(
       status: String,
       refundedAt: Date,
     },
+    completionOtp: {
+      type: String,
+      default: null,
+    },
+    isOtpVerified: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

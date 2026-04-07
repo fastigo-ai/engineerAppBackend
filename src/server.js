@@ -14,6 +14,8 @@ import connectDB from './config/db.js';
 import { isFirebaseConnected } from './config/firebase.js';
 import engineerAuthRoutes from './routes/engineerRoutes/authRoutes.js'; 
 import errorHandler from './middleware/errorHandler.js';
+import { handleRazorpayWebhook } from './controllers/razorpayWebhookController.js';
+import { initPayoutCron } from './utils/payoutCron.js';
 
 // Load environment variables
 dotenv.config();
@@ -22,6 +24,10 @@ dotenv.config();
 const app = express();
 const httpServer = createServer(app);
 initSocket(httpServer);
+
+// 1. Razorpay Webhook (Needs raw body for signature verification)
+// Must be defined BEFORE express.json()
+app.post('/api/webhook/razorpay', express.text({ type: 'application/json' }), handleRazorpayWebhook);
 
 // Middleware
 app.use(helmet());
@@ -65,6 +71,9 @@ const startServer = async () => {
   try {
     // Connect to database
     await connectDB();
+
+    // Initialize Cron Jobs
+    initPayoutCron();
 
     const PORT = process.env.PORT || config.port || 8080;
     httpServer.listen(PORT, '0.0.0.0', () => {

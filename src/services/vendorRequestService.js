@@ -2,23 +2,11 @@ import axios from "axios";
 import { latLngToCell } from "h3-js";
 import VendorOrder from "../models/vendorOrderModal.js";
 import { Engineer } from "../models/engineersModal.js";
-import { notifyMatchedEngineers, matchEngineersByLocation } from "./notificationEngineerService.js";
+import { notifyEngineersForOrder, matchEngineersByLocation } from "./notificationEngineerService.js";
 
 const H3_RESOLUTION = 8;
 
-const notifyEngineers = async (engineers, order) => {
-  const orderData = {
-    id: order._id,
-    call_id: order.call_id,
-    address: order.complete_address,
-    branch_name: order.branch_name,
-    state_name: order.state_name,
-    type: order.support_type,
-    price: order.order_price ? `₹${order.order_price}` : "To Be Decided",
-    location: order.location
-  };
-  return notifyMatchedEngineers(engineers, orderData);
-};
+// notifyEngineersForOrder centralized service handles both Regular and Vendor orders
 
 
 
@@ -104,7 +92,7 @@ export const createAndMatchVendorOrder = async (payload) => {
   });
 
   /* 3️⃣ SOCKET NOTIFY (ASYNC, NON BLOCKING) */
-  notifyEngineers(matchedEngineers, order);
+  await notifyEngineersForOrder(order);
 
   return {
     success: true,
@@ -173,16 +161,38 @@ export const rejectOrderService = async ({ orderId, engineerId }) => {
   }
 
   // 2. Persist the rejection in our DB
+  const updateData = {
+    $addToSet: { rejected_engineers: engineerId }
+  };
+
+  // If the rejecting engineer is the one who was assigned, reset the assignment
+  const currentOrder = await VendorOrder.findById(orderId);
+  let shouldReDispatch = false;
+  
+  if (currentOrder && currentOrder.assigned_engineer_id && currentOrder.assigned_engineer_id.toString() === engineerId.toString()) {
+    updateData.$set = {
+      assigned_engineer_id: null,
+      status: "PENDING",
+      work_status: "NOT_STARTED",
+      accepted_at: null
+    };
+    shouldReDispatch = true;
+    console.log('✅ Vendor order un-assigned and reset to PENDING for re-dispatch');
+  }
+
   const order = await VendorOrder.findOneAndUpdate(
     { _id: orderId },
-    {
-      $addToSet: { rejected_engineers: engineerId }
-    },
+    updateData,
     { new: true }
   );
 
   if (!order) {
     throw { status: 404, message: "Order not found" };
+  }
+
+  // 3. Trigger re-dispatch if applicable
+  if (shouldReDispatch) {
+    await notifyEngineersForOrder(order);
   }
 
   // 3. Construct the payload for the Vendor

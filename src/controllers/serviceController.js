@@ -15,6 +15,10 @@ import { uploadToCloudinary } from '../utils/uploadToCloudinary.js';
 import { ServicePlan } from '../models/serviceModal.js';
 import { ServicePlans } from '../models/planModal.js';
 import { Order } from '../models/orderSchema.js';
+import { notifyEngineersForOrder } from '../services/notificationEngineerService.js';
+
+
+// Helpers and other utilities can go here
 
 
 
@@ -843,15 +847,25 @@ export const rescheduleBooking = async (req, res) => {
       updateData.bookingDetails = bookingDetails;
     }
 
+    // When rescheduling, reset the engineer assignment to dispatch it again
+    updateData.assignedEngineer = null;
+    updateData.acceptedBy = null;
+    updateData.status = 'Searching';
+    updateData.orderStatus = 'Upcoming';
+    updateData.work_status = 'Upcoming';
+
     const order = await Order.findByIdAndUpdate(
       id,
       updateData,
       { new: true }
-    );
+    ).populate('servicePlan servicePlans');
 
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
+
+    // Trigger re-dispatch
+    await notifyEngineersForOrder(order);
 
     res.status(200).json({
       success: true,

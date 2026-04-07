@@ -48,7 +48,7 @@ export const notifyMatchedEngineers = async (engineers, orderData) => {
         address: orderData.addressText,
         paymentMode: orderData.paymentMode,
         servicePlan: orderData.notes.servicePlanNames,
-        userDetail: orderData.userDetail,
+        userDetail: orderData.customerDetails, // Added as alias for compatibility
         scheduledAt: orderData.scheduledAt,
         totalDuration: orderData.totalDuration,
         distance: eng.distanceKm,
@@ -72,6 +72,8 @@ export const notifyMatchedEngineers = async (engineers, orderData) => {
             order_id: orderData.id.toString(),
             support_type: orderData.type || '',
             complete_address: orderData.address || '',
+            customer_name: orderData.customerDetails?.name || '',
+            user_detail: JSON.stringify(orderData.customerDetails || {}),
             type: 'NEW_ORDER'
           },
           token: eng.fcmToken,
@@ -98,11 +100,96 @@ export const notifyMatchedEngineers = async (engineers, orderData) => {
   }
 };
 
+
+/**
+ * Centralized helper to notify engineers for any order (Regular or Vendor).
+ * This replaces local helpers in various controllers.
+ * @param {Object} order - The populated Order or VendorOrder document.
+ */
+export const notifyEngineersForOrder = async (order) => {
+  try {
+    if (!order.location || !order.location.coordinates) {
+      console.warn(`Cannot notify for order ${order._id}: Missing location.`);
+      return;
+    }
+
+    // Determine if it's a Vendor order or Regular (User) order
+    const isVendor = !!order.vendor_id;
+    
+    // Prepare exclusion list (assigned + rejected)
+    const excludeEngineers = [];
+    if (order.assignedEngineer) excludeEngineers.push(order.assignedEngineer.toString());
+    if (order.assigned_engineer_id) excludeEngineers.push(order.assigned_engineer_id.toString());
+    if (order.acceptedBy) excludeEngineers.push(order.acceptedBy.toString());
+    
+    if (order.rejectedBy && Array.isArray(order.rejectedBy)) {
+      order.rejectedBy.forEach(id => excludeEngineers.push(id.toString()));
+    }
+    if (order.rejected_engineers && Array.isArray(order.rejected_engineers)) {
+      order.rejected_engineers.forEach(id => excludeEngineers.push(id.toString()));
+    }
+
+    // Match nearby available engineers (excluding those already aware/assigned)
+    const matchedEngineers = await matchEngineersByLocation({
+      location: order.location,
+      excludeEngineers: [...new Set(excludeEngineers)] // Unique IDs
+    });
+
+    if (matchedEngineers && matchedEngineers.length > 0) {
+      let orderData;
+
+      if (isVendor) {
+        orderData = {
+          id: order._id,
+          call_id: order.call_id,
+          address: order.complete_address,
+          branch_name: order.branch_name,
+          state_name: order.state_name,
+          type: order.support_type,
+          price: order.order_price ? `₹${order.order_price}` : "To Be Decided",
+          location: order.location
+        };
+      } else {
+        // Regular user order
+        // Ensure service plans are populated for names
+        if (!order.servicePlan && !order.servicePlans?.length && order.populate) {
+          await order.populate('servicePlan servicePlans');
+        }
+
+        const servicePlanNames = order.servicePlan?.name || (order.servicePlans?.[0]?.name) || 'New Job';
+
+        orderData = {
+          id: order._id,
+          call_id: order.orderId,
+          address: order.bookingDetails?.address || 'nearby location',
+          type: servicePlanNames,
+          price: order.amount ? `₹${order.amount}` : "To Be Decided",
+          location: order.location,
+          scheduledAt: order.scheduledAt,
+          addressText: order.addressText,
+          paymentMode: order.paymentMode,
+          notes: { ...order.notes, servicePlanNames },
+          customerDetails: order.customerDetails,
+          totalDuration: order.totalDuration
+        };
+      }
+
+      await notifyMatchedEngineers(matchedEngineers, orderData);
+      console.log(`✅ Successfully broadcasted ${isVendor ? 'Vendor' : 'User'} order ${order._id} to ${matchedEngineers.length} engineers.`);
+    } else {
+      console.log(`ℹ️ No matching engineers found for order ${order._id} (Exclusions applied: ${excludeEngineers.length})`);
+    }
+  } catch (error) {
+    console.error(`❌ Error in centralized notifyEngineersForOrder for order ${order._id}:`, error);
+  }
+};
+
 /**
  * Matches engineers based on location using H3 grid.
  * @param {Object} location - GeoJSON location {type, coordinates: [lng, lat]}
+ * @param {Array} excludeEngineers - List of engineer IDs to skip.
  */
-export async function matchEngineersByLocation({ location }) {
+export async function matchEngineersByLocation({ location, excludeEngineers = [] }) {
   if (!location?.coordinates || location.coordinates.length !== 2) {
     throw new Error("Invalid location format");
   }
@@ -113,6 +200,7 @@ export async function matchEngineersByLocation({ location }) {
 
   // Find active and available engineers in the H3 grid
   const engineers = await Engineer.find({
+    _id: { $nin: excludeEngineers }, // EXCLUSION LOGIC
     location: { $exists: true },
     isActive: true,
     isAvailable: true,

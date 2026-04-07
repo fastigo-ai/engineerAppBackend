@@ -4,7 +4,12 @@ import { Engineer } from "../../models/engineersModal.js";
 import STATUS_CODES from "../../constants/statusCodes.js";
 import vendorOrderModal from "../../models/vendorOrderModal.js";
 import mongoose from "mongoose";
-import { getDistanceInMeters } from "../../utils/distance.js"; // Ensure you import your distance helper
+import { getDistanceInMeters } from "../../utils/distance.js";
+import razorpay from "../../config/razorpay.js";
+import { notifyEngineersForOrder } from "../../services/notificationEngineerService.js";
+
+
+// Controller functions follow
 
 // Update Engineer Location
 export const updateEngineerLocation = async (req, res) => {
@@ -350,6 +355,17 @@ export const rejectRequest = async (req, res) => {
             order.orderStatus = 'Upcoming';
             order.work_status = 'Upcoming';
 
+            // Check if we should re-dispatch (scheduled time is in the future)
+            const now = new Date();
+            const scheduledAt = order.scheduledAt ? new Date(order.scheduledAt) : null;
+            let shouldReDispatch = false;
+
+            if (scheduledAt && now < scheduledAt) {
+                order.status = 'Searching'; // Reset to Searching status
+                shouldReDispatch = true;
+                console.log('✅ Order scheduled in future, resetting to Searching for re-dispatch');
+            }
+
             // Add to rejectedBy array if not already present
             const rejectedByStrings = order.rejectedBy.map(id => id.toString());
             if (!rejectedByStrings.includes(engineerIdString)) {
@@ -394,6 +410,10 @@ export const rejectRequest = async (req, res) => {
 
         console.log('💾 Saving order...');
         await order.save();
+        if (typeof shouldReDispatch !== 'undefined' && shouldReDispatch) {
+            await notifyEngineersForOrder(order);
+        }
+
         console.log('✅ Order saved successfully');
 
         console.log('🔍 Fetching updated order with populated fields...');
@@ -464,6 +484,14 @@ export const completeRequest = async (req, res) => {
                 success: true,
                 message: 'Order already completed',
                 data: order
+            });
+        }
+
+        // For user orders, ensure OTP is verified before completion
+        if (!order.isOtpVerified) {
+            return res.status(STATUS_CODES.BAD_REQUEST).json({
+                success: false,
+                message: 'OTP must be verified before completing the request.'
             });
         }
 
@@ -580,6 +608,17 @@ export const updateRequestStatus = async (req, res) => {
                 order.orderStatus = 'Upcoming';
                 order.work_status = 'Upcoming';
 
+                // Check if we should re-dispatch (scheduled time is in the future)
+                const now = new Date();
+                const scheduledAt = order.scheduledAt ? new Date(order.scheduledAt) : null;
+                var shouldReDispatchLegacy = false;
+
+                if (scheduledAt && now < scheduledAt) {
+                    order.status = 'Searching'; // Reset to Searching status
+                    shouldReDispatchLegacy = true;
+                    console.log('✅ Order scheduled in future, resetting to Searching for re-dispatch');
+                }
+
                 // Add to rejectedBy array if not already present
                 const rejectedByStrings = order.rejectedBy.map(id => id.toString());
                 if (!rejectedByStrings.includes(engineerIdString)) {
@@ -618,7 +657,7 @@ export const updateRequestStatus = async (req, res) => {
                 }
 
                 // Update order status to accepted
-                order.status = 'paid';
+                order.status = 'pending';
                 order.orderStatus = 'Accepted';
                 order.acceptedBy = engineerId;
                 order.assignedEngineer = engineerId;
@@ -650,6 +689,10 @@ export const updateRequestStatus = async (req, res) => {
 
         console.log('💾 Saving order...');
         await order.save();
+        if (typeof shouldReDispatchLegacy !== 'undefined' && shouldReDispatchLegacy) {
+            await notifyEngineersForOrder(order);
+        }
+
         console.log('✅ Order saved successfully');
 
         console.log('🔍 Fetching updated order with populated fields...');
@@ -778,10 +821,51 @@ export const updateWorkStatus = async (req, res) => {
                 });
             }
 
+            if (work_status === 'In Progress' || work_status === 'started' || work_status === 'started_work') {
+                const now = new Date();
+                const scheduledTime = order.scheduledAt ? new Date(order.scheduledAt) : null;
+
+                if (scheduledTime && now < scheduledTime) {
+                    const diffMs = scheduledTime.getTime() - now.getTime();
+                    const diffMins = Math.ceil(diffMs / (1000 * 60));
+
+                    return res.status(STATUS_CODES.BAD_REQUEST).json({
+                        success: false,
+                        message: `Cannot start work yet. Scheduled time is in ${diffMins} minutes.`
+                    });
+                }
+            }
+
             order.work_status = work_status;
             if (work_status === 'Completed') {
+                if (!order.isOtpVerified) {
+                    return res.status(STATUS_CODES.BAD_REQUEST).json({
+                        success: false,
+                        message: 'OTP must be verified before completing the request.'
+                    });
+                }
                 order.status = 'paid';
                 order.orderStatus = 'Completed';
+
+                // --- NEW: CREDIT WALLET FOR COMPLETED WORK ---
+                try {
+                    const { creditEngineerWallet } = await import('../../services/walletService.js');
+                    const payoutAmount = order.totalAmount || order.amount || 0;
+                    
+                    if (payoutAmount > 0) {
+                        await creditEngineerWallet({
+                            engineerId,
+                            amount: payoutAmount,
+                            orderId: order._id.toString(),
+                            category: 'earning'
+                        });
+                        console.log(`Credited ₹${payoutAmount} to wallet for engineer ${engineerId}`);
+                    }
+                } catch (creditError) {
+                    console.error("Failed to credit wallet during order completion:", creditError);
+                    // We don't block order completion if wallet credit fails, as it's recorded in logs
+                }
+                // ----------------------------------------------
             } else if (work_status === 'Cancelled') {
                 order.orderStatus = 'Cancelled';
             }
@@ -850,6 +934,128 @@ export const getCompletedRequests = async (req, res) => {
         res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({
             success: false,
             message: error.message
+        });
+    }
+};
+
+// Send Completion OTP
+export const sendCompletionOTP = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const order = await Order.findById(id).populate('userId', 'phone');
+
+        if (!order) {
+            return res.status(STATUS_CODES.NOT_FOUND).json({
+                success: false, message: 'Order not found'
+            });
+        }
+
+        // Generate 4-digit OTP
+        const otp = Math.floor(1000 + Math.random() * 9000).toString();
+        order.completionOtp = otp;
+        await order.save();
+
+        // Simulated SMS sending
+        console.log(`[SIMULATED SMS] OTP for Order ${order.orderId} sent to ${order.userId?.phone}: ${otp}`);
+
+        res.status(STATUS_CODES.SUCCESS).json({
+            success: true,
+            message: 'OTP sent to user successfully'
+        });
+    } catch (error) {
+        res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({
+            success: false, message: error.message
+        });
+    }
+};
+
+// Verify Completion OTP
+export const verifyCompletionOTP = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { otp } = req.body;
+        const order = await Order.findById(id);
+
+        if (!order) {
+            return res.status(STATUS_CODES.NOT_FOUND).json({
+                success: false, message: 'Order not found'
+            });
+        }
+
+        if (order.completionOtp === otp) {
+            order.isOtpVerified = true;
+            order.completionOtp = null; // Clear OTP after verification
+            await order.save();
+            return res.status(STATUS_CODES.SUCCESS).json({
+                success: true,
+                message: 'OTP verified successfully'
+            });
+        } else {
+            return res.status(STATUS_CODES.BAD_REQUEST).json({
+                success: false,
+                message: 'Invalid OTP'
+            });
+        }
+    } catch (error) {
+        console.error('Verify completion OTP error:', error);
+        res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({
+            success: false, message: error.message
+        });
+    }
+};
+
+// Generate Payment QR Code (Razorpay)
+export const generatePaymentQRCode = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const order = await Order.findById(id);
+
+        if (!order) {
+            return res.status(STATUS_CODES.NOT_FOUND).json({
+                success: false, message: 'Order not found'
+            });
+        }
+
+        // Only generate Razorpay QR if it's "Payment After Service" (Case-insensitive)
+        const isPAS = order.paymentMode &&
+            order.paymentMode.toString().toLowerCase().trim() === 'payment after service';
+
+        if (!isPAS) {
+            return res.status(STATUS_CODES.BAD_REQUEST).json({
+                success: false,
+                message: 'Razorpay QR is only available for Payment After Service orders.'
+            });
+        }
+
+        const amountInPaise = Math.round(order.amount * 100);
+
+        // Generate Razorpay QR Code
+        const qrCode = await razorpay.qrCode.create({
+            type: 'upi_qr',
+            name: `Door2fy Order ${order.orderId}`,
+            usage: 'single_use',
+            fixed_amount: true,
+            payment_amount: amountInPaise,
+            description: `Payment for Order #${order.orderId}`,
+            notes: {
+                orderId: order._id.toString(),
+                orderNumber: order.orderId
+            }
+        });
+
+        res.status(STATUS_CODES.SUCCESS).json({
+            success: true,
+            data: {
+                qrId: qrCode.id,
+                imageUrl: qrCode.image_url,
+                paymentUrl: qrCode.payment_url // UPI deep link
+            }
+        });
+    } catch (error) {
+        console.error('Generate Razorpay QR error:', error);
+        res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({
+            success: false,
+            message: error.message || 'Failed to generate Razorpay QR code'
         });
     }
 };
