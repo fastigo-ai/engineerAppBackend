@@ -1,55 +1,67 @@
-import Razorpay from 'razorpay';
+import axios from 'axios';
 import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
 
 dotenv.config();
 
-const razorpay = new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID,
-    key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+const RAZORPAY_KEY = process.env.RAZORPAY_KEY_ID;
+const RAZORPAY_SECRET = process.env.RAZORPAY_KEY_SECRET;
+const RAZORPAY_ACCOUNT_NUMBER = process.env.RAZORPAY_ACCOUNT_NUMBER;
+
+// Basic Auth for Razorpay
+const auth = Buffer.from(`${RAZORPAY_KEY}:${RAZORPAY_SECRET}`).toString('base64');
+const headers = {
+    'Authorization': `Basic ${auth}`,
+    'Content-Type': 'application/json'
+};
+
+const BASE_URL = 'https://api.razorpay.com/v1';
 
 /**
- * Service to handle Razorpay Payouts and related entities
+ * Service to handle Razorpay Payouts and related entities (using REST API)
  */
 export const createContact = async (engineer) => {
     try {
-        const contact = await razorpay.contacts.create({
+        const response = await axios.post(`${BASE_URL}/contacts`, {
             name: engineer.name,
             email: engineer.email || `${engineer.mobile}@door2fy.com`,
             contact: engineer.mobile,
             type: "employee",
             reference_id: engineer._id.toString(),
-        });
-        return contact;
+        }, { headers });
+
+        return response.data;
     } catch (error) {
-        console.error("Razorpay Contact Creation Error:", error);
-        throw error;
+        const message = error.response?.data?.error?.description || error.message;
+        console.error("Razorpay Contact Creation Error:", message);
+        throw new Error(message);
     }
 };
 
 export const createFundAccount = async (contactId, bankDetails) => {
     try {
-        const fundAccount = await razorpay.fundAccount.create({
+        const response = await axios.post(`${BASE_URL}/fund_accounts`, {
             account_type: "bank_account",
             contact_id: contactId,
             bank_account: {
-                name: bankDetails.accountHolderName,
+                name: bankDetails.accountHolderName || bankDetails.accountName || "Bank Account",
                 ifsc: bankDetails.ifsc,
                 account_number: bankDetails.accountNumber,
             },
-        });
-        return fundAccount;
+        }, { headers });
+
+        return response.data;
     } catch (error) {
-        console.error("Razorpay Fund Account Creation Error:", error);
-        throw error;
+        const message = error.response?.data?.error?.description || error.message;
+        console.error("Razorpay Fund Account Creation Error:", message);
+        throw new Error(message);
     }
 };
 
 export const createPayout = async ({ fundAccountId, amount, accountNumber, referenceId, idempotencyKey }) => {
     try {
-        const payout = await razorpay.payouts.create({
-            account_number: accountNumber || process.env.RAZORPAY_ACCOUNT_NUMBER, // Merchant X-account
+        const response = await axios.post(`${BASE_URL}/payouts`, {
+            account_number: accountNumber || RAZORPAY_ACCOUNT_NUMBER,
             fund_account_id: fundAccountId,
             amount: Math.round(amount * 100), // Convert to paise
             currency: "INR",
@@ -60,21 +72,28 @@ export const createPayout = async ({ fundAccountId, amount, accountNumber, refer
             notes: {
                 ledgerReference: referenceId
             }
-        }, {
-            "X-Payout-Idempotency": idempotencyKey
+        }, { 
+            headers: {
+                ...headers,
+                "X-Payout-Idempotency": idempotencyKey || uuidv4()
+            }
         });
-        return payout;
+
+        return response.data;
     } catch (error) {
-        console.error("Razorpay Payout Error:", error);
-        throw error;
+        const message = error.response?.data?.error?.description || error.message;
+        console.error("Razorpay Payout Error:", message);
+        throw new Error(message);
     }
 };
 
 export const fetchPayout = async (payoutId) => {
     try {
-        return await razorpay.payouts.fetch(payoutId);
+        const response = await axios.get(`${BASE_URL}/payouts/${payoutId}`, { headers });
+        return response.data;
     } catch (error) {
-        console.error("Razorpay Fetch Payout Error:", error);
-        throw error;
+        const message = error.response?.data?.error?.description || error.message;
+        console.error("Razorpay Fetch Payout Error:", message);
+        throw new Error(message);
     }
 };
