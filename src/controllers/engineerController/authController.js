@@ -355,43 +355,6 @@ export const onboardEngineer = async (req, res) => {
   }
 };
 
-export const updateFcmToken = async (req, res) => {
-  try {
-    const { userId, token } = req.body;
-
-    if (!userId || !token) {
-      return res.status(400).json({
-        success: false,
-        error: "User ID and token are required"
-      });
-    }
-
-    const engineer = await Engineer.findByIdAndUpdate(
-      userId,
-      { fcmToken: token },
-      { new: true }
-    );
-
-    if (!engineer) {
-      return res.status(404).json({
-        success: false,
-        error: "Engineer not found"
-      });
-    }
-
-    res.json({
-      success: true,
-      message: "FCM token updated successfully"
-    });
-  } catch (err) {
-    console.error('Update FCM token error:', err);
-    res.status(500).json({
-      success: false,
-      error: err.message
-    });
-  }
-};
-
 export const getProfile = async (req, res) => {
   try {
     const engineerId = req.engineer.id;

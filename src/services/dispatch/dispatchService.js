@@ -233,6 +233,25 @@ export const dispatchOrder = async (orderId) => {
         if (!selectedEngineers.length) {
             console.log(" No engineers found");
 
+            // 🔔 Notify User that we are still searching
+            if (order.userId) {
+                try {
+                    const { sendPushToUser } = await import("../notification/notificationService.js");
+                    sendPushToUser(order.userId, {
+                        notification: {
+                            title: 'Searching for Partners...',
+                            body: 'We are currently looking for the best technician near you. Thank you for your patience.',
+                        },
+                        data: {
+                            order_id: order._id.toString(),
+                            type: 'SEARCHING_ENGINEERS'
+                        }
+                    });
+                } catch (notifyError) {
+                    // Silently fail for "Still searching" info notifications
+                }
+            }
+
             // optional retry
             // setTimeout(() => dispatchOrder(orderId), 10000);
 

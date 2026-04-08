@@ -94,10 +94,13 @@ const EngineerSchema = new mongoose.Schema({
     type: String,
     index: true
   },
-  fcmToken: {
-    type: String,
-    trim: true
-  },
+  fcmTokens: [
+    {
+      token: { type: String, required: true },
+      device: { type: String }, // ios, android, web
+      lastUsed: { type: Date, default: Date.now }
+    }
+  ],
   status: {
     type: String,
     enum: ["OFFLINE", "ONLINE", "BUSY"],
@@ -189,6 +192,7 @@ EngineerSchema.pre(
 
 // Index for geospatial queries
 EngineerSchema.index({ location: '2dsphere' });
+EngineerSchema.index({ 'fcmTokens.token': 1 });
 EngineerSchema.index({
   h3Index: 1,
   status: 1,

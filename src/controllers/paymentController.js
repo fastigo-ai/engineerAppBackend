@@ -8,6 +8,9 @@ import { dispatchOrder } from '../services/dispatch/dispatchService.js';
 import User from '../models/user.js';
 import { createCheckoutService } from '../services/user/paymentService.js';
 import { notifyEngineersForOrder } from '../services/notificationEngineerService.js';
+import { Wallet } from '../models/Wallet.js';
+import { Ledger } from '../models/Ledger.js';
+import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
 
 
 // Create Checkout Session
@@ -314,6 +317,16 @@ export const handleRazorpayWebhook = async (req, res) => {
 
       case 'refund.processed':
         await handleRefundProcessed(payload);
+        break;
+      
+      // --- Razorpay X Payout Events ---
+      case 'payout.processed':
+        await handlePayoutProcessed(payload);
+        break;
+      
+      case 'payout.failed':
+      case 'payout.reversed':
+        await handlePayoutReversed(payload);
         break;
 
       default:
@@ -1062,6 +1075,25 @@ export const verifyPayment = async (req, res) => {
 
     if (dispatchLock) {
       dispatchOrder(order._id); // 🔥 NON-BLOCKING
+      
+      // 🔔 Notify User that their order is confirmed
+      if (order.userId) {
+        try {
+          const { sendPushToUser } = await import("../services/notification/notificationService.js");
+          sendPushToUser(order.userId, {
+            notification: {
+              title: 'Order Confirmed!',
+              body: `Your booking for ${order.servicePlan?.name || 'Service'} is successful. We are matching a partner for you.`,
+            },
+            data: {
+              order_id: order._id.toString(),
+              type: 'ORDER_CONFIRMED'
+            }
+          });
+        } catch (notifyError) {
+          console.error('[PaymentController] Failed to send confirmation push:', notifyError);
+        }
+      }
     }
 
     // 9️ Response
@@ -1167,4 +1199,140 @@ export const getUserOrders = async (req, res) => {
       error: error.message
     });
   }
+};
+
+// --- RAZORPAY X PAYOUT WEBHOOK HANDLERS ---
+
+/**
+ * Handle payout.processed event
+ * Move funds from lockedBalance -> withdrawnAmount (Net Payout)
+ * Retain commission (Gross - Net)
+ */
+const handlePayoutProcessed = async (payload) => {
+    try {
+        const payoutEntity = payload.payout.entity;
+        const payoutId = payoutEntity.id;
+        const requestId = payoutEntity.reference_id;
+
+        console.log(`Processing Success Webhook for Payout: ${payoutId}`);
+
+        const withdrawal = await WithdrawalRequest.findById(requestId);
+        if (!withdrawal) {
+            console.error(`Withdrawal request ${requestId} not found for success sync`);
+            return;
+        }
+
+        if (withdrawal.status === 'success') {
+            console.log(`Withdrawal ${requestId} already marked success`);
+            return;
+        }
+
+        const engineerId = withdrawal.engineerId;
+        const grossAmount = withdrawal.amount; // Gross (100%)
+        const netAmount = withdrawal.netAmount || (grossAmount * 0.75); // Net (75%)
+
+        const session = await Wallet.startSession();
+        session.startTransaction();
+
+        try {
+            // 1. Update Wallet: Remove Gross from Locked, Add Net to Withdrawn
+            await Wallet.findOneAndUpdate(
+                { engineerId },
+                { 
+                    $inc: { 
+                        lockedBalance: -grossAmount,
+                        withdrawnAmount: netAmount
+                    }
+                },
+                { session }
+            );
+
+            // 2. Update Withdrawal Request
+            await WithdrawalRequest.findByIdAndUpdate(requestId, {
+                status: 'success',
+                processedAt: new Date()
+            }, { session });
+
+            // 3. Update Ledger Status
+            await Ledger.findOneAndUpdate(
+                { referenceId: requestId.toString(), type: 'debit' },
+                { status: 'success' },
+                { session }
+            );
+
+            await session.commitTransaction();
+            console.log(`Finalized withdrawal ${requestId}: Gross ₹${grossAmount} deducted, Net ₹${netAmount} recorded.`);
+        } catch (error) {
+            await session.abortTransaction();
+            throw error;
+        } finally {
+            session.endSession();
+        }
+
+    } catch (error) {
+        console.error("Handle payout processed error:", error);
+    }
+};
+
+/**
+ * Handle payout.failed / payout.reversed
+ * Revert funds from lockedBalance -> availableBalance (Gross)
+ */
+const handlePayoutReversed = async (payload) => {
+    try {
+        const payoutEntity = payload.payout.entity;
+        const payoutId = payoutEntity.id;
+        const requestId = payoutEntity.reference_id;
+        const failureReason = payoutEntity.status_details?.description || 'Payout failed';
+
+        console.log(`Processing Failure Webhook for Payout: ${payoutId}, Reason: ${failureReason}`);
+
+        const withdrawal = await WithdrawalRequest.findById(requestId);
+        if (!withdrawal) return;
+
+        if (withdrawal.status === 'failed') return;
+
+        const engineerId = withdrawal.engineerId;
+        const grossAmount = withdrawal.amount;
+
+        const session = await Wallet.startSession();
+        session.startTransaction();
+
+        try {
+            // 1. Revert Wallet: Move Gross from Locked back to Available
+            await Wallet.findOneAndUpdate(
+                { engineerId },
+                { 
+                    $inc: { 
+                        lockedBalance: -grossAmount,
+                        availableBalance: grossAmount
+                    }
+                },
+                { session }
+            );
+
+            // 2. Mark Request as Failed
+            await WithdrawalRequest.findByIdAndUpdate(requestId, {
+                status: 'failed',
+                failureReason
+            }, { session });
+
+            // 3. Update Ledger Status
+            await Ledger.findOneAndUpdate(
+                { referenceId: requestId.toString(), type: 'debit' },
+                { status: 'failed' },
+                { session }
+            );
+
+            await session.commitTransaction();
+            console.log(`Reverted withdrawal ${requestId}: Gross ₹${grossAmount} returned to available balance.`);
+        } catch (error) {
+            await session.abortTransaction();
+            throw error;
+        } finally {
+            session.endSession();
+        }
+    } catch (error) {
+        console.error("Handle payout reversed error:", error);
+    }
 };

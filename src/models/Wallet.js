@@ -17,6 +17,11 @@ const WalletSchema = new mongoose.Schema({
         type: Number,
         default: 0,
         min: 0
+    },
+    withdrawnAmount: {
+        type: Number,
+        default: 0,
+        min: 0
     }
 }, {
     timestamps: true

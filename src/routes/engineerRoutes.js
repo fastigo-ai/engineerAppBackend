@@ -75,7 +75,7 @@ router.put(
 router.put("/updateLocation", authenticateEngineer, updateEngineerLocation);
 router.put("/goOnline", authenticateEngineer, goOnlineController);
 router.put("/goOffline", authenticateEngineer, goOfflineController);
-router.post("heartbeat", authenticateEngineer, heartbeatController);
+router.post("/heartbeat", authenticateEngineer, heartbeatController);
 router.post("/update/location", authenticateEngineer, updateLocationController);
 router.get("/requests/nearby", authenticateEngineer, getNearbyRequests);
 router.get("/requests/fetching-nearby", authenticateEngineer, getNearbyOrdersController);

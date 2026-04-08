@@ -63,13 +63,23 @@ const userSchema = new mongoose.Schema({
   refreshToken: {
     type: String,
     default: null
-  }
+  },
+  fcmTokens: [
+    {
+      token: { type: String, required: true },
+      device: { type: String }, // ios, android, web
+      lastUsed: { type: Date, default: Date.now }
+    }
+  ],
 }, {
   timestamps: true,
 });
 
 // Index for geospatial queries
 userSchema.index({ location: '2dsphere' });
+
+// Index for FCM tokens
+userSchema.index({ 'fcmTokens.token': 1 });
 
 const User = mongoose.model('User', userSchema);
 

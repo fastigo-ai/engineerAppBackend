@@ -136,6 +136,7 @@ const OrderSchema = new mongoose.Schema(
       type: String,
       trim: true,
       unique: true,
+      sparse: true
     },
     orderStatus: {
       type: String,

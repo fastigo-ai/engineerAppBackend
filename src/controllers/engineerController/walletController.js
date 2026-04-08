@@ -3,6 +3,7 @@ import { Wallet } from '../../models/Wallet.js';
 import { Ledger } from '../../models/Ledger.js';
 import { BankAccount } from '../../models/BankAccount.js';
 import { WithdrawalRequest } from '../../models/WithdrawalRequest.js';
+import { Order } from '../../models/orderSchema.js';
 import * as payoutService from '../../services/payoutService.js';
 import { v4 as uuidv4 } from 'uuid';
 import STATUS_CODES from '../../constants/statusCodes.js';
@@ -56,7 +57,7 @@ export const requestWithdrawal = async (req, res) => {
         console.log(`Withdrawal Request - Gross: ${amount}, Commission: ${commission}, Net Payout: ${netPayout}`);
 
         // 4. INTERNAL TRANSACTIONAL ACCOUNTING
-        // Move funds from available to locked
+        // Move Gross amount from available to locked
         wallet.availableBalance -= amount;
         wallet.lockedBalance += amount;
         await wallet.save({ session });
@@ -65,7 +66,9 @@ export const requestWithdrawal = async (req, res) => {
         const withdrawal = new WithdrawalRequest({
             _id: requestId,
             engineerId,
-            amount, // Total requested (Gross)
+            amount,           // Total requested (Gross)
+            commission,       // Platform Fee
+            netAmount: netPayout, // What engineer gets
             status: 'pending'
         });
         await withdrawal.save({ session });
@@ -135,6 +138,54 @@ export const requestWithdrawal = async (req, res) => {
 export const getWalletBalance = async (req, res) => {
     try {
         const engineerId = req.user.id;
+
+        // --- 1. PROACTIVE LEDGER SYNC (Find missing earnings) ---
+        try {
+            // A. Find all completed/paid regular orders
+            const completedRegularOrders = await Order.find({
+                assignedEngineer: engineerId,
+                $or: [{ status: 'paid' }, { orderStatus: 'Completed' }]
+            }).select('_id amount').lean();
+
+            // B. Find all completed vendor orders
+            const VendorOrder = (await import('../../models/vendorOrderModal.js')).default;
+            const completedVendorOrders = await VendorOrder.find({
+                assigned_engineer_id: engineerId,
+                work_status: 'COMPLETED'
+            }).select('_id order_price payout_amount').lean();
+
+            // C. Combine All Potential Credits
+            const potentialCredits = [
+                ...completedRegularOrders.map(o => ({ id: o._id, amount: o.amount || 0 })),
+                ...completedVendorOrders.map(o => ({ id: o._id, amount: o.payout_amount || o.order_price || 0 }))
+            ];
+
+            // D. Get existing success credits in Ledger
+            const existingLedgerEntries = await Ledger.find({
+                engineerId,
+                type: 'credit',
+                status: 'success'
+            }).select('referenceId').lean();
+            const existingIds = new Set(existingLedgerEntries.map(l => l.referenceId?.toString()));
+
+            // E. Create missing Ledger entries
+            const { creditEngineerWallet } = await import('../../services/walletService.js');
+            for (const cred of potentialCredits) {
+                if (!existingIds.has(cred.id.toString()) && cred.amount > 0) {
+                    console.log(`Syncing missing credit for order ${cred.id}: ₹${cred.amount}`);
+                    await creditEngineerWallet({
+                        engineerId,
+                        amount: cred.amount,
+                        orderId: cred.id.toString(),
+                        category: 'earning'
+                    });
+                }
+            }
+        } catch (syncError) {
+            console.error("Wallet Sync Error:", syncError);
+            // Don't block the balance return if sync fails
+        }
+
         let wallet = await Wallet.findOne({ engineerId });
 
         if (!wallet) {
@@ -157,12 +208,19 @@ export const getWalletBalance = async (req, res) => {
         const debits = ledgerAggregation.find(i => i._id === 'debit')?.total || 0;
         const actualBalance = credits - debits;
 
+        // Auto-reconcile balance if discrepancy exists
+        if (wallet.availableBalance !== actualBalance) {
+            wallet.availableBalance = actualBalance;
+            await wallet.save();
+            console.log(`Reconciled wallet balance for engineer ${engineerId} to ₹${actualBalance}`);
+        }
+
         return res.status(STATUS_CODES.SUCCESS).json({
             success: true,
             data: {
                 availableBalance: wallet.availableBalance,
                 lockedBalance: wallet.lockedBalance,
-                verifiedBalance: actualBalance, // For audit visibility
+                verifiedBalance: actualBalance, // Audit trace
                 updatedAt: wallet.updatedAt
             }
         });

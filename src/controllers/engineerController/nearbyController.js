@@ -25,9 +25,11 @@ export const getNearbyOrdersController = async (req, res) => {
 
     // 2. Strict enforcement: Engineer must be online to fetch nearby orders
     if (engineer.status !== "ONLINE") {
-      return res.status(STATUS_CODES.BAD_REQUEST || 400).json({
-        success: false,
-        message: "You must be ONLINE to fetch nearby orders."
+      return res.status(STATUS_CODES.SUCCESS || 200).json({
+        success: true,
+        isOffline: true, // Key flag for frontend
+        message: "You must be ONLINE to fetch nearby orders.",
+        data: []
       });
     }
 

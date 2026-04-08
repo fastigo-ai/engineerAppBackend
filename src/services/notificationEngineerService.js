@@ -1,8 +1,4 @@
-import { latLngToCell, gridDisk } from "h3-js";
-import { Engineer } from "../models/engineersModal.js";
-import { getDistanceInMeters } from "../utils/distance.js";
-import { getIO } from "../config/socket.js";
-import { admin } from "../config/firebase.js";
+import { sendPushToMatchedEngineers } from "./notification/notificationService.js";
 
 const H3_RESOLUTION = 8;
 const MAX_RADIUS_KM = 25;
@@ -20,15 +16,10 @@ export const notifyMatchedEngineers = async (engineers, orderData) => {
 
   console.log(`Notifying ${engineers.length} engineers for Order ${orderData.id}`);
 
+  // 1. Send order request via Socket.io to each engineer
   for (const eng of engineers) {
-    // const engineerRoom = eng.engineer_id.toString();
-    console.log("eng", eng);
-    //user                   // vendor
     const engineerRoom = eng._id.toString() || eng.engineer_id.toString();
 
-    console.log("engineerRoom", orderData.type);
-
-    // 1. Send order request via Socket.io
     if (orderData.type !== "User Order") {
       io.to(engineerRoom).emit("NEW_VENDOR_ORDER_REQUEST", {
         order_id: orderData._id,
@@ -45,9 +36,10 @@ export const notifyMatchedEngineers = async (engineers, orderData) => {
     } else {
       io.to(engineerRoom).emit("NEW_USER_ORDER_REQUEST", {
         order_id: orderData._id,
-        address: orderData.addressText,
+        address: orderData.addressText || orderData.address || 'nearby location',
+        addressText: orderData.addressText,
         paymentMode: orderData.paymentMode,
-        servicePlan: orderData.notes.servicePlanNames,
+        servicePlan: orderData.notes?.servicePlanNames || "New Job",
         userDetail: orderData.customerDetails,
         scheduledAt: orderData.scheduledAt,
         totalDuration: orderData.totalDuration,
@@ -59,45 +51,30 @@ export const notifyMatchedEngineers = async (engineers, orderData) => {
       });
     }
 
-
-    // 2. Send push notification via FCM if fcmToken exists
-    if (eng.fcmToken) {
-      try {
-        const message = {
-          notification: {
-            title: 'New Job Request!',
-            body: `New ${orderData.type || 'job'} available at ${orderData.address || 'nearby location'}`,
-          },
-          data: {
-            order_id: orderData.id.toString(),
-            support_type: orderData.type || '',
-            complete_address: orderData.address || '',
-            customer_name: orderData.customerDetails?.name || '',
-            user_detail: JSON.stringify(orderData.customerDetails || {}),
-            type: 'NEW_ORDER'
-          },
-          token: eng.fcmToken,
-        };
-
-        admin.messaging().send(message)
-          .then((response) => {
-            console.log('Successfully sent push notification:', response);
-          })
-          .catch((error) => {
-            console.error('Error sending push notification:', error);
-          });
-      } catch (err) {
-        console.error('FCM send error:', err);
-      }
-    }
-
-    // 3. Join ONLY online sockets to the order room
+    // Join online sockets to the order room
     const sockets = await io.in(engineerRoom).fetchSockets();
     if (sockets.length > 0) {
       io.in(engineerRoom).socketsJoin(orderRoom);
-      console.log(`Engineer ${engineerRoom} joined ${orderRoom}`);
     }
   }
+
+  // 2. Batch send push notifications via Centralized Notification Service
+  const engineerIds = engineers.map(e => e._id);
+  const payload = {
+    notification: {
+      title: 'New Job Request!',
+      body: `New ${orderData.type || 'job'} available at ${orderData.address || 'nearby location'}`,
+    },
+    data: {
+      order_id: (orderData._id || orderData.id).toString(),
+      support_type: orderData.type || '',
+      complete_address: orderData.address || orderData.addressText || '',
+      customer_name: orderData.customerDetails?.name || '',
+      type: 'NEW_ORDER'
+    }
+  };
+
+  sendPushToMatchedEngineers(engineerIds, payload);
 };
 
 
@@ -213,7 +190,7 @@ export async function matchEngineersByLocation({ location, excludeEngineers = []
       { h3Index: null }
     ]
   })
-    .select("_id name mobile location rating totalJobs completedJobs h3Index isAvailable isActive fcmToken")
+    .select("_id name mobile location rating totalJobs completedJobs h3Index isAvailable isActive fcmTokens")
     .lean();
 
   if (!engineers.length) {
@@ -233,7 +210,7 @@ export async function matchEngineersByLocation({ location, excludeEngineers = []
         mobile: e.mobile,
         rating: e.rating,
         h3Index: e.h3Index,
-        fcmToken: e.fcmToken,
+        fcmTokens: e.fcmTokens,
         distanceInMeters: distance,
         distanceKm: +(distance / 1000).toFixed(2)
       };

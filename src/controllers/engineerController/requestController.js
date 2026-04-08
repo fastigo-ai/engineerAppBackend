@@ -285,6 +285,25 @@ export const acceptRequest = async (req, res) => {
         await order.save();
         console.log(' Order saved successfully');
 
+        // 🔔 Notify User that an engineer has been assigned
+        if (order.userId) {
+            try {
+                const { sendPushToUser } = await import("../../services/notification/notificationService.js");
+                sendPushToUser(order.userId, {
+                    notification: {
+                        title: 'Engineer Assigned!',
+                        body: `Engineer ${req.user.name || 'Partner'} has been assigned to your order.`,
+                    },
+                    data: {
+                        order_id: order._id.toString(),
+                        type: 'ENGINEER_ASSIGNED'
+                    }
+                });
+            } catch (notifyError) {
+                console.error('Failed to send assignment notification to user:', notifyError);
+            }
+        }
+
         console.log(' Fetching updated order with populated fields...');
         const updatedOrder = await Order.findById(id)
             .populate('userId', 'name phone address')
@@ -891,6 +910,25 @@ export const updateWorkStatus = async (req, res) => {
             // If completed, sync main status too
             if (work_status === 'Completed') {
                 await vendorOrderModal.findByIdAndUpdate(id, { status: 'COMPLETED' });
+
+                // --- NEW: CREDIT WALLET FOR COMPLETED VENDOR WORK ---
+                try {
+                    const { creditEngineerWallet } = await import('../../services/walletService.js');
+                    const payoutAmount = vendorOrder.totalAmount || vendorOrder.order_price || 0;
+                    
+                    if (payoutAmount > 0) {
+                        await creditEngineerWallet({
+                            engineerId,
+                            amount: payoutAmount,
+                            orderId: vendorOrder._id.toString(),
+                            category: 'earning'
+                        });
+                        console.log(`Credited ₹${payoutAmount} to wallet for vendor engineer ${engineerId}`);
+                    }
+                } catch (creditError) {
+                    console.error("Failed to credit wallet during vendor order completion:", creditError);
+                }
+                // ---------------------------------------------------
             }
 
             return res.status(STATUS_CODES.SUCCESS).json({
