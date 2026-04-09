@@ -94,15 +94,15 @@ export const updateEngineerLocation = async (req, res) => {
 export const getNearbyRequests = async (req, res) => {
     try {
         const engineerId = req.user.id;
-        const { latitude, longitude, maxDistance = 50000 } = req.query; // maxDistance in meters (default 50km)
+        const { latitude, longitude, maxDistance = 50000, type = "all" } = req.query; // maxDistance in meters (default 50km)
         let coordinates = [];
 
         // If coordinates provided in query, use them
         if (latitude && longitude) {
             coordinates = [parseFloat(longitude), parseFloat(latitude)];
         } else if (engineerId) {
-            // Fetch engineer's last known location
-            const engineer = await User.findById(engineerId);
+            // Fetch engineer's last known location (BUG FIX: Use Engineer model, not User)
+            const engineer = await Engineer.findById(engineerId);
             if (!engineer || !engineer.location || !engineer.location.coordinates) {
                 return res.status(STATUS_CODES.BAD_REQUEST || 400).json({
                     success: false,
@@ -117,31 +117,37 @@ export const getNearbyRequests = async (req, res) => {
             });
         }
 
-        // 2. Fetch Regular Orders
-        const requests = await Order.find({
-            status: { $in: ['created', 'paid'] },
-            assignedEngineer: null,
-            work_status: { $nin: ['Completed', 'Cancelled'] },
-            rejectedBy: { $ne: engineerId },
-            location: {
-                $near: {
-                    $geometry: {
-                        type: 'Point',
-                        coordinates: coordinates
-                    },
-                    $maxDistance: parseInt(maxDistance)
-                }
-            }
-        })
-            .populate('userId', 'name phone address')
-            .populate('servicePlan', 'name')
-            .populate('servicePlans', 'name')
-            .lean();
+        let requests = [];
+        let vendorRequests = [];
 
-        // 3. Fetch Vendor Orders
-        const vendorRequests = await vendorOrderModal.aggregate([
-            {
-                $geoNear: {
+        // 2. Fetch Regular Orders (Only if type is 'all' or 'user')
+        if (type === "all" || type === "user") {
+            requests = await Order.find({
+                status: { $in: ['created', 'paid', 'Searching', 'pending'] },
+                assignedEngineer: null,
+                work_status: { $nin: ['Completed', 'Cancelled'] },
+                rejectedBy: { $ne: engineerId },
+                location: {
+                    $near: {
+                        $geometry: {
+                            type: 'Point',
+                            coordinates: coordinates
+                        },
+                        $maxDistance: parseInt(maxDistance)
+                    }
+                }
+            })
+                .populate('userId', 'name phone address')
+                .populate('servicePlan', 'name')
+                .populate('servicePlans', 'name')
+                .lean();
+        }
+
+        // 3. Fetch Vendor Orders (Only if type is 'all' or 'vendor')
+        if (type === "all" || type === "vendor") {
+            vendorRequests = await vendorOrderModal.aggregate([
+                {
+                    $geoNear: {
                     near: { type: 'Point', coordinates: coordinates },
                     distanceField: 'distance',
                     maxDistance: parseInt(maxDistance),
@@ -178,6 +184,7 @@ export const getNearbyRequests = async (req, res) => {
                 }
             }
         ]);
+        }
 
         const mappedRequests = requests.map(order => {
             const orderCoords = order.location?.coordinates;
@@ -757,8 +764,9 @@ export const getAcceptedRequests = async (req, res) => {
             });
         }
 
-        const latNum = parseFloat(latitude);
-        const lngNum = parseFloat(longitude);
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
 
         // 2. Fetch Direct Orders
         const requests = await Order.find({
@@ -767,14 +775,19 @@ export const getAcceptedRequests = async (req, res) => {
         })
             .populate('userId', 'name phone address')
             .populate('servicePlan', 'name')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit)
             .lean();
 
-        // 5. Final Sort (Closest distance first)
+        // 5. Final Sort (Closest distance first) - Optional if paginated
         requests.sort((a, b) => (a.distance || 0) - (b.distance || 0));
 
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
             count: requests.length,
+            page,
+            limit,
             data: requests
         });
     } catch (error) {
@@ -789,15 +802,37 @@ export const getAcceptedRequests = async (req, res) => {
 export const getRejectedRequests = async (req, res) => {
     try {
         const engineerId = req.user.id;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
 
         const requests = await Order.find({
             rejectedBy: engineerId
-        }).populate('userId', 'name phone address').populate('servicePlan', 'name').lean();
+        })
+            .populate('userId', 'name phone address')
+            .populate('servicePlan', 'name')
+            .sort({ updatedAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .lean();
+
+        // Security: Mask sensitive user data for rejected requests
+        const redactedRequests = requests.map(req => {
+            if (req.userId) {
+                req.userId.phone = "Hidden";
+            }
+            if (req.customerDetails) {
+                req.customerDetails.phone = "Hidden";
+            }
+            return req;
+        });
 
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
-            count: requests.length,
-            data: requests
+            count: redactedRequests.length,
+            page,
+            limit,
+            data: redactedRequests
         });
     } catch (error) {
         console.error('Get rejected requests error:', error);
@@ -956,15 +991,26 @@ export const updateWorkStatus = async (req, res) => {
 export const getCompletedRequests = async (req, res) => {
     try {
         const engineerId = req.user.id;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
 
         const requests = await Order.find({
             assignedEngineer: engineerId,
             orderStatus: 'Completed'
-        }).populate('userId', 'name phone address').populate('servicePlan', 'name').lean();
+        })
+            .populate('userId', 'name phone address')
+            .populate('servicePlan', 'name')
+            .sort({ updatedAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .lean();
 
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
             count: requests.length,
+            page,
+            limit,
             data: requests
         });
     } catch (error) {

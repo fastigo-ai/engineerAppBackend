@@ -486,15 +486,26 @@ export const completeOrder = async (req, res) => {
 export const getAcceptedVendorOrders = async (req, res) => {
   try {
     const engineerId = req.user.id;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
     const orders = await VendorOrder.find({
       assigned_engineer_id: engineerId,
       status: "ACCEPTED",
-    }).sort({ accepted_at: -1 }).lean();
+    })
+      .sort({ accepted_at: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
 
     const mappedOrders = orders.map(order => ({ ...order, isVendorOrder: true }));
 
     return res.status(200).json({
       success: true,
+      count: mappedOrders.length,
+      page,
+      limit,
       data: mappedOrders,
       orders: mappedOrders, // Provide both for compatibility
     });
@@ -507,14 +518,30 @@ export const getAcceptedVendorOrders = async (req, res) => {
 export const getRejectedVendorOrders = async (req, res) => {
   try {
     const engineerId = req.user.id;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
     const orders = await VendorOrder.find({
       rejected_engineers: engineerId,
-    }).sort({ created_at: -1 }).lean();
+    })
+      .sort({ created_at: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
 
-    const mappedOrders = orders.map(order => ({ ...order, isVendorOrder: true }));
+    const mappedOrders = orders.map(order => ({ 
+      ...order, 
+      isVendorOrder: true,
+      contact_phone: "Hidden",
+      l1_support_number: "Hidden"
+    }));
 
     return res.status(200).json({
       success: true,
+      count: mappedOrders.length,
+      page,
+      limit,
       data: mappedOrders,
       orders: mappedOrders,
     });
@@ -527,15 +554,26 @@ export const getRejectedVendorOrders = async (req, res) => {
 export const getCompletedVendorOrders = async (req, res) => {
   try {
     const engineerId = req.user.id;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
     const orders = await VendorOrder.find({
       assigned_engineer_id: engineerId,
       status: "COMPLETED",
-    }).sort({ completed_at: -1 }).lean();
+    })
+      .sort({ completed_at: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
 
     const mappedOrders = orders.map(order => ({ ...order, isVendorOrder: true }));
 
     return res.status(200).json({
       success: true,
+      count: mappedOrders.length,
+      page,
+      limit,
       data: mappedOrders,
       orders: mappedOrders,
     });

@@ -34,7 +34,8 @@ export const getNearbyOrdersController = async (req, res) => {
     }
 
     // 3. Call the service to find nearby matches using H3 radius expansion
-    const orders = await getNearbyOrdersService({ engineer });
+    const type = req.query.type || "all";
+    const orders = await getNearbyOrdersService({ engineer, type });
 
     return res.status(STATUS_CODES.SUCCESS || 200).json({
       success: true,
