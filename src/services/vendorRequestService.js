@@ -52,7 +52,7 @@ export const createAndMatchVendorOrder = async (payload) => {
         contact_name: payload.contact_name,
         contact_phone: payload.contact_phone,
 
-        order_price: payload.order_price || 0,
+        order_price: payload.amount || 0,
         sla_priority: payload.sla_priority,
         sla_response_time_minutes: payload.sla_response_time_minutes || 0,
         description: payload.description,
@@ -168,7 +168,7 @@ export const rejectOrderService = async ({ orderId, engineerId }) => {
   // If the rejecting engineer is the one who was assigned, reset the assignment
   const currentOrder = await VendorOrder.findById(orderId);
   let shouldReDispatch = false;
-  
+
   if (currentOrder && currentOrder.assigned_engineer_id && currentOrder.assigned_engineer_id.toString() === engineerId.toString()) {
     updateData.$set = {
       assigned_engineer_id: null,

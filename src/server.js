@@ -12,7 +12,7 @@ import paymentRoutes from './routes/paymentRoutes.js';
 import engineerRoutes from './routes/engineerRoutes.js';
 import connectDB from './config/db.js';
 import { isFirebaseConnected } from './config/firebase.js';
-import engineerAuthRoutes from './routes/engineerRoutes/authRoutes.js'; 
+import engineerAuthRoutes from './routes/engineerRoutes/authRoutes.js';
 import errorHandler from './middleware/errorHandler.js';
 import { handleRazorpayWebhook } from './controllers/razorpayWebhookController.js';
 import { initPayoutCron } from './utils/payoutCron.js';
@@ -73,7 +73,7 @@ const startServer = async () => {
     await connectDB();
 
     // Initialize Cron Jobs
-    initPayoutCron();
+    // initPayoutCron();
 
     const PORT = process.env.PORT || config.port || 8080;
     httpServer.listen(PORT, '0.0.0.0', () => {
