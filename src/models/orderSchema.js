@@ -239,7 +239,6 @@ const OrderSchema = new mongoose.Schema(
 OrderSchema.index({ userId: 1, status: 1 });
 OrderSchema.index({ createdAt: -1 });
 OrderSchema.index({ location: "2dsphere" });
-OrderSchema.index({ razorpayOrderId: 1 });
 
 export const Order = mongoose.model("Order", OrderSchema);
 
