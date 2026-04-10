@@ -26,7 +26,8 @@ export const notifyMatchedEngineers = async (engineers, orderData) => {
 
     if (orderData.type !== "User Order") {
       io.to(engineerRoom).emit("NEW_VENDOR_ORDER_REQUEST", {
-        order_id: orderData._id,
+        order_id: (orderData.id || orderData._id),
+        _id: (orderData.id || orderData._id),
         call_id: orderData.call_id || null,
         address: orderData.address || orderData.addressText,
         branch_name: orderData.branch_name || null,
@@ -39,7 +40,8 @@ export const notifyMatchedEngineers = async (engineers, orderData) => {
       });
     } else {
       io.to(engineerRoom).emit("NEW_USER_ORDER_REQUEST", {
-        order_id: orderData._id,
+        order_id: (orderData.id || orderData._id),
+        _id: (orderData.id || orderData._id),
         address: orderData.addressText || orderData.address || 'nearby location',
         addressText: orderData.addressText,
         paymentMode: orderData.paymentMode,

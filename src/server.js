@@ -73,7 +73,7 @@ const startServer = async () => {
     await connectDB();
 
     // Initialize Cron Jobs
-    initPayoutCron();
+    // initPayoutCron();
 
     const PORT = process.env.PORT || config.port || 8080;
     httpServer.listen(PORT, '0.0.0.0', () => {

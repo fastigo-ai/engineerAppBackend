@@ -468,8 +468,8 @@ export const completeOrder = async (req, res) => {
     };
 
     // Fire-and-forget or await depending on vendor reliability
-    // axios.post("https://door2fyvendor-gv4g4.ondigitalocean.app/calls/engineer/assignment-result", webhookPayload)
-    //   .catch(err => console.error("Vendor Webhook Error:", err.message));
+    axios.post("https://door2fyvendor-gv4g4.ondigitalocean.app/calls/engineer/assignment-result", webhookPayload)
+      .catch(err => console.error("Vendor Webhook Error:", err.message));
 
     return res.status(200).json({
       success: true,
@@ -530,8 +530,8 @@ export const getRejectedVendorOrders = async (req, res) => {
       .limit(limit)
       .lean();
 
-    const mappedOrders = orders.map(order => ({ 
-      ...order, 
+    const mappedOrders = orders.map(order => ({
+      ...order,
       isVendorOrder: true,
       contact_phone: "Hidden",
       l1_support_number: "Hidden"
