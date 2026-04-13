@@ -20,7 +20,7 @@ export const servicableLocation = async (req, res) => {
       });
     }
 
-    const SERVICE_RADIUS = 20000; // 20 km
+    const SERVICE_RADIUS = 20000;
     const H3_RESOLUTION = 8;
     const RING_SIZE = 22;
 

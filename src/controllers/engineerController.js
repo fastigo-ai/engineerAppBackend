@@ -63,7 +63,9 @@ export const unAssignEngineerFromOrderController = async (req, res) => {
             acceptedBy: null,
             status: 'Searching',
             work_status: 'Searching'
-        }, { new: true }).populate('userId');
+        }, { new: true })
+        .populate('userId')
+        .populate('servicePlan servicePlans');
 
         await Engineer.findByIdAndUpdate(assignedEngineer._id, { isAvailable: true, assignedOrders: [] }, { new: true });
 

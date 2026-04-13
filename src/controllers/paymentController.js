@@ -398,7 +398,7 @@ const handlePaymentCaptured = async (payload) => {
 
     const order = await Order.findOne({
       razorpayOrderId: paymentEntity.order_id
-    });
+    }).populate('servicePlan servicePlans');
 
     if (!order) {
       console.error('Order not found for payment capture');
@@ -492,7 +492,7 @@ const handleOrderPaid = async (payload) => {
 
     const order = await Order.findOne({
       razorpayOrderId: orderEntity.id
-    });
+    }).populate('servicePlan servicePlans');
 
     if (!order) {
       console.error('Order not found for order.paid event');

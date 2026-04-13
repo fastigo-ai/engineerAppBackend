@@ -11,11 +11,11 @@ import * as payoutService from '../services/payoutService.js';
 export const initPayoutCron = () => {
     cron.schedule('*/5 * * * *', async () => {
         console.log('--- Running Payout Retry Cron ---');
-        
+
         try {
             // Find requests stuck in 'pending' for more than 5 minutes
             const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-            
+
             const pendingWithdrawals = await WithdrawalRequest.find({
                 status: 'pending',
                 createdAt: { $lte: fiveMinutesAgo }
@@ -57,3 +57,6 @@ export const initPayoutCron = () => {
         }
     });
 };
+
+
+

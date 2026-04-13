@@ -195,6 +195,13 @@ EngineerSchema.index({ location: '2dsphere' });
 EngineerSchema.index({ 'fcmTokens.token': 1 });
 EngineerSchema.index({
   h3Index: 1,
+  isActive: 1,
+  isAvailable: 1,
+  isBlocked: 1
+});
+
+EngineerSchema.index({
+  h3Index: 1,
   status: 1,
   lastHeartbeat: 1,
   engineerId: 1

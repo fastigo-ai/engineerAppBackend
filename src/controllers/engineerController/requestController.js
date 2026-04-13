@@ -350,7 +350,7 @@ export const rejectRequest = async (req, res) => {
         console.log('Engineer ID:', engineerId);
 
         // Find the order
-        const order = await Order.findById(id);
+        const order = await Order.findById(id).populate('servicePlan servicePlans');
 
         if (!order) {
             console.log('❌ Order not found:', id);
@@ -583,7 +583,7 @@ export const updateRequestStatus = async (req, res) => {
         console.log('✅ Status validation passed');
 
         // Find the order
-        const order = await Order.findById(id);
+        const order = await Order.findById(id).populate('servicePlan servicePlans');
 
         if (!order) {
             console.log('❌ Order not found:', id);
