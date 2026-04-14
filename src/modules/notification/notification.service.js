@@ -110,7 +110,8 @@ export async function dispatchNotification(notification) {
         const code = result.error?.code ?? '';
         if (
           code === 'messaging/invalid-registration-token' ||
-          code === 'messaging/registration-token-not-registered'
+          code === 'messaging/registration-token-not-registered' ||
+          code === 'messaging/mismatched-credential'
         ) {
           const expiredToken = tokens[i].fcmToken;
           
