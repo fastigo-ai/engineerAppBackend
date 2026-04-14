@@ -126,3 +126,107 @@ export const getHistory = catchAsync(async (req, res) => {
 
   res.status(200).json({ success: true, data: notifications });
 });
+
+/**
+ * Admin: Send individual or list of notifications
+ */
+export const adminSendNotification = catchAsync(async (req, res) => {
+  const { userIds, userModel, type, title, body, data, scheduledAt } = req.body;
+
+  if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+    return res.status(400).json({ success: false, message: 'Array of userIds is required' });
+  }
+
+  const delayMs = scheduledAt ? Math.max(0, new Date(scheduledAt).getTime() - Date.now()) : 0;
+
+  // Use Bulk for efficiency even if it's 1 user
+  const result = await Notification.insertMany(userIds.map(id => ({
+    userId: id,
+    userModel: userModel || 'User',
+    type: type || 'SYSTEM',
+    title,
+    body,
+    data: data || {},
+    status: 'PENDING',
+    nextRunAt: new Date(Date.now() + delayMs)
+  })));
+
+  res.status(200).json({
+    success: true,
+    message: `Enqueued ${result.length} notifications`,
+    data: { count: result.length }
+  });
+});
+
+/**
+ * Admin: Run a targeted campaign
+ */
+export const adminSendCampaign = catchAsync(async (req, res) => {
+  const { 
+    target, // 'all' | 'segment' | 'city'
+    segment, // 'NEW' | 'ACTIVE' | 'INACTIVE' | 'VIP'
+    city,
+    userModel = 'User',
+    type = 'PROMO',
+    title,
+    body,
+    data = {},
+    scheduledAt 
+  } = req.body;
+
+  if (!title || !body) {
+    return res.status(400).json({ success: false, message: 'Title and body are required' });
+  }
+
+  const query = {};
+  if (target === 'city' && city) {
+    query.city = city;
+  }
+
+  // Fetch candidate users
+  const Model = userModel === 'Engineer' ? Engineer : User;
+  const users = await Model.find(query).select('_id').lean();
+  let targetUserIds = users.map(u => u._id);
+
+  // Apply segment filtering if requested
+  if (target === 'segment' && segment) {
+    const { getUserSegment } = await import('../user/user.segment.js');
+    const filteredResults = await Promise.all(
+      targetUserIds.map(async (id) => {
+        const s = await getUserSegment(id);
+        return s === segment ? id : null;
+      })
+    );
+    targetUserIds = filteredResults.filter(id => id !== null);
+  }
+
+  if (targetUserIds.length === 0) {
+    return res.status(200).json({ success: true, message: 'No users matched the targeting criteria', data: { count: 0 } });
+  }
+
+  const delayMs = scheduledAt ? Math.max(0, new Date(scheduledAt).getTime() - Date.now()) : 0;
+
+  const docs = targetUserIds.map(userId => ({
+    userId,
+    userModel,
+    type,
+    title,
+    body,
+    data,
+    status: 'PENDING',
+    nextRunAt: new Date(Date.now() + delayMs),
+  }));
+
+  // Chunk insert for very large campaigns to prevent memory spikes
+  const CHUNK_SIZE = 500;
+  for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
+    const chunk = docs.slice(i, i + CHUNK_SIZE);
+    await Notification.insertMany(chunk, { ordered: false });
+  }
+
+  res.status(200).json({
+    success: true,
+    message: `Campaign started: Enqueued ${docs.length} notifications`,
+    data: { count: docs.length }
+  });
+});

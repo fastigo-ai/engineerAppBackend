@@ -1,11 +1,16 @@
 import express from 'express';
 import AdminSubscription from '../models/AdminSubscription.js';
+import * as notificationController from '../modules/notification/notification.controller.js';
+import { authenticate, authorize } from '../middleware/authMiddleWare.js';
 
 const router = express.Router();
 
+// Apply admin protection to all routes in this file
+router.use(authenticate);
+router.use(authorize('super_admin', 'admin'));
+
 /**
  * Register a new browser push subscription
- * POST /api/admin/subscribe
  */
 router.post('/subscribe', async (req, res) => {
   try {
@@ -15,7 +20,6 @@ router.post('/subscribe', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid subscription data' });
     }
 
-    // Update existing or create new
     await AdminSubscription.findOneAndUpdate(
       { endpoint },
       { endpoint, keys, adminName: adminName || 'Admin' },
@@ -30,8 +34,13 @@ router.post('/subscribe', async (req, res) => {
 });
 
 /**
+ * Manual Notification Endpoints
+ */
+router.post('/notification/send', notificationController.adminSendNotification);
+router.post('/notification/campaign', notificationController.adminSendCampaign);
+
+/**
  * Unregister a subscription
- * DELETE /api/admin/unsubscribe
  */
 router.delete('/unsubscribe', async (req, res) => {
   try {

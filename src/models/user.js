@@ -23,6 +23,7 @@ const userSchema = new mongoose.Schema({
       'company_user',
       'engineer',
       'super_admin',
+      'admin',
     ],
     default: 'customer',
   },

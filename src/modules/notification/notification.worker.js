@@ -5,13 +5,13 @@ import { logger } from '../../utils/logger.js';
 
 const LOCK_DURATION_MS = 60000;  // 60s lock timeout
 const BATCH_SIZE = 20;           // jobs per poll tick
-const POLL_SCHEDULE = '*/10 * * * * *'; // every 10 seconds
+const POLL_SCHEDULE = '*/100 * * * * *'; // every 10 seconds
 
 let isRunning = false;
 let batchCount = 0; // Heartbeat tracker
 
 async function processBatch() {
-  if (isRunning) return; 
+  if (isRunning) return;
   isRunning = true;
   batchCount++;
 
@@ -27,28 +27,28 @@ async function processBatch() {
     // Atomic claim loop
     const jobs = [];
     for (let i = 0; i < BATCH_SIZE; i++) {
-        const job = await Notification.findOneAndUpdate(
-          {
-            status: { $in: ['PENDING', 'FAILED'] },
-            nextRunAt: { $lte: now },
-            attempts: { $lt: 3 },
-            $or: [
-              { lockedUntil: null },
-              { lockedUntil: { $lte: now } },
-            ],
+      const job = await Notification.findOneAndUpdate(
+        {
+          status: { $in: ['PENDING', 'FAILED'] },
+          nextRunAt: { $lte: now },
+          attempts: { $lt: 3 },
+          $or: [
+            { lockedUntil: null },
+            { lockedUntil: { $lte: now } },
+          ],
+        },
+        {
+          $set: {
+            status: 'PROCESSING',
+            lockedAt: now,
+            lockedUntil: lockExpiry,
           },
-          {
-            $set: {
-              status: 'PROCESSING',
-              lockedAt: now,
-              lockedUntil: lockExpiry,
-            },
-            $inc: { attempts: 1 },
-          },
-          { new: true, sort: { nextRunAt: 1 } }
-        );
-        if (!job) break;
-        jobs.push(job);
+          $inc: { attempts: 1 },
+        },
+        { new: true, sort: { nextRunAt: 1 } }
+      );
+      if (!job) break;
+      jobs.push(job);
     }
 
     if (jobs.length === 0) return;
@@ -108,5 +108,5 @@ async function markJobFailed(job, reason) {
 
 export function startNotificationWorker() {
   cron.schedule(POLL_SCHEDULE, processBatch);
-  logger.info('[NotificationWorker] Background polling started (every 10s)');
+  logger.info('[NotificationWorker] Background polling started (every 100s)');
 }
