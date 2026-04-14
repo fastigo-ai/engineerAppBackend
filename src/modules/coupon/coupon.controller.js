@@ -9,9 +9,6 @@ export const applyCoupon = async (req, res) => {
     const amount = Number(req.body.amount || 0);
     const userId = req.user.id;
 
-    console.log(`[CouponController] Validating coupon: ${couponCode}, Amount: ${amount} (paise)`);
-
-
     const validationResult = await couponService.validateCoupon({
       userId,
       couponCode,
