@@ -36,6 +36,7 @@ export const sendPushNotification = async ({ targetId, targetModel, payload }) =
           const tokensToRemove = [];
           response.responses.forEach((resp, idx) => {
             if (!resp.success) {
+              const errorCode = resp.error?.code;
               if (
                 errorCode === 'messaging/registration-token-not-registered' ||
                 errorCode === 'messaging/invalid-registration-token' ||
@@ -118,6 +119,7 @@ export const sendBatchPushNotification = async ({ targetIds, targetModel, payloa
             if (!resp.success) {
               const token = allTokens[idx];
               const targetId = tokenMap[token];
+              const errorCode = resp.error?.code;
               if (
                 errorCode === 'messaging/registration-token-not-registered' ||
                 errorCode === 'messaging/invalid-registration-token' ||
