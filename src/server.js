@@ -19,6 +19,10 @@ import { handleRazorpayWebhook } from './controllers/razorpayWebhookController.j
 import { initPayoutCron } from './utils/payoutCron.js';
 import couponRoutes from './modules/coupon/coupon.routes.js';
 import { initCouponCron } from './modules/coupon/coupon.cron.js';
+import adminRoutes from './routes/adminRoutes.js';
+import notificationRoutes from './modules/notification/notification.routes.js';
+import { startNotificationWorker } from './modules/notification/notification.worker.js';
+import { startAllNotificationCrons } from './modules/notification/notification.cron.js';
 
 // Load environment variables
 dotenv.config();
@@ -63,6 +67,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/engineer', engineerRoutes);
 app.use('/api/coupon', couponRoutes);
 app.use('/api/map', mapRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/notification', notificationRoutes);
 
 // Engineer auth routes
 app.use('/api/engineer/auth', engineerAuthRoutes);
@@ -80,6 +86,10 @@ const startServer = async () => {
     // Initialize Cron Jobs
     // initPayoutCron();
     initCouponCron();
+    
+    // Start Notification Worker & Crons
+    startNotificationWorker();
+    startAllNotificationCrons();
 
     const PORT = process.env.PORT || config.port || 8080;
     httpServer.listen(PORT, '0.0.0.0', () => {

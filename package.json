@@ -24,7 +24,8 @@
     "razorpay": "^2.9.6",
     "socket.io": "^4.8.3",
     "twilio": "^5.10.7",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/react-native-razorpay": "^2.2.6"

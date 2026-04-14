@@ -8,6 +8,7 @@ import { getGeoCacheService } from '../services/map/geoCacheService.js';
 import { dispatchOrder } from '../services/dispatch/dispatchService.js';
 import User from '../models/user.js';
 import { createCheckoutService } from '../services/user/paymentService.js';
+import { notifyAdmins } from "../services/notification/webPushService.js";
 import { notifyEngineersForOrder } from '../services/notificationEngineerService.js';
 import { Wallet } from '../models/Wallet.js';
 import { Ledger } from '../models/Ledger.js';
@@ -706,6 +707,17 @@ export const createCheckoutController = async (req, res) => {
         couponCode,
         validationKey
       });
+
+    // Notify Admins via Web Push (Async)
+    notifyAdmins({
+      title: 'New Order Received!',
+      body: `Order ${order.orderId} for ₹${order.amount}`,
+      data: {
+        orderId: order.orderId,
+        amount: order.amount,
+        url: `/admin/orders/${order.orderId}`
+      }
+    }).catch(err => console.error('[CheckoutController] Admin notification failed:', err));
 
     return res.status(201).json({
       success: true,
