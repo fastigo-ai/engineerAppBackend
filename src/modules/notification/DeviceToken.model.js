@@ -13,8 +13,7 @@ const deviceTokenSchema = new mongoose.Schema({
   },
   fcmToken: {
     type: String,
-    required: true,
-    index: true
+    required: true
   },
   platform: {
     type: String,
