@@ -1,6 +1,7 @@
 import { catchAsync } from '../../utils/catchAsync.js';
-import DeviceToken from './DeviceToken.model.js';
+import * as service from './notification.service.js';
 import Notification from './Notification.model.js';
+import DeviceToken from './DeviceToken.model.js';
 import User from '../../models/user.js';
 import { Engineer } from '../../models/engineersModal.js';
 
@@ -12,51 +13,18 @@ export const registerDevice = catchAsync(async (req, res) => {
   const userId = req.user?._id || req.user?.id;
   const userModel = (req.user?.role === 'engineer' || req.engineer) ? 'Engineer' : 'User';
 
-  if (!fcmToken || !platform || !deviceId) {
-    return res.status(400).json({ success: false, message: 'Missing required device information' });
+  if (!fcmToken) {
+    return res.status(400).json({ success: false, message: 'FCM token is required' });
   }
 
-  // OWNERSHIP GUARD: If this token belongs to someone else, deactivate it for them
-  // This handles the "hijacking" or "shared device" scenario.
-  await DeviceToken.updateMany(
-    { fcmToken, $or: [{ userId: { $ne: userId } }, { userModel: { $ne: userModel } }] },
-    { isActive: false, invalidatedAt: new Date() }
-  );
-
-  // Update/Upsert DeviceToken document
-  const token = await DeviceToken.findOneAndUpdate(
-    { deviceId, userId, userModel },
-    {
-      fcmToken,
-      platform,
-      appVersion,
-      isActive: true,
-      lastSeenAt: new Date(),
-      invalidatedAt: null,
-    },
-    { upsert: true, new: true }
-  );
-
-  // For backward compatibility, also update the old fcmTokens array in User/Engineer model
-  const Model = userModel === 'Engineer' ? Engineer : User;
-  const existingToken = await Model.findOne({ _id: userId, 'fcmTokens.token': fcmToken });
-
-  if (!existingToken) {
-    await Model.findByIdAndUpdate(userId, {
-      $addToSet: {
-        fcmTokens: {
-          token: fcmToken,
-          device: platform,
-          lastUsed: new Date()
-        }
-      }
-    });
-  } else {
-    await Model.updateOne(
-      { _id: userId, 'fcmTokens.token': fcmToken },
-      { $set: { 'fcmTokens.$.lastUsed': new Date() } }
-    );
-  }
+  const token = await service.syncDeviceToken({
+    userId,
+    userModel,
+    fcmToken,
+    platform,
+    deviceId,
+    appVersion
+  });
 
   res.status(200).json({ success: true, data: token });
 });

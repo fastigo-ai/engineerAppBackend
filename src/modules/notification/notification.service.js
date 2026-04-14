@@ -148,3 +148,61 @@ export async function dispatchNotification(notification) {
     throw error;
   }
 }
+
+/**
+ * Synchronizes a device token across both new and legacy models.
+ * Handles ownership guards and auto-activation.
+ */
+export async function syncDeviceToken({ userId, userModel, fcmToken, platform, deviceId, appVersion }) {
+  if (!userId || !fcmToken) return null;
+
+  const finalUserModel = userModel || 'User';
+  const finalPlatform = platform || 'android';
+  const finalDeviceId = deviceId || `gen_${fcmToken.substring(0, 10)}`;
+
+  // 1. OWNERSHIP GUARD: If this token belongs to someone else, deactivate it for them.
+  // This prevents the "login as different user on same phone" cross-talk.
+  await DeviceToken.updateMany(
+    { fcmToken, $or: [{ userId: { $ne: userId } }, { userModel: { $ne: finalUserModel } }] },
+    { isActive: false, invalidatedAt: new Date() }
+  );
+
+  // 2. NEW ARCHITECTURE: Update/Upsert DeviceToken collection.
+  const tokenDoc = await DeviceToken.findOneAndUpdate(
+    { deviceId: finalDeviceId, userId, userModel: finalUserModel },
+    {
+      fcmToken,
+      platform: finalPlatform,
+      appVersion,
+      isActive: true,
+      lastSeenAt: new Date(),
+      invalidatedAt: null,
+    },
+    { upsert: true, new: true }
+  );
+
+  // 3. LEGACY ARCHITECTURE: Sync to User/Engineer model fcmTokens array.
+  const Model = finalUserModel === 'Engineer' ? Engineer : User;
+  
+  // Prune any existing entries of this specific token for this user to avoid duplicates
+  await Model.findByIdAndUpdate(userId, {
+    $pull: { fcmTokens: { token: fcmToken } }
+  });
+
+  // Add fresh entry to the top of the array
+  await Model.findByIdAndUpdate(userId, {
+    $push: {
+      fcmTokens: {
+        $each: [{
+          token: fcmToken,
+          device: finalPlatform,
+          lastUsed: new Date()
+        }],
+        $position: 0,
+        $slice: 10 // Keep only last 10 tokens for performance
+      }
+    }
+  });
+
+  return tokenDoc;
+}

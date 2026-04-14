@@ -2,6 +2,7 @@ import { Engineer } from "../../models/engineersModal.js";
 import { BankAccount } from "../../models/BankAccount.js";
 import * as payoutService from "../../services/payoutService.js";
 import jwt from "jsonwebtoken";
+import { syncDeviceToken } from "../../modules/notification/notification.service.js";
 
 export const login = async (req, res) => {
   try {
@@ -89,6 +90,19 @@ export const login = async (req, res) => {
       updatedAt: engineer.updatedAt
     };
 
+    // Sync FCM Token if provided in request
+    const { fcmToken, deviceId, platform, appVersion } = req.body;
+    if (fcmToken) {
+      await syncDeviceToken({
+        userId: engineer._id,
+        userModel: 'Engineer',
+        fcmToken,
+        deviceId,
+        platform,
+        appVersion
+      }).catch(err => console.error('[EngineerLogin] FCM Sync failed:', err));
+    }
+
     res.json({
       success: true,
       token,
@@ -139,6 +153,19 @@ export const register = async (req, res) => {
     });
 
     await engineer.save();
+
+    // Sync FCM Token if provided in request
+    const { fcmToken, deviceId, platform, appVersion } = req.body;
+    if (fcmToken) {
+      await syncDeviceToken({
+        userId: engineer._id,
+        userModel: 'Engineer',
+        fcmToken,
+        deviceId,
+        platform,
+        appVersion
+      }).catch(err => console.error('[EngineerRegister] FCM Sync failed:', err));
+    }
 
     res.status(201).json({
       success: true,
@@ -311,6 +338,19 @@ export const onboardEngineer = async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
+
+    // Sync FCM Token if provided in request
+    const { fcmToken, deviceId, platform, appVersion } = req.body;
+    if (fcmToken) {
+      await syncDeviceToken({
+        userId: engineer._id,
+        userModel: 'Engineer',
+        fcmToken,
+        deviceId,
+        platform,
+        appVersion
+      }).catch(err => console.error('[EngineerOnboard] FCM Sync failed:', err));
+    }
 
     res.status(isNew ? 201 : 200).json({
       success: true,

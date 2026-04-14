@@ -1,8 +1,8 @@
-// src/controllers/auth.controller.ts
 import { admin } from "../config/firebase.js";
 import User from "../models/user.js";
 import jwt from "jsonwebtoken";
 import { twilioClient, verifySid } from "../config/twilio.js";
+import { syncDeviceToken } from "../modules/notification/notification.service.js";
 
 // Send OTP via Twilio Verify
 export const sendOTP = async (req, res) => {
@@ -239,6 +239,19 @@ export const loginWithFirebase = async (req, res) => {
       { expiresIn: "7d" }
     );
 
+    // Sync FCM Token if provided in request
+    const { fcmToken, deviceId, platform, appVersion } = req.body;
+    if (fcmToken) {
+      await syncDeviceToken({
+        userId: user._id,
+        userModel: 'User',
+        fcmToken,
+        deviceId,
+        platform,
+        appVersion
+      }).catch(err => console.error('[Login] FCM Sync failed:', err));
+    }
+
     return res.json({ message: "Login successful", user, token: backendToken });
   } catch (err) {
     console.error("Login error:", err);
@@ -314,12 +327,18 @@ export const verifyOTP = async (req, res) => {
 
         await user.save();
 
-        // Generate JWT token
-        const token = jwt.sign(
-          { userId: user._id, role: user.role, userType: user.userType },
-          process.env.JWT_SECRET,
-          { expiresIn: "7d" }
-        );
+        // Sync FCM Token if provided in request
+        const { fcmToken, deviceId, platform, appVersion } = req.body;
+        if (fcmToken) {
+          await syncDeviceToken({
+            userId: user._id,
+            userModel: 'User',
+            fcmToken,
+            deviceId,
+            platform,
+            appVersion
+          }).catch(err => console.error('[VerifyOTP] FCM Sync failed:', err));
+        }
 
         return res.json({
           message: "OTP verified successfully",
