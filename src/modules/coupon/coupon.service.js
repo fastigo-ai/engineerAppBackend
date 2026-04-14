@@ -24,9 +24,11 @@ export const validateCoupon = async ({ userId, couponCode, amount, servicePlans 
     throw new Error('Coupon has expired');
   }
 
+  console.log(`[CouponService] Validating - Input Amount: ${amount}, Min Amount Required: ${coupon.minOrderAmount}, Comparison: ${amount} < ${coupon.minOrderAmount}`);
   if (amount < coupon.minOrderAmount) {
     throw new Error(`Minimum order amount of ₹${(coupon.minOrderAmount / 100).toFixed(2)} required`);
   }
+
 
   // Global usage limit check
   if (coupon.usedCount >= coupon.usageLimit) {

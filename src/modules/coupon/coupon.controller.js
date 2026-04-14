@@ -5,15 +5,12 @@ import * as couponService from './coupon.service.js';
  */
 export const applyCoupon = async (req, res) => {
   try {
-    const { couponCode, amount, servicePlans } = req.body;
+    const { couponCode, servicePlans } = req.body;
+    const amount = Number(req.body.amount || 0);
     const userId = req.user.id;
 
-    if (!couponCode || !amount) {
-      return res.status(400).json({
-        success: false,
-        message: 'Coupon code and amount are required'
-      });
-    }
+    console.log(`[CouponController] Validating coupon: ${couponCode}, Amount: ${amount} (paise)`);
+
 
     const validationResult = await couponService.validateCoupon({
       userId,
@@ -21,6 +18,7 @@ export const applyCoupon = async (req, res) => {
       amount,
       servicePlans
     });
+
 
     return res.status(200).json({
       success: true,

@@ -1128,11 +1128,59 @@ export const verifyPayment = async (req, res) => {
     });
   } catch (error) {
     console.error("Verify Payment Error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Payment verification failed",
       error: error.message,
+    });
+  }
+};
+
+
+/**
+ * Update order status explicitly (used for failures/cancellations)
+ */
+export const updateOrderStatus = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { status, failureReason } = req.body;
+    const userId = req.user.id;
+
+    if (!['failed', 'cancelled'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status update. Only failed or cancelled are allowed via this endpoint.'
+      });
+    }
+
+    const order = await Order.findOneAndUpdate(
+      { orderId, userId },
+      { 
+        $set: { 
+          status, 
+          failureReason: failureReason || 'Updated by user/system' 
+        } 
+      },
+      { new: true }
+    );
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Order marked as ${status}`,
+      data: order
+    });
+  } catch (error) {
+    console.error('Update order status error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update order status'
     });
   }
 };

@@ -13,6 +13,7 @@ import engineerRoutes from './routes/engineerRoutes.js';
 import connectDB from './config/db.js';
 import { isFirebaseConnected } from './config/firebase.js';
 import engineerAuthRoutes from './routes/engineerRoutes/authRoutes.js';
+import mapRoutes from './routes/mapRoutes.js';
 import errorHandler from './middleware/errorHandler.js';
 import { handleRazorpayWebhook } from './controllers/razorpayWebhookController.js';
 import { initPayoutCron } from './utils/payoutCron.js';
@@ -61,6 +62,7 @@ app.use('/api/payment', paymentRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/engineer', engineerRoutes);
 app.use('/api/coupon', couponRoutes);
+app.use('/api/map', mapRoutes);
 
 // Engineer auth routes
 app.use('/api/engineer/auth', engineerAuthRoutes);
