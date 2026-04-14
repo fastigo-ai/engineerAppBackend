@@ -34,6 +34,7 @@ const userSchema = new mongoose.Schema({
 
   // General Info
   address: { type: String, required: false },
+  city: { type: String, trim: true, index: true },
 
   // Phone verification status (OTP handled by Twilio Verify)
   isPhoneVerified: { type: Boolean, default: false },

@@ -147,3 +147,37 @@ export const adminListAllCoupons = async (req, res) => {
     });
   }
 };
+
+/**
+ * Get the best applicable coupon for the user
+ */
+export const getBestCoupon = async (req, res) => {
+  try {
+    const { amount, servicePlans } = req.body;
+    const userId = req.user.id;
+
+    if (!amount) {
+      return res.status(400).json({
+        success: false,
+        message: 'Order amount is required'
+      });
+    }
+
+    const bestCoupon = await couponService.getBestCoupon({
+      userId,
+      amount,
+      servicePlans
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: bestCoupon
+    });
+  } catch (error) {
+    console.error('Get best coupon error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to find best coupon'
+    });
+  }
+};

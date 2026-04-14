@@ -60,9 +60,25 @@ const couponSchema = new mongoose.Schema({
   applicableCategories: [{
     type: String // or Category ID if you have a Category model
   }],
-  firstTimeUserOnly: {
-    type: Boolean,
-    default: false
+  targeting: {
+    userSegments: [{
+      type: String,
+      enum: ['NEW', 'ACTIVE', 'INACTIVE', 'VIP'],
+      index: true
+    }],
+    cities: [{
+      type: String,
+      trim: true,
+      index: true
+    }],
+    applicableCategories: [{
+      type: String,
+      trim: true
+    }],
+    firstTimeUserOnly: {
+      type: Boolean,
+      default: false
+    }
   },
   createdBy: {
     type: String,

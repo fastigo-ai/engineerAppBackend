@@ -3,6 +3,8 @@ import Coupon from './coupon.model.js';
 import CouponUsage from './couponUsage.model.js';
 import { generateValidationKey } from './coupon.validator.js';
 import { Order } from '../../models/orderSchema.js';
+import User from '../../models/user.js';
+import { getUserSegment } from '../user/user.segment.js';
 
 /**
  * Validate coupon against business rules
@@ -11,78 +13,140 @@ import { Order } from '../../models/orderSchema.js';
  * @param {string} params.couponCode
  * @param {number} params.amount - in paise
  * @param {Array} params.servicePlans - array of service plan IDs or objects
+ * @param {boolean} params.isSilent - If true, returns null instead of throwing errors
  */
-export const validateCoupon = async ({ userId, couponCode, amount, servicePlans = [] }) => {
-  const coupon = await Coupon.findOne({ code: couponCode.toUpperCase(), isActive: true });
+export const validateCoupon = async ({ userId, couponCode, amount, servicePlans = [], isSilent = false }) => {
+  try {
+    const coupon = await Coupon.findOne({ code: couponCode.toUpperCase(), isActive: true });
 
-  if (!coupon) {
-    throw new Error('Invalid coupon code');
+    if (!coupon) {
+      throw new Error('Invalid coupon code');
+    }
+
+    const now = new Date();
+    if (now < coupon.startDate || now > coupon.endDate) {
+      throw new Error('Coupon has expired');
+    }
+
+    if (amount < coupon.minOrderAmount) {
+      throw new Error(`Minimum order amount of ₹${(coupon.minOrderAmount / 100).toFixed(2)} required`);
+    }
+
+    // Global usage limit check
+    if (coupon.usedCount >= coupon.usageLimit) {
+      throw new Error('Coupon usage limit reached');
+    }
+
+    // Per user limit check
+    const userUsageCount = await CouponUsage.countDocuments({
+      userId,
+      couponId: coupon._id,
+      status: 'USED'
+    });
+
+    if (userUsageCount >= coupon.perUserLimit) {
+      throw new Error('You have already reached the usage limit for this coupon');
+    }
+
+    // --- TARGETING CHECKS ---
+
+    // 1. Segment Check
+    if (coupon.targeting?.userSegments?.length > 0) {
+      const segment = await getUserSegment(userId);
+      if (!coupon.targeting.userSegments.includes(segment)) {
+        throw new Error('Coupon not applicable for your account segment');
+      }
+    }
+
+    // 2. First Time User Check (Rule-based)
+    if (coupon.targeting?.firstTimeUserOnly) {
+      const hasPreviousOrders = await Order.findOne({ userId, status: 'paid' }).lean();
+      if (hasPreviousOrders) {
+        throw new Error('This coupon is only for first-time users');
+      }
+    }
+
+    // 3. City Check
+    if (coupon.targeting?.cities?.length > 0) {
+      const user = await User.findById(userId).select('city').lean();
+      if (!user.city || !coupon.targeting.cities.includes(user.city)) {
+        throw new Error('Coupon not valid in your location');
+      }
+    }
+
+    // 4. Category Check
+    if (coupon.targeting?.applicableCategories?.length > 0) {
+      // servicePlans can be array of IDs or objects with Category
+      // We assume they are populated objects if category check is needed, 
+      // or we handle both cases.
+      const hasValidCategory = servicePlans.some(plan => {
+        const categoryName = typeof plan.category === 'string' 
+          ? plan.category 
+          : plan.category?.name;
+        return coupon.targeting.applicableCategories.includes(categoryName);
+      });
+
+      if (!hasValidCategory) {
+        throw new Error('Coupon not applicable for selected services');
+      }
+    }
+
+    // Calculate discount
+    let discount = 0;
+    if (coupon.type === 'FLAT') {
+      discount = coupon.value;
+    } else if (coupon.type === 'PERCENTAGE') {
+      discount = Math.floor((amount * coupon.value) / 100);
+      if (coupon.maxDiscount && discount > coupon.maxDiscount) {
+        discount = coupon.maxDiscount;
+      }
+    }
+
+    const finalAmount = Math.max(0, amount - discount);
+    const validationKey = generateValidationKey({ userId, couponId: coupon._id, amount });
+
+    return {
+      coupon,
+      discount,
+      finalAmount,
+      validationKey
+    };
+  } catch (error) {
+    if (isSilent) return null;
+    throw error;
   }
+};
 
+/**
+ * Find the best applicable coupon for the user
+ */
+export const getBestCoupon = async ({ userId, amount, servicePlans = [] }) => {
   const now = new Date();
-  if (now < coupon.startDate || now > coupon.endDate) {
-    throw new Error('Coupon has expired');
-  }
+  const activeCoupons = await Coupon.find({
+    isActive: true,
+    startDate: { $lte: now },
+    endDate: { $gte: now },
+    $expr: { $lt: ["$usedCount", "$usageLimit"] }
+  }).lean();
 
-  console.log(`[CouponService] Validating - Input Amount: ${amount}, Min Amount Required: ${coupon.minOrderAmount}, Comparison: ${amount} < ${coupon.minOrderAmount}`);
-  if (amount < coupon.minOrderAmount) {
-    throw new Error(`Minimum order amount of ₹${(coupon.minOrderAmount / 100).toFixed(2)} required`);
-  }
+  const applicableCoupons = [];
 
+  for (const coupon of activeCoupons) {
+    const result = await validateCoupon({
+      userId,
+      couponCode: coupon.code,
+      amount,
+      servicePlans,
+      isSilent: true
+    });
 
-  // Global usage limit check
-  if (coupon.usedCount >= coupon.usageLimit) {
-    throw new Error('Coupon usage limit reached');
-  }
-
-  // Per user limit check
-  const userUsageCount = await CouponUsage.countDocuments({
-    userId,
-    couponId: coupon._id,
-    status: 'USED'
-  });
-
-  if (userUsageCount >= coupon.perUserLimit) {
-    throw new Error('You have already reached the usage limit for this coupon');
-  }
-
-  // First time user check
-  if (coupon.firstTimeUserOnly) {
-    const hasPreviousOrders = await Order.findOne({ userId, status: 'paid' });
-    if (hasPreviousOrders) {
-      throw new Error('This coupon is only for first-time users');
+    if (result) {
+      applicableCoupons.push(result);
     }
   }
 
-  // Applicable plans check (if restricted)
-  if (coupon.applicablePlans && coupon.applicablePlans.length > 0) {
-    const planIds = servicePlans.map(p => p.toString());
-    const isApplicable = planIds.some(id => coupon.applicablePlans.map(ap => ap.toString()).includes(id));
-    if (!isApplicable) {
-      throw new Error('This coupon is not applicable for the selected services');
-    }
-  }
-
-  // Calculate discount
-  let discount = 0;
-  if (coupon.type === 'FLAT') {
-    discount = coupon.value;
-  } else if (coupon.type === 'PERCENTAGE') {
-    discount = Math.floor((amount * coupon.value) / 100);
-    if (coupon.maxDiscount && discount > coupon.maxDiscount) {
-      discount = coupon.maxDiscount;
-    }
-  }
-
-  const finalAmount = Math.max(0, amount - discount);
-  const validationKey = generateValidationKey({ userId, couponId: coupon._id, amount });
-
-  return {
-    coupon,
-    discount,
-    finalAmount,
-    validationKey
-  };
+  // Sort by highest discount
+  return applicableCoupons.sort((a, b) => b.discount - a.discount)[0] || null;
 };
 
 /**
