@@ -16,6 +16,7 @@ import { ServicePlan } from '../models/serviceModal.js';
 import { ServicePlans } from '../models/planModal.js';
 import { Order } from '../models/orderSchema.js';
 import { notifyEngineersForOrder } from '../services/notificationEngineerService.js';
+import { notifyBookingUpdate } from '../services/notification/notificationService.js';
 
 
 // Helpers and other utilities can go here
@@ -828,6 +829,13 @@ export const cancelBooking = async (req, res) => {
       message: 'Booking cancelled successfully',
       data: order
     });
+
+    // 🔔 Notify User: Booking Cancelled
+    if (order.userId) {
+      notifyBookingUpdate(order.userId, order._id, 'BOOKING_CANCELLED', {
+        serviceName: 'your requested service'
+      }).catch(err => console.error('[ServiceController] Cancel notification failed:', err));
+    }
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -872,6 +880,15 @@ export const rescheduleBooking = async (req, res) => {
       message: 'Booking rescheduled successfully',
       data: order
     });
+
+    // 🔔 Notify User: Booking Rescheduled
+    if (order.userId) {
+      const newTimeStr = scheduledAt ? new Date(scheduledAt).toLocaleString() : 'a new time';
+      notifyBookingUpdate(order.userId, order._id, 'BOOKING_RESCHEDULED', {
+        serviceName: order.servicePlan?.name || 'Service',
+        newTime: newTimeStr
+      }).catch(err => console.error('[ServiceController] Reschedule notification failed:', err));
+    }
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -966,11 +983,25 @@ export const updateOrderStatus = async (req, res) => {
       razorpaySignature: updatedOrder.razorpaySignature
     };
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       message: "Order status updated successfully",
       data: formattedOrder
     });
+
+    // 🔔 Notify User: Status Updates (Arrived, Started)
+    if (updatedOrder.userId) {
+      let eventKey = null;
+      if (status === 'Arrived') eventKey = 'ENGINEER_ARRIVED';
+      else if (status === 'Started') eventKey = 'JOB_STARTED';
+
+      if (eventKey) {
+        notifyBookingUpdate(updatedOrder.userId, updatedOrder._id, eventKey, {
+          serviceName: updatedOrder.servicePlan?.name || 'Service',
+          engineerName: 'Your engineer'
+        }).catch(err => console.error('[ServiceController] Status notification failed:', err));
+      }
+    }
   } catch (error) {
     console.error("Error updating order status:", error);
     return res.status(500).json({

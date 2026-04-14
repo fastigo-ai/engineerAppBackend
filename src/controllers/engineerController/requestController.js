@@ -7,6 +7,7 @@ import mongoose from "mongoose";
 import { getDistanceInMeters } from "../../utils/distance.js";
 import razorpay from "../../config/razorpay.js";
 import { notifyEngineersForOrder } from "../../services/notificationEngineerService.js";
+import { notifyBookingUpdate } from "../../services/notification/notificationService.js";
 
 
 // Controller functions follow
@@ -292,23 +293,11 @@ export const acceptRequest = async (req, res) => {
         await order.save();
         console.log(' Order saved successfully');
 
-        // 🔔 Notify User that an engineer has been assigned
+        // 🔔 Notify User: Engineer Assigned
         if (order.userId) {
-            try {
-                const { sendPushToUser } = await import("../../services/notification/notificationService.js");
-                sendPushToUser(order.userId, {
-                    notification: {
-                        title: 'Engineer Assigned!',
-                        body: `Engineer ${req.user.name || 'Partner'} has been assigned to your order.`,
-                    },
-                    data: {
-                        order_id: order._id.toString(),
-                        type: 'ENGINEER_ASSIGNED'
-                    }
-                });
-            } catch (notifyError) {
-                console.error('Failed to send assignment notification to user:', notifyError);
-            }
+            notifyBookingUpdate(order.userId, order._id, 'ENGINEER_ASSIGNED', {
+                engineerName: req.user.name || 'Partner'
+            }).catch(notifyError => console.error('Failed to send assignment notification to user:', notifyError));
         }
 
         console.log(' Fetching updated order with populated fields...');
@@ -544,6 +533,14 @@ export const completeRequest = async (req, res) => {
             message: 'Order completed successfully',
             data: updatedOrder
         });
+
+        // 🔔 Notify User: Job Completed
+        if (updatedOrder.userId) {
+            notifyBookingUpdate(updatedOrder.userId, updatedOrder._id, 'JOB_COMPLETED', {
+                serviceName: updatedOrder.servicePlan?.name || 'Service'
+            }).catch(err => console.error('[RequestController] Completion notification failed:', err));
+        }
+
         console.log('✅ Response sent successfully');
     } catch (error) {
         console.error('❌ ERROR in completeRequest:', error);

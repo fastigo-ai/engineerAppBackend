@@ -101,7 +101,9 @@ export async function dispatchNotification(notification) {
   };
 
   try {
+    logger.info(`[FCM] Attempting to send message to ${tokens.length} tokens for notification ${notification._id}`);
     const response = await admin.messaging().sendEachForMulticast(message);
+    logger.info(`[FCM] Successfully sent ${response.successCount} messages; failures: ${response.failureCount}`);
 
     // Process per-token results for invalidation
     const invalidations = [];

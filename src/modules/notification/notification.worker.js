@@ -5,7 +5,7 @@ import { logger } from '../../utils/logger.js';
 
 const LOCK_DURATION_MS = 60000;  // 60s lock timeout
 const BATCH_SIZE = 20;           // jobs per poll tick
-const POLL_SCHEDULE = '*/100 * * * * *'; // every 10 seconds
+const POLL_SCHEDULE = '*/10 * * * * *'; // every 10 seconds
 
 let isRunning = false;
 let batchCount = 0; // Heartbeat tracker
@@ -108,5 +108,5 @@ async function markJobFailed(job, reason) {
 
 export function startNotificationWorker() {
   cron.schedule(POLL_SCHEDULE, processBatch);
-  logger.info('[NotificationWorker] Background polling started (every 100s)');
+  logger.info('[NotificationWorker] Background polling started (every 10s)');
 }

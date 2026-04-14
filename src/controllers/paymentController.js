@@ -9,11 +9,9 @@ import { dispatchOrder } from '../services/dispatch/dispatchService.js';
 import User from '../models/user.js';
 import { createCheckoutService } from '../services/user/paymentService.js';
 import { notifyAdmins } from "../services/notification/webPushService.js";
-import { notifyEngineersForOrder } from '../services/notificationEngineerService.js';
-import { Wallet } from '../models/Wallet.js';
-import { Ledger } from '../models/Ledger.js';
 import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
 import { markCouponAsUsed, markCouponAsFailed } from '../modules/coupon/coupon.service.js';
+import { notifyBookingUpdate } from '../services/notification/notificationService.js';
 
 
 // Create Checkout Session
@@ -440,6 +438,18 @@ const handlePaymentCaptured = async (payload) => {
     // Post-transaction side effects
     await notifyEngineersForOrder(order);
 
+    // 🔔 Notify User: Payment Received & Order Confirmed
+    if (order.userId) {
+      notifyBookingUpdate(order.userId, order._id, 'PAYMENT_RECEIVED', {
+        amount: order.amount,
+        orderId: order.orderId
+      }).catch(err => console.error('[PaymentController] Payment received notification failed:', err));
+
+      notifyBookingUpdate(order.userId, order._id, 'BOOKING_CONFIRMED', {
+        serviceName: order.servicePlan?.name || 'Service'
+      }).catch(err => console.error('[PaymentController] Order confirmed notification failed:', err));
+    }
+
   } catch (error) {
     await session.abortTransaction();
     console.error('Handle payment captured error:', error);
@@ -614,7 +624,13 @@ const handleRefundProcessed = async (payload) => {
 
     console.log(`Refund processed: ${refundEntity.id}`);
 
-    // TODO: Send refund confirmation to user
+    // 🔔 Notify User: Refund Processed
+    if (order && order.userId) {
+      notifyBookingUpdate(order.userId, order._id, 'REFUND_PROCESSED', {
+        amount: refundEntity.amount / 100,
+        orderId: order.orderId
+      }).catch(err => console.error('[PaymentController] Refund notification failed:', err));
+    }
 
   } catch (error) {
     console.error('Handle refund processed error:', error);
@@ -1125,23 +1141,11 @@ export const verifyPayment = async (req, res) => {
     if (dispatchLock) {
       dispatchOrder(order._id); // 🔥 NON-BLOCKING
       
-      // 🔔 Notify User that their order is confirmed
+      // 🔔 Notify User: Order Confirmed
       if (order.userId) {
-        try {
-          const { sendPushToUser } = await import("../services/notification/notificationService.js");
-          sendPushToUser(order.userId, {
-            notification: {
-              title: 'Order Confirmed!',
-              body: `Your booking for ${order.servicePlan?.name || 'Service'} is successful. We are matching a partner for you.`,
-            },
-            data: {
-              order_id: order._id.toString(),
-              type: 'ORDER_CONFIRMED'
-            }
-          });
-        } catch (notifyError) {
-          console.error('[PaymentController] Failed to send confirmation push:', notifyError);
-        }
+        notifyBookingUpdate(order.userId, order._id, 'BOOKING_CONFIRMED', {
+          serviceName: order.servicePlan?.name || 'Service'
+        }).catch(err => console.error('[PaymentController] Confirmation push failed:', err));
       }
     }
 

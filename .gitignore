@@ -87,3 +87,5 @@ yarn.lock
 
 # SvelteKit build / output
 .svelte-kit
+
+scratch/

@@ -1,4 +1,5 @@
 import { enqueueNotification, enqueueBulk } from '../../modules/notification/notification.service.js';
+import { formatTemplate } from '../../modules/notification/notification.registry.js';
 
 /**
  * PRODUCTION REFACTOR: Now sends all notifications via the MongoDB Queue
@@ -61,6 +62,41 @@ export const sendPushToUser = (userId, payload) => {
  */
 export const sendPushToEngineer = (engineerId, payload) => {
   return sendPushNotification({ targetId: engineerId, targetModel: 'Engineer', payload });
+};
+
+/**
+ * High-level helper for booking-related updates
+ */
+export const notifyBookingUpdate = async (userId, orderId, eventType, data = {}) => {
+  try {
+    const template = formatTemplate(eventType, data);
+    if (!template) {
+      console.warn(`[NotificationService] No template found for event: ${eventType}`);
+      return { success: false, error: 'Template not found' };
+    }
+
+    // Ensure orderId is in data for deep linking
+    const finalData = { 
+      ...data, 
+      order_id: orderId?.toString(),
+      type: template.type 
+    };
+
+    return await sendPushNotification({
+      targetId: userId,
+      targetModel: 'User',
+      payload: {
+        notification: {
+          title: template.title,
+          body: template.body,
+        },
+        data: finalData
+      }
+    });
+  } catch (error) {
+    console.error(`[NotificationService] notifyBookingUpdate error:`, error);
+    return { success: false, error: error.message };
+  }
 };
 
 /**
