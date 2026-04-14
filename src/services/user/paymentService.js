@@ -4,6 +4,8 @@ import User from "../../models/user.js";
 import { latLngToCell } from "h3-js";
 import { dispatchOrder } from "../dispatch/dispatchService.js";
 import razorpay from "../../config/razorpay.js";
+import { validateCoupon, reserveCoupon } from "../../modules/coupon/coupon.service.js";
+import { verifyValidationKey } from "../../modules/coupon/coupon.validator.js";
 
 const H3_RESOLUTION = 8;
 
@@ -15,7 +17,9 @@ export const createCheckoutService = async ({
   longitude,
   scheduledAt,
   addressText,
-  paymentMode = "ONLINE"
+  paymentMode = "ONLINE",
+  couponCode,
+  validationKey
 }) => {
 
   // Normalize plans
@@ -101,6 +105,45 @@ export const createCheckoutService = async ({
   const receipt = `receipt_${Date.now()}`;
   const servicePlanNames = servicePlans.map(p => p.name).join(",");
 
+  // --- Coupon Logic ---
+  let discountAmount = 0;
+  let finalAmountInPaise = totalAmount * 100;
+  let couponId = null;
+
+  if (couponCode) {
+    const amountInPaise = totalAmount * 100;
+    const validationResult = await validateCoupon({
+      userId,
+      couponCode,
+      amount: amountInPaise,
+      servicePlans: planIds
+    });
+
+    // Verify validation key to prevent tampering
+    const isValid = verifyValidationKey({
+      userId,
+      couponId: validationResult.coupon._id,
+      amount: amountInPaise,
+      validationKey
+    });
+
+    if (!isValid) {
+      throw new Error("Invalid or tampered coupon validation key");
+    }
+
+    // Reserve coupon (Transaction happens here)
+    await reserveCoupon({
+      userId,
+      couponId: validationResult.coupon._id,
+      orderId
+    });
+
+    discountAmount = validationResult.discount;
+    finalAmountInPaise = validationResult.finalAmount;
+    couponId = validationResult.coupon._id;
+  }
+  // --------------------
+
   //  Payment Handling
   let paymentStatus = "PENDING";
   let razorpayOrder = null;
@@ -109,7 +152,7 @@ export const createCheckoutService = async ({
     paymentStatus = "ONLINE_PENDING";
 
     razorpayOrder = await razorpay.orders.create({
-      amount: totalAmount * 100,
+      amount: finalAmountInPaise, // Use final amount after discount
       currency: "INR",
       receipt,
       notes: {
@@ -118,6 +161,7 @@ export const createCheckoutService = async ({
         servicePlanNames,
         userId: userId.toString(),
         serviceCount: servicePlans.length,
+        couponCode: couponCode || "NONE",
       },
     });
 
@@ -159,6 +203,10 @@ export const createCheckoutService = async ({
     status,
 
     razorpayOrderId: razorpayOrder?.id || null,
+
+    couponId,
+    discountAmount,
+    finalAmount: finalAmountInPaise,
 
     customerDetails: {
       name: user.name,

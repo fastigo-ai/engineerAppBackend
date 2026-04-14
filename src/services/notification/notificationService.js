@@ -36,11 +36,10 @@ export const sendPushNotification = async ({ targetId, targetModel, payload }) =
           const tokensToRemove = [];
           response.responses.forEach((resp, idx) => {
             if (!resp.success) {
-              const errorCode = resp.error?.code;
-              // Cleanup tokens that are no longer valid
               if (
                 errorCode === 'messaging/registration-token-not-registered' ||
-                errorCode === 'messaging/invalid-registration-token'
+                errorCode === 'messaging/invalid-registration-token' ||
+                errorCode === 'messaging/mismatched-credential'
               ) {
                 tokensToRemove.push(tokens[idx]);
               }
@@ -119,11 +118,10 @@ export const sendBatchPushNotification = async ({ targetIds, targetModel, payloa
             if (!resp.success) {
               const token = allTokens[idx];
               const targetId = tokenMap[token];
-              const errorCode = resp.error?.code;
-
               if (
                 errorCode === 'messaging/registration-token-not-registered' ||
-                errorCode === 'messaging/invalid-registration-token'
+                errorCode === 'messaging/invalid-registration-token' ||
+                errorCode === 'messaging/mismatched-credential'
               ) {
                 if (!cleanupMap[targetId]) cleanupMap[targetId] = [];
                 cleanupMap[targetId].push(token);

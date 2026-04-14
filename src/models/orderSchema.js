@@ -228,6 +228,22 @@ const OrderSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    couponId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Coupon",
+      default: null,
+    },
+    discountAmount: {
+      type: Number, // in paise
+      default: 0,
+    },
+    finalAmount: {
+      type: Number, // in paise
+      default: function() {
+        // Default to total amount if no discount
+        return this.amount * 100;
+      },
+    },
   },
   {
     timestamps: true,

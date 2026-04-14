@@ -11,6 +11,7 @@ import { notifyEngineersForOrder } from '../services/notificationEngineerService
 import { Wallet } from '../models/Wallet.js';
 import { Ledger } from '../models/Ledger.js';
 import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
+import { markCouponAsUsed, markCouponAsFailed } from '../modules/coupon/coupon.service.js';
 
 
 // Create Checkout Session
@@ -425,6 +426,11 @@ const handlePaymentCaptured = async (payload) => {
 
     console.log(`Payment captured: ${paymentEntity.id}`);
 
+    // Update coupon status if applicable
+    if (order.couponId) {
+      await markCouponAsUsed(order.orderId);
+    }
+
     // TODO: Send confirmation email/notification to user
     // TODO: Trigger any post-payment business logic
     await notifyEngineersForOrder(order);
@@ -439,7 +445,7 @@ const handlePaymentFailed = async (payload) => {
   try {
     const paymentEntity = payload.payment.entity;
 
-    const order = await Order.findOne({
+    let order = await Order.findOne({
       razorpayOrderId: paymentEntity.order_id
     });
 
@@ -448,11 +454,15 @@ const handlePaymentFailed = async (payload) => {
       return;
     }
 
-    // Update order status
-    await Order.findByIdAndUpdate(order._id, {
+    order = await Order.findOneAndUpdate({ _id: order._id }, {
       status: 'failed',
       failureReason: paymentEntity.error_description || 'Payment failed'
-    });
+    }, { new: true });
+
+    // Update coupon status if applicable
+    if (order && order.couponId) {
+      await markCouponAsFailed(order.orderId);
+    }
 
     // Create/update payment record with failure details
     await Payment.findOneAndUpdate(
@@ -505,6 +515,11 @@ const handleOrderPaid = async (payload) => {
     });
 
     console.log(`Order paid: ${orderEntity.id}`);
+
+    // Update coupon status if applicable
+    if (order.couponId) {
+      await markCouponAsUsed(order.orderId);
+    }
 
     // Trigger notification
     await notifyEngineersForOrder(order);
@@ -632,13 +647,14 @@ const handleRefundProcessed = async (payload) => {
 export const createCheckoutController = async (req, res) => {
   try {
     const userId = req.user.id;
-
     let {
       servicePlanId,
       servicePlanIds,
       addressText,
       scheduledAt,
-      paymentMode
+      paymentMode,
+      couponCode,
+      validationKey
     } = req.body;
 
     let latitude = null;
@@ -667,7 +683,9 @@ export const createCheckoutController = async (req, res) => {
         location,
         scheduledAt,
         addressText,
-        paymentMode
+        paymentMode,
+        couponCode,
+        validationKey
       });
 
     return res.status(201).json({
