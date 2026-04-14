@@ -161,7 +161,24 @@ export const reserveCoupon = async ({ userId, couponId, orderId }) => {
   session.startTransaction();
 
   try {
-    // 1. Atomically increment usedCount if not exceeding limit
+    // 1. Check if an active reservation already exists for this user and coupon
+    const existingReservation = await CouponUsage.findOne({
+      userId,
+      couponId,
+      status: 'RESERVED'
+    }).session(session);
+
+    if (existingReservation) {
+      // If a reservation exists, just update the orderId to the latest attempt
+      // This prevents the "active reservation" error and ensures usedCount remains correct
+      existingReservation.orderId = orderId;
+      await existingReservation.save({ session });
+      
+      await session.commitTransaction();
+      return await Coupon.findById(couponId).session(session);
+    }
+
+    // 2. Normal flow: Atomically increment usedCount if not exceeding limit
     const updatedCoupon = await Coupon.findOneAndUpdate(
       {
         _id: couponId,
@@ -176,9 +193,7 @@ export const reserveCoupon = async ({ userId, couponId, orderId }) => {
       throw new Error('Coupon usage limit reached or coupon inactive');
     }
 
-    // 2. Create CouponUsage record as RESERVED
-    // Note: The unique index on {userId, couponId, status: 'RESERVED'}
-    // will prevent duplicate active reservations for the same user/coupon.
+    // 3. Create CouponUsage record as RESERVED
     await CouponUsage.create([{
       couponId,
       userId,
@@ -190,8 +205,10 @@ export const reserveCoupon = async ({ userId, couponId, orderId }) => {
     return updatedCoupon;
   } catch (error) {
     await session.abortTransaction();
+    // Catch unique constraint just in case of race conditions
     if (error.code === 11000) {
-      throw new Error('You already have an active reservation for this coupon');
+      // If we hit a race condition, the next retry should pick up the existing reservation
+      throw new Error('You already have an active reservation for this coupon. Please try again in 1 minute.');
     }
     throw error;
   } finally {
