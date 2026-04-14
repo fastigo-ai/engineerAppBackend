@@ -128,38 +128,60 @@ export const getHistory = catchAsync(async (req, res) => {
 });
 
 /**
- * Admin: Send individual or list of notifications
+ * Admin: Send individual or list of notifications with staggering
  */
 export const adminSendNotification = catchAsync(async (req, res) => {
-  const { userIds, userModel, type, title, body, data, scheduledAt } = req.body;
+  const { 
+    userIds, 
+    userModel = 'User', 
+    type = 'SYSTEM', 
+    title, 
+    body, 
+    data = {}, 
+    scheduledAt,
+    batchSize, // Optional: Number of users per stagger wave
+    staggerMinutes = 0 // Optional: Minutes between waves
+  } = req.body;
 
   if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
     return res.status(400).json({ success: false, message: 'Array of userIds is required' });
   }
 
-  const delayMs = scheduledAt ? Math.max(0, new Date(scheduledAt).getTime() - Date.now()) : 0;
+  const baseDelayMs = scheduledAt ? Math.max(0, new Date(scheduledAt).getTime() - Date.now()) : 0;
+  const effectiveBatchSize = batchSize || userIds.length;
+  
+  const docs = [];
+  userIds.forEach((userId, index) => {
+    const batchIndex = Math.floor(index / effectiveBatchSize);
+    const staggerDelayMs = batchIndex * (staggerMinutes * 60000);
+    
+    docs.push({
+      userId,
+      userModel,
+      type,
+      title,
+      body,
+      data,
+      status: 'PENDING',
+      nextRunAt: new Date(Date.now() + baseDelayMs + staggerDelayMs)
+    });
+  });
 
-  // Use Bulk for efficiency even if it's 1 user
-  const result = await Notification.insertMany(userIds.map(id => ({
-    userId: id,
-    userModel: userModel || 'User',
-    type: type || 'SYSTEM',
-    title,
-    body,
-    data: data || {},
-    status: 'PENDING',
-    nextRunAt: new Date(Date.now() + delayMs)
-  })));
+  // Chunk insert into DB for efficiency
+  const CHUNK_SIZE = 500;
+  for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
+    await Notification.insertMany(docs.slice(i, i + CHUNK_SIZE), { ordered: false });
+  }
 
   res.status(200).json({
     success: true,
-    message: `Enqueued ${result.length} notifications`,
-    data: { count: result.length }
+    message: `Enqueued ${docs.length} notifications in ${Math.ceil(docs.length / effectiveBatchSize)} waves`,
+    data: { count: docs.length, waves: Math.ceil(docs.length / effectiveBatchSize) }
   });
 });
 
 /**
- * Admin: Run a targeted campaign
+ * Admin: Run a targeted campaign with staggering
  */
 export const adminSendCampaign = catchAsync(async (req, res) => {
   const { 
@@ -171,7 +193,9 @@ export const adminSendCampaign = catchAsync(async (req, res) => {
     title,
     body,
     data = {},
-    scheduledAt 
+    scheduledAt,
+    batchSize,
+    staggerMinutes = 0
   } = req.body;
 
   if (!title || !body) {
@@ -204,29 +228,34 @@ export const adminSendCampaign = catchAsync(async (req, res) => {
     return res.status(200).json({ success: true, message: 'No users matched the targeting criteria', data: { count: 0 } });
   }
 
-  const delayMs = scheduledAt ? Math.max(0, new Date(scheduledAt).getTime() - Date.now()) : 0;
+  const baseDelayMs = scheduledAt ? Math.max(0, new Date(scheduledAt).getTime() - Date.now()) : 0;
+  const effectiveBatchSize = batchSize || targetUserIds.length;
 
-  const docs = targetUserIds.map(userId => ({
-    userId,
-    userModel,
-    type,
-    title,
-    body,
-    data,
-    status: 'PENDING',
-    nextRunAt: new Date(Date.now() + delayMs),
-  }));
+  const docs = targetUserIds.map((userId, index) => {
+    const batchIndex = Math.floor(index / effectiveBatchSize);
+    const staggerDelayMs = batchIndex * (staggerMinutes * 60000);
+    
+    return {
+      userId,
+      userModel,
+      type,
+      title,
+      body,
+      data,
+      status: 'PENDING',
+      nextRunAt: new Date(Date.now() + baseDelayMs + staggerDelayMs),
+    };
+  });
 
-  // Chunk insert for very large campaigns to prevent memory spikes
+  // Chunk insert for very large campaigns
   const CHUNK_SIZE = 500;
   for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
-    const chunk = docs.slice(i, i + CHUNK_SIZE);
-    await Notification.insertMany(chunk, { ordered: false });
+    await Notification.insertMany(docs.slice(i, i + CHUNK_SIZE), { ordered: false });
   }
 
   res.status(200).json({
     success: true,
-    message: `Campaign started: Enqueued ${docs.length} notifications`,
-    data: { count: docs.length }
+    message: `Campaign started: Enqueued ${docs.length} notifications in ${Math.ceil(docs.length / effectiveBatchSize)} waves`,
+    data: { count: docs.length, waves: Math.ceil(docs.length / effectiveBatchSize) }
   });
 });
