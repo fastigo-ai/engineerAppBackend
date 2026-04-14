@@ -340,6 +340,13 @@ export const verifyOTP = async (req, res) => {
           }).catch(err => console.error('[VerifyOTP] FCM Sync failed:', err));
         }
 
+        // Generate JWT token
+        const token = jwt.sign(
+          { userId: user._id, role: user.role, userType: user.userType },
+          process.env.JWT_SECRET,
+          { expiresIn: "7d" }
+        );
+
         return res.json({
           message: "OTP verified successfully",
           user: {
