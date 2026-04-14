@@ -6,14 +6,15 @@ import { enqueueNotification, enqueueBulk } from '../../modules/notification/not
 export const sendPushNotification = async ({ targetId, targetModel, payload }) => {
   try {
     const data = payload.data || {};
-    const type = data.type || 'SYSTEM'; // Default to SYSTEM if not specified
+    // Extract type from multiple possible locations to ensure integrity
+    const type = payload.type || data.type || 'SYSTEM'; 
 
     await enqueueNotification({
       userId: targetId,
       userModel: targetModel || 'User',
       type: type,
-      title: payload.notification?.title || 'Notification',
-      body: payload.notification?.body || '',
+      title: payload.notification?.title || payload.title || 'Notification',
+      body: payload.notification?.body || payload.body || '',
       data: data
     });
 

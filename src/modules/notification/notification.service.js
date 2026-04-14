@@ -2,6 +2,8 @@ import Notification from './Notification.model.js';
 import DeviceToken from './DeviceToken.model.js';
 import { admin } from '../../config/firebase.js';
 import { logger } from '../../utils/logger.js';
+import User from '../../models/user.js';
+import { Engineer } from '../../models/engineersModal.js';
 
 /**
  * Enqueues a notification into the MongoDB queue
@@ -29,11 +31,46 @@ export async function enqueueBulk({ userIds, userModel = 'User', type, title, bo
  * Sends a notification using FCM (Called by worker)
  */
 export async function dispatchNotification(notification) {
-  const tokens = await DeviceToken.find({
+  let tokens = await DeviceToken.find({
     userId: notification.userId,
     userModel: notification.userModel,
     isActive: true,
   }).lean();
+
+  const Model = notification.userModel === 'Engineer' ? Engineer : User;
+
+  // --- INTEGRITY FALLBACK: Check old tokens if new ones missing ---
+  if (tokens.length === 0) {
+    const legacyEntity = await Model.findById(notification.userId).select('fcmTokens').lean();
+    if (legacyEntity?.fcmTokens?.length > 0) {
+      logger.info(`[FCM] Fallback: Found ${legacyEntity.fcmTokens.length} legacy tokens for ${notification.userModel} ${notification.userId}`);
+      
+      // Map to compatible format
+      tokens = legacyEntity.fcmTokens.map(t => ({
+        fcmToken: t.token,
+        platform: t.device || 'android',
+        isLegacy: true // internal flag
+      }));
+
+      // AUTO-HYDRATION: Move legacy tokens to new standard (Async)
+      setImmediate(async () => {
+        try {
+          const newTokens = legacyEntity.fcmTokens.map(t => ({
+            userId: notification.userId,
+            userModel: notification.userModel,
+            fcmToken: t.token,
+            platform: t.device || 'android',
+            deviceId: `legacy_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            isActive: true,
+            lastSeenAt: t.lastUsed || new Date()
+          }));
+          await DeviceToken.insertMany(newTokens, { ordered: false }).catch(() => {}); // silence duplicate errors
+        } catch (hErr) {
+          logger.warn(`[FCM] Hydration failed for ${notification.userId}: ${hErr.message}`);
+        }
+      });
+    }
+  }
 
   if (tokens.length === 0) {
     logger.warn(`[FCM] No active tokens for ${notification.userModel} ${notification.userId}`);
@@ -75,11 +112,21 @@ export async function dispatchNotification(notification) {
           code === 'messaging/invalid-registration-token' ||
           code === 'messaging/registration-token-not-registered'
         ) {
+          const expiredToken = tokens[i].fcmToken;
+          
+          // 1. Deactivate in new collection
           invalidations.push(
             DeviceToken.findOneAndUpdate(
-              { fcmToken: tokens[i].fcmToken },
+              { fcmToken: expiredToken },
               { isActive: false, invalidatedAt: new Date() }
             )
+          );
+
+          // 2. PRUNE FROM LEGACY MODEL (Integrity Protection)
+          invalidations.push(
+            Model.findByIdAndUpdate(notification.userId, {
+              $pull: { fcmTokens: { token: expiredToken } }
+            })
           );
         }
         logger.warn(`[FCM] Service Error: ${code} | target: ${notification.userModel} ${notification.userId}`);

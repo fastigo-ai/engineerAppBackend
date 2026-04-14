@@ -8,14 +8,21 @@ const BATCH_SIZE = 20;           // jobs per poll tick
 const POLL_SCHEDULE = '*/10 * * * * *'; // every 10 seconds
 
 let isRunning = false;
+let batchCount = 0; // Heartbeat tracker
 
 async function processBatch() {
   if (isRunning) return; 
   isRunning = true;
+  batchCount++;
 
   try {
     const now = new Date();
     const lockExpiry = new Date(now.getTime() + LOCK_DURATION_MS);
+
+    // Periodic Heartbeat log (every 5 batches)
+    if (batchCount % 5 === 0) {
+      logger.info('[NotificationWorker] Heartbeat: Loop is active.');
+    }
 
     // Atomic claim loop
     const jobs = [];

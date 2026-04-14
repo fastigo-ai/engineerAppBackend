@@ -16,6 +16,13 @@ export const registerDevice = catchAsync(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Missing required device information' });
   }
 
+  // OWNERSHIP GUARD: If this token belongs to someone else, deactivate it for them
+  // This handles the "hijacking" or "shared device" scenario.
+  await DeviceToken.updateMany(
+    { fcmToken, $or: [{ userId: { $ne: userId } }, { userModel: { $ne: userModel } }] },
+    { isActive: false, invalidatedAt: new Date() }
+  );
+
   // Update/Upsert DeviceToken document
   const token = await DeviceToken.findOneAndUpdate(
     { deviceId, userId, userModel },
