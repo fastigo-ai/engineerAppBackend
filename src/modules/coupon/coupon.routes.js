@@ -1,6 +1,6 @@
 import express from 'express';
 import * as couponController from './coupon.controller.js';
-import { authenticate } from '../../middleware/authMiddleWare.js';
+import { authenticate, authorize } from '../../middleware/authMiddleWare.js';
 
 const router = express.Router();
 
@@ -15,5 +15,10 @@ router.post('/apply', couponController.applyCoupon);
 
 // Reserve a coupon (usually handled internally, but available)
 router.post('/reserve', couponController.reserveCoupon);
+
+// --- Admin Routes ---
+router.post('/admin/create', authorize('admin'), couponController.adminCreateCoupon);
+router.get('/admin/list', authorize('admin'), couponController.adminListAllCoupons);
+router.patch('/admin/toggle/:couponId', authorize('admin'), couponController.adminToggleStatus);
 
 export default router;

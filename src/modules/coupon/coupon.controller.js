@@ -79,3 +79,73 @@ export const reserveCoupon = async (req, res) => {
     });
   }
 };
+
+/**
+ * Admin: Create a new coupon
+ */
+export const adminCreateCoupon = async (req, res) => {
+  try {
+    const coupon = await couponService.createCoupon(req.body);
+    return res.status(201).json({
+      success: true,
+      message: 'Coupon created successfully',
+      data: coupon
+    });
+  } catch (error) {
+    console.error('Admin create coupon error:', error);
+    return res.status(400).json({
+      success: false,
+      message: error.message || 'Failed to create coupon'
+    });
+  }
+};
+
+/**
+ * Admin: Toggle coupon status
+ */
+export const adminToggleStatus = async (req, res) => {
+  try {
+    const { couponId } = req.params;
+    const { isActive } = req.body;
+
+    const coupon = await couponService.updateCouponStatus(couponId, isActive);
+
+    if (!coupon) {
+      return res.status(404).json({
+        success: false,
+        message: 'Coupon not found'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Coupon ${isActive ? 'activated' : 'deactivated'} successfully`,
+      data: coupon
+    });
+  } catch (error) {
+    console.error('Admin toggle status error:', error);
+    return res.status(400).json({
+      success: false,
+      message: error.message || 'Failed to update coupon status'
+    });
+  }
+};
+
+/**
+ * Admin: List all coupons
+ */
+export const adminListAllCoupons = async (req, res) => {
+  try {
+    const coupons = await couponService.getAllCoupons();
+    return res.status(200).json({
+      success: true,
+      data: coupons
+    });
+  } catch (error) {
+    console.error('Admin list coupons error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch coupons'
+    });
+  }
+};

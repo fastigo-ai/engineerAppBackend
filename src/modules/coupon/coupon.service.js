@@ -177,3 +177,28 @@ export const getAvailableCoupons = async (userId) => {
   // Skipping for brevity, but could be added for better UX
   return coupons;
 };
+
+/**
+ * Admin: Create a new coupon
+ */
+export const createCoupon = async (couponData) => {
+  return Coupon.create(couponData);
+};
+
+/**
+ * Admin: Update coupon status (Active/Inactive)
+ */
+export const updateCouponStatus = async (couponId, isActive) => {
+  return Coupon.findByIdAndUpdate(
+    couponId,
+    { isActive },
+    { new: true }
+  );
+};
+
+/**
+ * Admin: Get all coupons (including inactive)
+ */
+export const getAllCoupons = async (query = {}) => {
+  return Coupon.find(query).sort({ createdAt: -1 });
+};
