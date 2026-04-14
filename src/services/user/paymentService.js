@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { Order } from "../../models/orderSchema.js"
 import { ServicePlan } from '../../models/serviceModal.js';
 import User from "../../models/user.js";
@@ -21,213 +22,167 @@ export const createCheckoutService = async ({
   couponCode,
   validationKey
 }) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  // Normalize plans
-  let planIds = servicePlanIds?.length
-    ? servicePlanIds
-    : servicePlanId
-      ? [servicePlanId]
-      : [];
+  try {
+    // Normalize plans
+    let planIds = servicePlanIds?.length
+      ? servicePlanIds
+      : servicePlanId
+        ? [servicePlanId]
+        : [];
 
-  if (!planIds.length) {
-    throw new Error("At least one service plan is required");
-  }
-
-  // Fetch user
-  const user = await User.findById(userId);
-  if (!user) throw new Error("User not found");
-
-  // Fetch plans
-  // console.log("DEBUG: Attempting to find service plans for IDs:", planIds);
-  const servicePlans = await ServicePlan.find({
-    _id: { $in: planIds }
-  });
-  // console.log("DEBUG: Found service plans count:", servicePlans.length);
-
-  if (servicePlans.length !== planIds.length) {
-    console.error("DEBUG: Plan mismatch detected!", {
-      providedCount: planIds.length,
-      foundCount: servicePlans.length,
-      providedIds: planIds,
-      foundIds: servicePlans.map(p => p._id.toString())
-    });
-    throw new Error(`Some service plans not found or inactive. Found ${servicePlans.length} out of ${planIds.length}`);
-  }
-
-  // Price & Duration
-  const totalAmount = servicePlans.reduce((sum, p) => sum + (p.price || 0), 0);
-
-  const totalDuration = servicePlans.reduce(
-    (sum, p) => sum + (p.duration || 0) + (p.bufferTime || 0),
-    0
-  );
-
-  // Order Type
-  let scheduleDate = null;
-  let orderType = "INSTANT";
-
-  if (scheduledAt) {
-    scheduleDate = new Date(scheduledAt);
-
-    if (isNaN(scheduleDate.getTime())) {
-      throw new Error("Invalid scheduled time");
+    if (!planIds.length) {
+      throw new Error("At least one service plan is required");
     }
 
-    if (scheduleDate < new Date()) {
-      throw new Error("Scheduled time must be future");
+    // Fetch user
+    const user = await User.findById(userId).session(session);
+    if (!user) throw new Error("User not found");
+
+    // Fetch plans
+    const servicePlans = await ServicePlan.find({
+      _id: { $in: planIds }
+    }).session(session);
+
+    if (servicePlans.length !== planIds.length) {
+      throw new Error(`Some service plans not found or inactive.`);
     }
 
-    orderType = "SCHEDULED";
-  }
+    // Price & Duration
+    const totalAmount = servicePlans.reduce((sum, p) => sum + (p.price || 0), 0);
+    const totalDuration = servicePlans.reduce(
+      (sum, p) => sum + (p.duration || 0) + (p.bufferTime || 0),
+      0
+    );
 
-  // Geo + H3
-  let location = null;
-  let h3Index = null;
+    // Order Type
+    let scheduleDate = null;
+    let orderType = "INSTANT";
 
-  if (latitude !== undefined && longitude !== undefined) {
-    const lat = parseFloat(latitude);
-    const lng = parseFloat(longitude);
-
-    if (isNaN(lat) || isNaN(lng)) {
-      throw new Error("Invalid coordinates");
+    if (scheduledAt) {
+      scheduleDate = new Date(scheduledAt);
+      if (isNaN(scheduleDate.getTime())) throw new Error("Invalid scheduled time");
+      if (scheduleDate < new Date()) throw new Error("Scheduled time must be future");
+      orderType = "SCHEDULED";
     }
 
-    location = {
-      type: "Point",
-      coordinates: [lng, lat]
-    };
+    // Geo + H3
+    let location = null;
+    let h3Index = null;
+    if (latitude !== undefined && longitude !== undefined) {
+      const lat = parseFloat(latitude);
+      const lng = parseFloat(longitude);
+      location = { type: "Point", coordinates: [lng, lat] };
+      h3Index = latLngToCell(lat, lng, H3_RESOLUTION);
+    }
 
-    h3Index = latLngToCell(lat, lng, H3_RESOLUTION);
-  }
+    const orderId = `ORD_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const receipt = `receipt_${Date.now()}`;
+    const servicePlanNames = servicePlans.map(p => p.name).join(",");
 
-  // IDs
-  const orderId = `ORD_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const receipt = `receipt_${Date.now()}`;
-  const servicePlanNames = servicePlans.map(p => p.name).join(",");
+    // --- Coupon Logic ---
+    let discountAmount = 0;
+    let finalAmountInPaise = totalAmount * 100;
+    let couponId = null;
 
-  // --- Coupon Logic ---
-  let discountAmount = 0;
-  let finalAmountInPaise = totalAmount * 100;
-  let couponId = null;
+    if (couponCode) {
+      const amountInPaise = totalAmount * 100;
+      const validationResult = await validateCoupon({
+        userId,
+        couponCode,
+        amount: amountInPaise,
+        servicePlans: planIds
+      });
 
-  if (couponCode) {
-    const amountInPaise = totalAmount * 100;
-    const validationResult = await validateCoupon({
+      const isValid = verifyValidationKey({
+        userId,
+        couponId: validationResult.coupon._id,
+        amount: amountInPaise,
+        validationKey
+      });
+
+      if (!isValid) {
+        throw new Error("Invalid or tampered coupon validation key");
+      }
+
+      // Reserve coupon (Pass the session!)
+      await reserveCoupon({
+        userId,
+        couponId: validationResult.coupon._id,
+        orderId
+      }, session);
+
+      discountAmount = validationResult.discount;
+      finalAmountInPaise = validationResult.finalAmount;
+      couponId = validationResult.coupon._id;
+    }
+
+    // Payment Handling (External API)
+    let paymentStatus = "PENDING";
+    let razorpayOrder = null;
+
+    if (paymentMode === "ONLINE") {
+      paymentStatus = "ONLINE_PENDING";
+      razorpayOrder = await razorpay.orders.create({
+        amount: finalAmountInPaise,
+        currency: "INR",
+        receipt,
+        notes: {
+          orderId,
+          userId: userId.toString(),
+          couponCode: couponCode || "NONE",
+        },
+      });
+    } else if (paymentMode === "Payment After Service") {
+      paymentStatus = "PAS_PENDING";
+    }
+
+    let status = paymentMode === "Payment After Service" ? "Searching" : "created";
+
+    // Create Order (Pass the session!)
+    const [order] = await Order.create([{
+      orderId,
       userId,
-      couponCode,
-      amount: amountInPaise,
-      servicePlans: planIds
-    });
-
-    // Verify validation key to prevent tampering
-    const isValid = verifyValidationKey({
-      userId,
-      couponId: validationResult.coupon._id,
-      amount: amountInPaise,
-      validationKey
-    });
-
-    if (!isValid) {
-      throw new Error("Invalid or tampered coupon validation key");
-    }
-
-    // Reserve coupon (Transaction happens here)
-    await reserveCoupon({
-      userId,
-      couponId: validationResult.coupon._id,
-      orderId
-    });
-
-    discountAmount = validationResult.discount;
-    finalAmountInPaise = validationResult.finalAmount;
-    couponId = validationResult.coupon._id;
-  }
-  // --------------------
-
-  //  Payment Handling
-  let paymentStatus = "PENDING";
-  let razorpayOrder = null;
-
-  if (paymentMode === "ONLINE") {
-    paymentStatus = "ONLINE_PENDING";
-
-    razorpayOrder = await razorpay.orders.create({
-      amount: finalAmountInPaise, // Use final amount after discount
+      servicePlans: planIds,
+      servicePlan: planIds[0],
+      orderType,
+      scheduledAt: scheduleDate,
+      amount: totalAmount,
+      totalDuration,
       currency: "INR",
       receipt,
-      notes: {
-        orderId,
-        servicePlanIds: planIds.join(","),
-        servicePlanNames,
-        userId: userId.toString(),
-        serviceCount: servicePlans.length,
-        couponCode: couponCode || "NONE",
+      paymentMode,
+      paymentStatus,
+      location,
+      h3Index,
+      addressText,
+      status,
+      razorpayOrderId: razorpayOrder?.id || null,
+      couponId,
+      discountAmount,
+      finalAmount: finalAmountInPaise,
+      customerDetails: {
+        name: user.name,
+        email: user.email,
+        phone: user.mobile
       },
-    });
+      notes: { servicePlanNames }
+    }], { session });
 
-  } else if (paymentMode === "Payment After Service") {
-    paymentStatus = "PAS_PENDING";
-  }
+    await session.commitTransaction();
 
-  //  Order Status Logic (IMPORTANT)
-  let status = "created";
-
-  if (paymentMode === "Payment After Service") {
-    status = "Searching";
-  }
-
-  // Create Order
-  const order = await Order.create({
-    orderId,
-    userId,
-
-    servicePlans: planIds,
-    servicePlan: planIds[0],
-
-    orderType,
-    scheduledAt: scheduleDate,
-
-    amount: totalAmount,
-    totalDuration,
-
-    currency: "INR",
-    receipt,
-
-    paymentMode,
-    paymentStatus,
-
-    location,
-    h3Index,
-    addressText,
-
-    status,
-
-    razorpayOrderId: razorpayOrder?.id || null,
-
-    couponId,
-    discountAmount,
-    finalAmount: finalAmountInPaise,
-
-    customerDetails: {
-      name: user.name,
-      email: user.email,
-      phone: user.mobile
-    },
-
-    notes: {
-      servicePlanNames
+    if (paymentMode === "Payment After Service") {
+      dispatchOrder(order._id);
     }
-  });
 
-  //  Trigger dispatch ONLY for PAS or already paid
-  if (paymentMode === "Payment After Service") {
-    dispatchOrder(order._id);
+    return { order, razorpayOrder, servicePlans };
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
   }
-
-  return {
-    order,
-    razorpayOrder,
-    servicePlans
-  };
 };
 

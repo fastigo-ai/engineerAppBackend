@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import crypto from 'crypto';
 import razorpay from '../config/razorpay.js';
 import { ServicePlan } from '../models/serviceModal.js';
@@ -394,15 +395,18 @@ const handlePaymentAuthorized = async (payload) => {
 
 // Handle payment.captured event
 const handlePaymentCaptured = async (payload) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     const paymentEntity = payload.payment.entity;
 
     const order = await Order.findOne({
       razorpayOrderId: paymentEntity.order_id
-    }).populate('servicePlan servicePlans');
+    }).populate('servicePlan servicePlans').session(session);
 
     if (!order) {
       console.error('Order not found for payment capture');
+      await session.abortTransaction();
       return;
     }
 
@@ -410,7 +414,7 @@ const handlePaymentCaptured = async (payload) => {
     await Order.findByIdAndUpdate(order._id, {
       status: 'paid',
       razorpayPaymentId: paymentEntity.id
-    });
+    }, { session });
 
     // Update payment record
     await Payment.findOneAndUpdate(
@@ -421,47 +425,53 @@ const handlePaymentCaptured = async (payload) => {
         tax: paymentEntity.tax / 100 || 0,
         capturedAt: new Date()
       },
-      { upsert: true }
+      { upsert: true, session }
     );
-
-    console.log(`Payment captured: ${paymentEntity.id}`);
 
     // Update coupon status if applicable
     if (order.couponId) {
-      await markCouponAsUsed(order.orderId);
+      await markCouponAsUsed(order.orderId, session);
     }
 
-    // TODO: Send confirmation email/notification to user
-    // TODO: Trigger any post-payment business logic
+    await session.commitTransaction();
+    console.log(`Payment captured & order updated: ${paymentEntity.id}`);
+
+    // Post-transaction side effects
     await notifyEngineersForOrder(order);
 
   } catch (error) {
+    await session.abortTransaction();
     console.error('Handle payment captured error:', error);
+  } finally {
+    session.endSession();
   }
 };
 
 // Handle payment.failed event
 const handlePaymentFailed = async (payload) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     const paymentEntity = payload.payment.entity;
 
-    let order = await Order.findOne({
+    const order = await Order.findOne({
       razorpayOrderId: paymentEntity.order_id
-    });
+    }).session(session);
 
     if (!order) {
       console.error('Order not found for payment failure');
+      await session.abortTransaction();
       return;
     }
 
-    order = await Order.findOneAndUpdate({ _id: order._id }, {
+    await Order.findByIdAndUpdate(order._id, {
       status: 'failed',
       failureReason: paymentEntity.error_description || 'Payment failed'
-    }, { new: true });
+    }, { session });
 
     // Update coupon status if applicable
     if (order && order.couponId) {
-      await markCouponAsFailed(order.orderId);
+      await markCouponAsFailed(order.orderId, session);
     }
 
     // Create/update payment record with failure details
@@ -483,49 +493,58 @@ const handlePaymentFailed = async (payload) => {
         errorStep: paymentEntity.error_step,
         errorReason: paymentEntity.error_reason
       },
-      { upsert: true }
+      { upsert: true, session }
     );
 
-    console.log(`Payment failed: ${paymentEntity.id}`);
-
-    // TODO: Send failure notification to user
+    await session.commitTransaction();
+    console.log(`Payment failed handled: ${paymentEntity.id}`);
 
   } catch (error) {
+    await session.abortTransaction();
     console.error('Handle payment failed error:', error);
+  } finally {
+    session.endSession();
   }
 };
 
 // Handle order.paid event
 const handleOrderPaid = async (payload) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     const orderEntity = payload.order.entity;
 
     const order = await Order.findOne({
       razorpayOrderId: orderEntity.id
-    }).populate('servicePlan servicePlans');
+    }).populate('servicePlan servicePlans').session(session);
 
     if (!order) {
       console.error('Order not found for order.paid event');
+      await session.abortTransaction();
       return;
     }
 
     // Update order status
     await Order.findByIdAndUpdate(order._id, {
       status: 'paid'
-    });
-
-    console.log(`Order paid: ${orderEntity.id}`);
+    }, { session });
 
     // Update coupon status if applicable
     if (order.couponId) {
-      await markCouponAsUsed(order.orderId);
+      await markCouponAsUsed(order.orderId, session);
     }
+
+    await session.commitTransaction();
+    console.log(`Order paid handled: ${orderEntity.id}`);
 
     // Trigger notification
     await notifyEngineersForOrder(order);
 
   } catch (error) {
+    await session.abortTransaction();
     console.error('Handle order paid error:', error);
+  } finally {
+    session.endSession();
   }
 };
 
