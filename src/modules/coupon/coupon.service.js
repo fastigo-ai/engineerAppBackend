@@ -132,3 +132,89 @@ export const markCouponAsFailed = async (orderId, externalSession = null) => {
 // Also provide aliases for the commit/rollback phases if needed
 export const commitCouponUsage = markCouponAsUsed;
 export const rollbackCouponUsage = markCouponAsFailed;
+
+/**
+ * Generate a user-friendly description for the coupon
+ */
+const generateDescription = (coupon) => {
+  if (coupon.description) return coupon.description;
+  
+  let desc = '';
+  const valueDisp = coupon.type === 'PERCENTAGE' ? `${coupon.value}%` : `₹${(coupon.value / 100).toFixed(0)}`;
+  const minDisp = `₹${(coupon.minOrderAmount / 100).toFixed(0)}`;
+
+  desc = `Get ${valueDisp} OFF`;
+  if (coupon.minOrderAmount > 0) {
+    desc += ` on orders above ${minDisp}`;
+  }
+  if (coupon.maxDiscount > 0 && coupon.type === 'PERCENTAGE') {
+    desc += ` up to ₹${(coupon.maxDiscount / 100).toFixed(0)}`;
+  }
+  
+  return desc;
+};
+
+/**
+ * List all coupons available to a specific user
+ */
+export const getAvailableCoupons = async (userId) => {
+  const coupons = await couponRepository.findAllActive();
+  
+  // Get user order history for first-time user check
+  const hasPreviousOrders = await Order.findOne({ userId, status: 'paid' }).lean();
+
+  const filtered = [];
+  for (const coupon of coupons) {
+    // 1. Overall usage limit
+    if (coupon.usageLimit > 0 && coupon.usedCount >= coupon.usageLimit) continue;
+
+    // 2. First-time user filter
+    if (coupon.targeting?.firstTimeUserOnly && hasPreviousOrders) continue;
+
+    // 3. User segment filter (simplified: assume ACTIVE for now if not specified)
+    // In a full implementation, you'd match the user's segment here
+
+    // 4. Per-user limit check
+    const userUsageCount = await usageRepository.countUserUsage(userId, coupon._id, 'USED');
+    if (userUsageCount >= coupon.perUserLimit) continue;
+
+    // Decorate with description
+    filtered.push({
+      ...coupon,
+      description: generateDescription(coupon)
+    });
+  }
+
+  return filtered;
+};
+
+/**
+ * Find the best coupon for a given order
+ */
+export const getBestCoupon = async ({ userId, amount, servicePlans }) => {
+  const available = await getAvailableCoupons(userId);
+  let best = null;
+  let maxDiscount = -1;
+
+  for (const coupon of available) {
+    try {
+      // Basic validation for this specific order
+      if (amount < coupon.minOrderAmount) continue;
+
+      const discount = calculateDiscount(coupon, amount);
+      if (discount > maxDiscount) {
+        maxDiscount = discount;
+        best = {
+          ...coupon,
+          calculatedDiscount: discount,
+          finalAmount: Math.max(0, amount - discount)
+        };
+      }
+    } catch (e) {
+      continue; // Skip invalid coupons for this order
+    }
+  }
+  
+  return best;
+};
+

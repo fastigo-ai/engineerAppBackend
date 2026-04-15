@@ -16,6 +16,18 @@ export class CouponRepository {
   }
 
   /**
+   * Find all active coupons within validity period
+   */
+  async findAllActive() {
+    const now = new Date();
+    return Coupon.find({
+      isActive: true,
+      startDate: { $lte: now },
+      endDate: { $gte: now }
+    }).lean();
+  }
+
+  /**
    * Atomically increment usedCount if it hasn't reached usageLimit
    * usageLimit 0 means unlimited
    */

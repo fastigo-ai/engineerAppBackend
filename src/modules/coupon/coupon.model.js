@@ -9,6 +9,11 @@ const couponSchema = new mongoose.Schema({
     trim: true,
     index: true
   },
+  description: {
+    type: String,
+    trim: true,
+    default: null
+  },
   type: {
     type: String,
     enum: ['FLAT', 'PERCENTAGE'],
