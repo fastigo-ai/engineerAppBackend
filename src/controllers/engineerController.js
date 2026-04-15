@@ -72,20 +72,13 @@ export const unAssignEngineerFromOrderController = async (req, res) => {
         // 🔔 Notify User and Redispatch
         if (engineer.userId) {
             try {
-                const { sendPushToUser } = await import("../services/notification/notificationService.js");
+                const { notifyBookingUpdate } = await import("../services/notification/notificationService.js");
                 const { notifyEngineersForOrder } = await import("../services/notificationEngineerService.js");
 
-                // 1. Notify User
-                sendPushToUser(engineer.userId._id, {
-                    notification: {
-                        title: 'Engineer Matching...',
-                        body: 'We are matching a new partner for your order as the previous one became unavailable.',
-                    },
-                    data: {
-                        order_id: engineer._id.toString(),
-                        type: 'ENGINEER_REASSIGNING'
-                    }
-                });
+                // 1. Notify User (Uses template from registry)
+                notifyBookingUpdate(engineer.userId._id, engineer._id, 'ENGINEER_DECLINED_REASSIGNING', {
+                    serviceName: engineer.servicePlan?.name || 'Service'
+                }).catch(err => console.error('Failed to notify user after unassignment:', err));
 
                 // 2. Trigger Redispatch
                 notifyEngineersForOrder(engineer);

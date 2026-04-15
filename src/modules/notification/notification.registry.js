@@ -38,9 +38,15 @@ export const NOTIFICATION_TEMPLATES = {
     type: 'MATCHING',
   },
 
+  ENGINEER_DECLINED_REASSIGNING: {
+    title: 'Engineer Matching...',
+    body: 'We are matching a new partner for your order as the previous one became unavailable.',
+    type: 'MATCHING',
+  },
+
   // --- Job Phase ---
   JOB_STARTED: {
-    title: 'Job Started',
+    title: 'Service Started',
     body: 'Your service for {{serviceName}} has officially started.',
     type: 'SYSTEM',
   },

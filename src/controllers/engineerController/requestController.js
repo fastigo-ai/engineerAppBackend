@@ -427,6 +427,13 @@ export const rejectRequest = async (req, res) => {
         await order.save();
         if (typeof shouldReDispatch !== 'undefined' && shouldReDispatch) {
             await notifyEngineersForOrder(order);
+
+            // 🔔 Notify User: Partner is being reassigned
+            if (order.userId) {
+                notifyBookingUpdate(order.userId, order._id, 'ENGINEER_DECLINED_REASSIGNING', {
+                    serviceName: order.servicePlan?.name || 'Service'
+                }).catch(err => console.error('[RequestController] Redispatch notification failed:', err));
+            }
         }
 
         console.log('✅ Order saved successfully');
@@ -898,6 +905,13 @@ export const updateWorkStatus = async (req, res) => {
                 order.status = 'paid';
                 order.orderStatus = 'Completed';
 
+                // 🔔 Notify User: Job Completed
+                if (order.userId) {
+                    notifyBookingUpdate(order.userId, order._id, 'JOB_COMPLETED', {
+                        serviceName: order.servicePlan?.name || 'Service'
+                    }).catch(err => console.error('[RequestController] Completion notification failed:', err));
+                }
+
                 // --- NEW: CREDIT WALLET FOR COMPLETED WORK ---
                 try {
                     const { creditEngineerWallet } = await import('../../services/walletService.js');
@@ -922,6 +936,14 @@ export const updateWorkStatus = async (req, res) => {
             }
 
             await order.save();
+
+            // 🔔 Notify User: Work Started
+            if (work_status === 'In Progress' && order.userId) {
+                notifyBookingUpdate(order.userId, order._id, 'JOB_STARTED', {
+                    serviceName: order.servicePlan?.name || 'Service'
+                }).catch(err => console.error('[RequestController] Service start notification failed:', err));
+            }
+
             return res.status(STATUS_CODES.SUCCESS).json({
                 success: true,
                 message: `Work status updated to ${work_status}`,
