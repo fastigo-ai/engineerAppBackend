@@ -45,7 +45,10 @@ export const validateCoupon = async ({ userId, couponCode, amount, servicePlans 
 
   // First-time user check
   if (coupon.targeting?.firstTimeUserOnly) {
-    const hasPreviousOrders = await Order.findOne({ userId, status: 'paid' }).lean();
+    const hasPreviousOrders = await Order.findOne({ 
+      userId, 
+      status: { $in: ['paid', 'completed'] } 
+    }).lean();
     if (hasPreviousOrders) throw new Error('This coupon is only for first-time users');
   }
 
@@ -161,7 +164,10 @@ export const getAvailableCoupons = async (userId) => {
   const coupons = await couponRepository.findAllActive();
   
   // Get user order history for first-time user check
-  const hasPreviousOrders = await Order.findOne({ userId, status: 'paid' }).lean();
+  const hasPreviousOrders = await Order.findOne({ 
+    userId, 
+    status: { $in: ['paid', 'completed'] } 
+  }).lean();
 
   const filtered = [];
   for (const coupon of coupons) {
