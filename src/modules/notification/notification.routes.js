@@ -13,3 +13,4 @@ router.patch('/:id/opened', authenticate, controller.markOpened);
 router.get('/history', authenticate, controller.getHistory);
 
 export default router;
+

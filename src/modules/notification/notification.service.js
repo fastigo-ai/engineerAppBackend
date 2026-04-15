@@ -115,8 +115,30 @@ export async function dispatchNotification(notification) {
   };
 
   try {
-    logger.info(`[FCM] Attempting to send message to ${tokens.length} tokens for notification ${notification._id}`);
-    const response = await admin.messaging().sendEachForMulticast(message);
+    const projectId = admin.app().options.credential?.projectId || process.env.FIREBASE_PROJECT_ID;
+    logger.info(`[FCM] Sending to ${tokens.length} token(s) for notification ${notification._id} via project: ${projectId}`);
+
+    let response;
+
+    if (tokens.length === 1) {
+      // Use send() for single token — more reliable credential validation
+      const singleMessage = {
+        token: tokens[0].fcmToken,
+        notification: { title: notification.title, body: notification.body },
+        data: stringData,
+        android: { priority: 'high', notification: { sound: 'default' } },
+        apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+      };
+
+      try {
+        const messageId = await admin.messaging().send(singleMessage);
+        response = { successCount: 1, failureCount: 0, responses: [{ success: true, messageId }] };
+      } catch (sendErr) {
+        response = { successCount: 0, failureCount: 1, responses: [{ success: false, error: sendErr }] };
+      }
+    } else {
+      response = await admin.messaging().sendEachForMulticast(message);
+    }
     logger.info(`[FCM] Successfully sent ${response.successCount} messages; failures: ${response.failureCount}`);
 
     // Process per-token results for invalidation
