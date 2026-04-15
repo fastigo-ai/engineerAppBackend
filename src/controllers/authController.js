@@ -260,6 +260,33 @@ export const loginWithFirebase = async (req, res) => {
     return res.status(401).json({ error: "Invalid Firebase token" });
   }
 };
+export const getProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    return res.json({
+      success: true,
+      user: {
+        _id: user._id,
+        uid: user.uid,
+        name: user.name,
+        mobile: user.mobile,
+        email: user.email,
+        profileImage: user.profileImage,
+        userType: user.userType,
+        role: user.role,
+        status: user.status,
+      }
+    });
+  } catch (err) {
+    console.error("Get profile error:", err);
+    return res.status(500).json({ error: "Failed to get profile data" });
+  }
+};
+
 export const updateName = async (req, res) => {
   try {
     console.log(req.user, 'req.user');
