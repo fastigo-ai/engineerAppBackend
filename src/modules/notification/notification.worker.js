@@ -72,7 +72,7 @@ async function processJob(job) {
     if (result.success) {
       await Notification.findByIdAndUpdate(job._id, {
         status: 'SENT',
-        fcmMessageId: result.fcmMessageId,
+        fcmMessageId: result.skipped ? `skipped:${result.reason}` : result.fcmMessageId,
         sentAt: new Date(),
         lockedAt: null,
         lockedUntil: null,

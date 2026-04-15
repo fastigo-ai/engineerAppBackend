@@ -24,7 +24,7 @@ export const NOTIFICATION_TEMPLATES = {
   // --- Engineer Phase ---
   ENGINEER_ASSIGNED: {
     title: 'Engineer Assigned!',
-    body: '{{engineerName}} has been assigned to your request and will arrive shortly.',
+    body: '{{engineerName}} has been assigned to your request and will arrive at your scheduled time.',
     type: 'MATCHING',
   },
   ENGINEER_EN_ROUTE: {
