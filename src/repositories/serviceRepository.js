@@ -91,6 +91,7 @@ export const getAllServicesRepository = async () => {
         subtitle: 1,
         price: 1,
         image: 1,
+        duration: 1,
         features: 1,
         featuresFormatted: 1,
         planType: '$planDetails.planType',
@@ -137,6 +138,7 @@ export const getServicesByPlanTypeRepository = async (planType) => {
             name: '$name',
             subtitle: '$subtitle',
             price: '$price',
+            duration: '$duration',
             features: '$features',
             category: {
               id: '$categoryDetails._id',
@@ -191,6 +193,7 @@ export const getServiceByIdRepository = async (serviceId) => {
         name: '$name',
         subtitle: '$subtitle',
         price: '$price',
+        duration: '$duration',
         features: '$features',
         category: {
           id: '$categoryDetails._id',
@@ -246,6 +249,7 @@ export const getServicesByCategoryRepository = async (categoryId) => {
             image: '$image',
             subtitle: '$subtitle',
             price: '$price',
+            duration: '$duration',
             features: '$features'
           }
         }

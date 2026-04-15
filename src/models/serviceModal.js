@@ -32,11 +32,12 @@ const ServicePlanSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Category',
     required: true,
-    trim: true,
-  }, duration: {
+  },
+  duration: {
     type: Number,
     required: true,
-    min: 0
+    min: 0,
+    default: 45 // Default to 45 mins if not specified
   },
 }, {
   timestamps: true,
