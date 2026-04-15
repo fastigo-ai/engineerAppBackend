@@ -759,13 +759,47 @@ export const editCategory = async (req, res) => {
 export const getUserOrders = async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log(userId, "userId");
+    const { page = 1, limit = 10, status, search } = req.query;
 
-    // Fetch only orders for the specific user
-    const orders = await Order.find({ userId: userId })
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Build query
+    const query = { userId: userId };
+    const filterConditions = [];
+
+    if (status) {
+      if (status === 'Ongoing') {
+        filterConditions.push({
+          $or: [
+            { orderStatus: 'Accepted' },
+            { work_status: 'In Progress' }
+          ]
+        });
+      } else {
+        filterConditions.push({ orderStatus: status });
+      }
+    }
+
+    if (search) {
+      const searchRegex = new RegExp(search, 'i');
+      filterConditions.push({
+        $or: [
+          { orderId: { $regex: searchRegex } },
+          { 'bookingDetails.services.name': { $regex: searchRegex } }
+        ]
+      });
+    }
+
+    if (filterConditions.length > 0) {
+      query.$and = filterConditions;
+    }
+
+    const totalCount = await Order.countDocuments(query);
+    
+    const orders = await Order.find(query)
       .populate({
         path: 'servicePlan',
-        select: 'name subtitle price image features featuresFormatted category',
+        select: 'name subtitle price image features featuresFormatted category duration',
         populate: {
           path: 'category',
           select: 'name description image'
@@ -773,32 +807,28 @@ export const getUserOrders = async (req, res) => {
       })
       .populate({
         path: 'servicePlans',
-        select: 'name subtitle price image features featuresFormatted category',
+        select: 'name subtitle price image features featuresFormatted category duration',
         populate: {
           path: 'category',
           select: 'name description image'
         }
       })
-      .populate('assignedEngineer', 'name mobile rating')
-      .sort({ createdAt: -1 }) // Newest first
+      .populate('assignedEngineer', 'name mobile rating profileImage')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
       .lean();
 
-    // Check if any orders found
-    if (!orders || orders.length === 0) {
-      return res.status(200).json({
-        success: true,
-        message: 'No orders found for this user',
-        data: [],
-        count: 0
-      });
-    }
+    const hasMore = skip + orders.length < totalCount;
 
-    // Return orders
     return res.status(200).json({
       success: true,
       message: 'User orders retrieved successfully',
       data: orders,
-      count: orders.length
+      count: orders.length,
+      totalCount: totalCount,
+      hasMore: hasMore,
+      currentPage: parseInt(page)
     });
 
   } catch (error) {
