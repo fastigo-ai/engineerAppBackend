@@ -3,6 +3,8 @@ import User from "../models/user.js";
 import jwt from "jsonwebtoken";
 import { twilioClient, verifySid } from "../config/twilio.js";
 import { syncDeviceToken } from "../modules/notification/notification.service.js";
+import { uploadToCloudinary } from "../utils/uploadToCloudinary.js";
+import cloudinary from "../config/cloudinary.js";
 
 // Send OTP via Twilio Verify
 export const sendOTP = async (req, res) => {
@@ -290,6 +292,80 @@ export const updateName = async (req, res) => {
   }
 };
 
+// Upload Profile Image
+export const uploadProfileImage = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No image file provided" });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Delete old profile image from Cloudinary if exists
+    if (user.profileImage) {
+      try {
+        // Extract public_id from the Cloudinary URL
+        const urlParts = user.profileImage.split('/');
+        const folderAndFile = urlParts.slice(-2).join('/');
+        const publicId = folderAndFile.replace(/\.[^.]+$/, '');
+        await cloudinary.uploader.destroy(publicId);
+      } catch (err) {
+        console.error('Failed to delete old profile image:', err);
+      }
+    }
+
+    // Upload new image to Cloudinary
+    const { url } = await uploadToCloudinary(req.file.buffer, "profile_images");
+
+    // Update user with new profile image URL
+    user.profileImage = url;
+    await user.save();
+
+    return res.json({
+      message: "Profile image updated successfully",
+      profileImage: url,
+    });
+  } catch (err) {
+    console.error("Upload profile image error:", err);
+    return res.status(500).json({ error: "Failed to upload profile image" });
+  }
+};
+
+// Remove Profile Image
+export const removeProfileImage = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Delete from Cloudinary if exists
+    if (user.profileImage) {
+      try {
+        const urlParts = user.profileImage.split('/');
+        const folderAndFile = urlParts.slice(-2).join('/');
+        const publicId = folderAndFile.replace(/\.[^.]+$/, '');
+        await cloudinary.uploader.destroy(publicId);
+      } catch (err) {
+        console.error('Failed to delete profile image from Cloudinary:', err);
+      }
+    }
+
+    user.profileImage = null;
+    await user.save();
+
+    return res.json({
+      message: "Profile image removed successfully",
+    });
+  } catch (err) {
+    console.error("Remove profile image error:", err);
+    return res.status(500).json({ error: "Failed to remove profile image" });
+  }
+};
+
 export const verifyOTP = async (req, res) => {
   try {
     const { mobile, otp } = req.body;
@@ -355,6 +431,7 @@ export const verifyOTP = async (req, res) => {
             name: user.name,
             mobile: user.mobile,
             email: user.email,
+            profileImage: user.profileImage,
             userType: user.userType,
             role: user.role,
             isPhoneVerified: user.isPhoneVerified,
