@@ -248,6 +248,14 @@ const OrderSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    noShowPhase: {
+      type: Number,
+      default: 0, // 0: Normal, 1: Pinged Engineer at T+10m
+    },
+    noShowPingedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

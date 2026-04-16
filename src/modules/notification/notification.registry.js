@@ -78,6 +78,16 @@ export const NOTIFICATION_TEMPLATES = {
     title: 'Expert Not Available',
     body: "We couldn't find an expert for your scheduled time. Please reschedule your booking or cancel for a full refund.",
     type: 'ORDER_UPDATE',
+  },
+  ENGINEER_NOSHOW_PING: {
+    title: 'Are you coming?',
+    body: 'Hi {{name}}, you have a scheduled job starting now. Please update your status or reach the location immediately.',
+    type: 'MATCHING',
+  },
+  USER_NOSHOW_ALERT: {
+    title: 'Professional Unavailable',
+    body: 'Our professional is unable to reach your location for the scheduled slot. You can now reschedule this booking or cancel it for a full refund.',
+    type: 'ORDER_UPDATE',
   }
 };
 
