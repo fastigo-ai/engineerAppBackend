@@ -39,8 +39,8 @@ export const NOTIFICATION_TEMPLATES = {
   },
 
   ENGINEER_DECLINED_REASSIGNING: {
-    title: 'Engineer Matching...',
-    body: 'We are matching a new partner for your order as the previous one became unavailable.',
+    title: 'Expert Matching...',
+    body: 'The assigned professional declined your {{serviceName}} order. We are searching for a new nearby expert for you.',
     type: 'MATCHING',
   },
 

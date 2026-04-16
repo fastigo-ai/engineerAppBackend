@@ -12,6 +12,8 @@ router.post('/device/unregister', authenticate, controller.unregisterDevice);
 router.patch('/:id/opened', authenticate, controller.markOpened);
 router.get('/history', authenticate, controller.getHistory);
 router.get('/unread-count', authenticate, controller.getUnreadCount);
+router.delete('/clear-all', authenticate, controller.clearAllNotifications);
+router.delete('/:id', authenticate, controller.deleteNotification);
 
 export default router;
 

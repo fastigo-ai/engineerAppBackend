@@ -256,6 +256,10 @@ const OrderSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    isRescheduled: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

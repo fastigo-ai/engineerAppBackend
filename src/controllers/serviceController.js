@@ -891,6 +891,7 @@ export const rescheduleBooking = async (req, res) => {
     updateData.status = 'Searching';
     updateData.orderStatus = 'Upcoming';
     updateData.work_status = 'Upcoming';
+    updateData.isRescheduled = true;
 
     const order = await Order.findByIdAndUpdate(
       id,

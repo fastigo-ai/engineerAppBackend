@@ -86,6 +86,7 @@ export const getHistory = catchAsync(async (req, res) => {
     userId,
     userModel,
     status: 'SENT',
+    is_deleted: { $ne: true }
   })
     .sort({ createdAt: -1 })
     .limit(20)
@@ -106,7 +107,8 @@ export const getUnreadCount = catchAsync(async (req, res) => {
     userId,
     userModel,
     status: 'SENT',
-    openedAt: null
+    openedAt: null,
+    is_deleted: { $ne: true }
   });
 
   res.status(200).json({ success: true, data: { count } });
@@ -243,4 +245,39 @@ export const adminSendCampaign = catchAsync(async (req, res) => {
     message: `Campaign started: Enqueued ${docs.length} notifications in ${Math.ceil(docs.length / effectiveBatchSize)} waves`,
     data: { count: docs.length, waves: Math.ceil(docs.length / effectiveBatchSize) }
   });
+});
+
+/**
+ * Delete a specific notification (Soft delete)
+ */
+export const deleteNotification = catchAsync(async (req, res) => {
+  const userId = req.user?._id || req.user?.id;
+  const userModel = (req.user?.role === 'engineer' || req.engineer) ? 'Engineer' : 'User';
+
+  const notification = await Notification.findOneAndUpdate(
+    { _id: req.params.id, userId, userModel },
+    { is_deleted: true },
+    { new: true }
+  );
+
+  if (!notification) {
+    return res.status(404).json({ success: false, message: 'Notification not found' });
+  }
+
+  res.status(200).json({ success: true, message: 'Notification deleted successfully' });
+});
+
+/**
+ * Clear all notifications for the current user (Soft delete)
+ */
+export const clearAllNotifications = catchAsync(async (req, res) => {
+  const userId = req.user?._id || req.user?.id;
+  const userModel = (req.user?.role === 'engineer' || req.engineer) ? 'Engineer' : 'User';
+
+  await Notification.updateMany(
+    { userId, userModel, is_deleted: { $ne: true } },
+    { is_deleted: true }
+  );
+
+  res.status(200).json({ success: true, message: 'All notifications cleared successfully' });
 });

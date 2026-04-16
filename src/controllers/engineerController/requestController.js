@@ -370,16 +370,10 @@ export const rejectRequest = async (req, res) => {
             order.orderStatus = 'Upcoming';
             order.work_status = 'Upcoming';
 
-            // Check if we should re-dispatch (scheduled time is in the future)
-            const now = new Date();
-            const scheduledAt = order.scheduledAt ? new Date(order.scheduledAt) : null;
-            let shouldReDispatch = false;
-
-            if (scheduledAt && now < scheduledAt) {
-                order.status = 'Searching'; // Reset to Searching status
-                shouldReDispatch = true;
-                console.log('✅ Order scheduled in future, resetting to Searching for re-dispatch');
-            }
+            // Always reset to Searching and re-dispatch when an accepted order is declined
+            order.status = 'Searching';
+            let shouldReDispatch = true;
+            console.log('✅ Order being reset to Searching for re-dispatch due to engineer decline after acceptance');
 
             // Add to rejectedBy array if not already present
             const rejectedByStrings = order.rejectedBy.map(id => id.toString());
@@ -638,16 +632,10 @@ export const updateRequestStatus = async (req, res) => {
                 order.orderStatus = 'Upcoming';
                 order.work_status = 'Upcoming';
 
-                // Check if we should re-dispatch (scheduled time is in the future)
-                const now = new Date();
-                const scheduledAt = order.scheduledAt ? new Date(order.scheduledAt) : null;
-                var shouldReDispatchLegacy = false;
-
-                if (scheduledAt && now < scheduledAt) {
-                    order.status = 'Searching'; // Reset to Searching status
-                    shouldReDispatchLegacy = true;
-                    console.log('✅ Order scheduled in future, resetting to Searching for re-dispatch');
-                }
+                // Always reset to Searching and re-dispatch when an accepted order is declined
+                order.status = 'Searching';
+                var shouldReDispatchLegacy = true;
+                console.log('✅ Order being reset to Searching for re-dispatch due to engineer decline in legacy updateRequestStatus');
 
                 // Add to rejectedBy array if not already present
                 const rejectedByStrings = order.rejectedBy.map(id => id.toString());
