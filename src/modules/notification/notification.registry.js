@@ -73,6 +73,11 @@ export const NOTIFICATION_TEMPLATES = {
     title: 'OTP Verification',
     body: 'Please share the OTP {{otp}} with your engineer to start/complete the job.',
     type: 'SYSTEM',
+  },
+  SEARCHING_DELAYED: {
+    title: 'Expert Not Available',
+    body: "We couldn't find an expert for your scheduled time. Please reschedule your booking or cancel for a full refund.",
+    type: 'ORDER_UPDATE',
   }
 };
 

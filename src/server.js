@@ -23,6 +23,7 @@ import adminRoutes from './routes/adminRoutes.js';
 import notificationRoutes from './modules/notification/notification.routes.js';
 import { startNotificationWorker } from './modules/notification/notification.worker.js';
 import { startAllNotificationCrons } from './modules/notification/notification.cron.js';
+import { initStaleOrderJob } from './jobs/staleOrderJob.js';
 
 // Load environment variables
 dotenv.config();
@@ -90,6 +91,7 @@ const startServer = async () => {
     // Start Notification Worker & Crons
     startNotificationWorker();
     startAllNotificationCrons();
+    initStaleOrderJob();
 
     const PORT = process.env.PORT || config.port || 8080;
     httpServer.listen(PORT, '0.0.0.0', () => {

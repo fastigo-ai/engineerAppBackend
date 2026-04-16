@@ -96,6 +96,23 @@ export const getHistory = catchAsync(async (req, res) => {
 });
 
 /**
+ * Get unread notification count for the current user
+ */
+export const getUnreadCount = catchAsync(async (req, res) => {
+  const userId = req.user?._id || req.user?.id;
+  const userModel = (req.user?.role === 'engineer' || req.engineer) ? 'Engineer' : 'User';
+
+  const count = await Notification.countDocuments({
+    userId,
+    userModel,
+    status: 'SENT',
+    openedAt: null
+  });
+
+  res.status(200).json({ success: true, data: { count } });
+});
+
+/**
  * Admin: Send individual or list of notifications with staggering
  */
 export const adminSendNotification = catchAsync(async (req, res) => {

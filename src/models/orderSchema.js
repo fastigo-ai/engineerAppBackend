@@ -244,6 +244,10 @@ const OrderSchema = new mongoose.Schema(
         return this.amount * 100;
       },
     },
+    searchingDelayedNotificationSent: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

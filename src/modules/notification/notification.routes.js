@@ -11,6 +11,7 @@ router.post('/device/unregister', authenticate, controller.unregisterDevice);
 // Notification Inbox & Tracking
 router.patch('/:id/opened', authenticate, controller.markOpened);
 router.get('/history', authenticate, controller.getHistory);
+router.get('/unread-count', authenticate, controller.getUnreadCount);
 
 export default router;
 
