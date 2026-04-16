@@ -20,7 +20,7 @@ export const initStaleOrderJob = () => {
         assignedEngineer: null,
         scheduledAt: { $lte: now },
         searchingDelayedNotificationSent: { $ne: true }
-      });
+      }).populate('servicePlan servicePlans');
 
       for (const order of staleUnassigned) {
         try {
@@ -70,11 +70,9 @@ export const initStaleOrderJob = () => {
 
       // PHASE 2: Unassign at T+15 minutes (or 5 mins after ping)
       const overdueUnassign = await Order.find({
-        orderStatus: { $in: ['Accepted', 'Upcoming'] },
-        work_status: 'Upcoming',
         noShowPhase: 1,
         noShowPingedAt: { $lte: new Date(now.getTime() - 5 * 60000) } // 5 mins after ping
-      });
+      }).populate('servicePlan servicePlans');
 
       for (const order of overdueUnassign) {
         try {
@@ -87,7 +85,9 @@ export const initStaleOrderJob = () => {
           await order.save();
 
           // Notify User
-          await notifyBookingUpdate(order.userId, order._id, 'USER_NOSHOW_ALERT');
+          await notifyBookingUpdate(order.userId, order._id, 'USER_NOSHOW_ALERT', {
+            serviceName: order.servicePlan?.name || order.servicePlans?.[0]?.name || 'scheduled service'
+          });
 
           // Notify Engineer
           if (oldEngineerId) {

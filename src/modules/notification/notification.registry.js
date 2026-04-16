@@ -76,7 +76,7 @@ export const NOTIFICATION_TEMPLATES = {
   },
   SEARCHING_DELAYED: {
     title: 'Expert Not Available',
-    body: "We couldn't find an expert for your scheduled time. Please reschedule your booking or cancel for a full refund.",
+    body: "We couldn't find an expert for your scheduled {{serviceName}} at the moment. Please reschedule your booking or cancel for a full refund.",
     type: 'ORDER_UPDATE',
   },
   ENGINEER_NOSHOW_PING: {
@@ -86,7 +86,7 @@ export const NOTIFICATION_TEMPLATES = {
   },
   USER_NOSHOW_ALERT: {
     title: 'Professional Unavailable',
-    body: 'The assigned professional is unable to reach your location due to some technical issues. You can now reschedule this booking or cancel it for a full refund.',
+    body: 'The assigned professional for your {{serviceName}} is unable to reach your location due to some technical issues. You can now reschedule this booking or cancel it for a full refund.',
     type: 'ORDER_UPDATE',
   }
 };
