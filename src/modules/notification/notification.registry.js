@@ -86,7 +86,7 @@ export const NOTIFICATION_TEMPLATES = {
   },
   USER_NOSHOW_ALERT: {
     title: 'Professional Unavailable',
-    body: 'Our professional is unable to reach your location for the scheduled slot. You can now reschedule this booking or cancel it for a full refund.',
+    body: 'The assigned professional is unable to reach your location due to some technical issues. You can now reschedule this booking or cancel it for a full refund.',
     type: 'ORDER_UPDATE',
   }
 };

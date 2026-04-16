@@ -37,35 +37,40 @@ export const initStaleOrderJob = () => {
       
       // PHASE 1: Ping Engineer at T+10 minutes
       const overduePing = await Order.find({
-        orderStatus: 'Accepted',
-        work_status: 'Upcoming', // Haven't started
+        orderStatus: { $in: ['Accepted', 'Upcoming'] }, // Include Upcoming if assigned
+        work_status: 'Upcoming', // Haven't started yet
         assignedEngineer: { $ne: null },
         scheduledAt: { $lte: new Date(now.getTime() - 10 * 60000) }, // 10 mins overdue
-        noShowPhase: 0
+        noShowPhase: { $in: [0, null] }
       }).populate('assignedEngineer');
 
       for (const order of overduePing) {
         try {
           const eng = order.assignedEngineer;
+          /* 
+          // HOLD: Engineer App notification part held for now
           if (eng) {
             await sendPushToEngineer(eng._id, {
               title: 'Are you coming?',
               body: `Hi ${eng.name}, you have a scheduled job starting now. Please update your status or reach location immediately.`,
               data: { type: 'MATCHING', orderId: order._id.toString() }
             });
-            // Also notify user that we are verifying
-            await notifyBookingUpdate(order.userId, order._id, 'ENGINEER_NOSHOW_PING', { name: eng.name });
           }
+          */
+
+          // REMOVED: This should not go to User App as a notification
+          // await notifyBookingUpdate(order.userId, order._id, 'ENGINEER_NOSHOW_PING', { name: eng.name });
+          
           order.noShowPhase = 1;
           order.noShowPingedAt = now;
           await order.save();
-          console.log(`[StaleJob] No-Show Ping sent for ${order._id}`);
-        } catch (err) { console.error(`[StaleJob] Error pinging engineer for ${order._id}:`, err); }
+          console.log(`[StaleJob] No-Show Phase 1 (Internal) for ${order._id}`);
+        } catch (err) { console.error(`[StaleJob] Error updating phase 1 for ${order._id}:`, err); }
       }
 
       // PHASE 2: Unassign at T+15 minutes (or 5 mins after ping)
       const overdueUnassign = await Order.find({
-        orderStatus: 'Accepted',
+        orderStatus: { $in: ['Accepted', 'Upcoming'] },
         work_status: 'Upcoming',
         noShowPhase: 1,
         noShowPingedAt: { $lte: new Date(now.getTime() - 5 * 60000) } // 5 mins after ping
