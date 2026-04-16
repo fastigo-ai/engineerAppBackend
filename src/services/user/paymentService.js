@@ -175,8 +175,8 @@ export const createCheckoutService = async ({
 
     if (paymentMode === "Payment After Service") {
       dispatchOrder(order._id);
-      
-      // 🔔 Notify User: Booking Confirmed (PAS)
+
+      //  Notify User: Booking Confirmed (PAS)
       import("../notification/notificationService.js").then(({ notifyBookingUpdate }) => {
         notifyBookingUpdate(userId, order._id, 'BOOKING_CONFIRMED', {
           serviceName: servicePlans[0]?.name || 'Service'

@@ -166,12 +166,14 @@ export const findMatchingEngineers = async (order, startTime, endTime) => {
 
         // 3️ Distance calculation
         availableEngineers.forEach(eng => {
-            eng.distanceKm = getDistanceInMeters(
+
+            let dist = getDistanceInMeters(
                 order.location.coordinates[1],
                 order.location.coordinates[0],
                 eng.location.coordinates[1],
                 eng.location.coordinates[0]
             );
+            eng.distanceKm = dist / 1000;
         });
 
         // 4️ Ranking (distance + rating)
