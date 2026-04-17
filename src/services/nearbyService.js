@@ -2,7 +2,8 @@ import { Order } from "../models/orderSchema.js";
 import VendorOrder from "../models/vendorOrderModal.js";
 import { gridDisk } from "h3-js";
 
-const MAX_RADIUS = 5; // expand search
+const USER_RADIUS_RINGS = 12; // ~10km
+const VENDOR_RADIUS_RINGS = 30; // ~25km
 const MAX_ORDERS = 15; // increased for mixed orders
 
 export const getNearbyOrdersService = async ({ engineer, type = "all" }) => {
@@ -10,71 +11,56 @@ export const getNearbyOrdersService = async ({ engineer, type = "all" }) => {
     throw new Error("Engineer location not available");
   }
 
-  let foundOrders = [];
-
-  // Aggregate all orders within MAX_RADIUS before limiting
+  // Aggregate all orders within separate radii
   const allRegularOrders = [];
   const allVendorOrders = [];
-  const processedRegularIds = new Set();
-  const processedVendorIds = new Set();
 
   const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-  for (let radius = 1; radius <= MAX_RADIUS; radius++) {
-    const cells = gridDisk(engineer.h3Index, radius);
-    const now = new Date();
-
-    // 1. Fetch Regular (User) Orders (Only if type is 'all' or 'user')
-    if (type === "all" || type === "user") {
-      const regularOrders = await Order.find({
-        h3Index: { $in: cells },
-        status: { $in: ["Searching", "created", "paid", "pending"] },
-        assignedEngineer: null,
-        isDeleted: { $ne: true },
-        rejectedBy: { $ne: engineer._id },
-        work_status: { $nin: ["Completed", "Cancelled"] },
-        $or: [
-          { orderType: "INSTANT" },
-          { 
-            orderType: "SCHEDULED", 
-            scheduledAt: { $lte: tomorrow } // Show orders for today/tomorrow
-          }
-        ]
-      })
-        .select("orderId location amount totalDuration orderType scheduledAt addressText customerDetails servicePlan servicePlans created_at createdAt notes bookingDetails paymentMode paymentStatus")
-        .sort({ createdAt: -1 })
-        .lean();
-
-      regularOrders.forEach(o => {
-        if (!processedRegularIds.has(o._id.toString())) {
-          allRegularOrders.push(o);
-          processedRegularIds.add(o._id.toString());
+  // 1. Fetch Regular (User) Orders (within 10km / 12 rings)
+  if (type === "all" || type === "user") {
+    const userCells = gridDisk(engineer.h3Index, USER_RADIUS_RINGS);
+    const regularOrders = await Order.find({
+      h3Index: { $in: userCells },
+      status: { $in: ["Searching", "created", "paid", "pending"] },
+      assignedEngineer: null,
+      isDeleted: { $ne: true },
+      rejectedBy: { $ne: engineer._id },
+      work_status: { $nin: ["Completed", "Cancelled"] },
+      $or: [
+        { orderType: "INSTANT" },
+        { 
+          orderType: "SCHEDULED", 
+          scheduledAt: { $lte: tomorrow } // Show orders for today/tomorrow
         }
-      });
-    }
-
-    // 2. Fetch Vendor Orders (Only if type is 'all' or 'vendor')
-    if (type === "all" || type === "vendor") {
-      const vendorOrders = await VendorOrder.find({
-        h3Index: { $in: cells },
-        status: "PENDING",
-        assigned_engineer_id: null,
-        rejected_engineers: { $ne: engineer._id }
-      })
-        .select("call_id location order_price support_type branch_name complete_address created_at payment_status payout_amount")
-        .sort({ created_at: -1 })
-        .lean();
-
-      vendorOrders.forEach(o => {
-        if (!processedVendorIds.has(o._id.toString())) {
-          allVendorOrders.push(o);
-          processedVendorIds.add(o._id.toString());
-        }
-      });
-    }
+      ]
+    })
+      .select("orderId location amount totalDuration orderType scheduledAt addressText customerDetails servicePlan servicePlans created_at createdAt notes bookingDetails paymentMode paymentStatus")
+      .sort({ createdAt: -1 })
+      .limit(MAX_ORDERS)
+      .lean();
+    
+    allRegularOrders.push(...regularOrders);
   }
 
-  console.log(`🔍 Nearby Search: Found ${allRegularOrders.length} user orders, ${allVendorOrders.length} vendor orders within ${MAX_RADIUS}km`);
+  // 2. Fetch Vendor Orders (within 25km / 30 rings)
+  if (type === "all" || type === "vendor") {
+    const vendorCells = gridDisk(engineer.h3Index, VENDOR_RADIUS_RINGS);
+    const vendorOrders = await VendorOrder.find({
+      h3Index: { $in: vendorCells },
+      status: "PENDING",
+      assigned_engineer_id: null,
+      rejected_engineers: { $ne: engineer._id }
+    })
+      .select("call_id location order_price support_type branch_name complete_address created_at payment_status payout_amount")
+      .sort({ created_at: -1 })
+      .limit(MAX_ORDERS)
+      .lean();
+    
+    allVendorOrders.push(...vendorOrders);
+  }
+
+  console.log(`🔍 Nearby Search: Found ${allRegularOrders.length} user orders (10km), ${allVendorOrders.length} vendor orders (25km)`);
 
   // 3. Mark types, unify address, and REDACT sensitive customer info
   const mappedRegular = allRegularOrders.map(o => ({ 

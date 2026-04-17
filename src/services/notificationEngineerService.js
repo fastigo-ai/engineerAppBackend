@@ -6,8 +6,8 @@ import { getDistanceInMeters } from "../utils/distance.js";
 
 const H3_RESOLUTION  = 8;
 const MAX_RADIUS_M   = 25_000;
-const MAX_RESULTS    = 10;
-const MIN_CANDIDATES = 3;
+const MAX_RESULTS    = 15;
+const MIN_CANDIDATES = 15;
 const RING_START     = 2;
 const RING_MAX       = 20;
 const RING_STEP      = 2;
@@ -20,9 +20,9 @@ export const notifyMatchedEngineers = async (engineers, orderData) => {
   console.log(`[Notify] Dispatching order ${orderId} to ${engineers.length} engineers`);
 
   for (const eng of engineers) {
-    const engineerRoom = eng._id.toString(); // always present — eng.engineer_id fallback removed
+    const engineerRoom = eng._id.toString(); 
 
-    if (orderData.type !== "User Order") {
+    if (orderData.isVendorOrder) {
       io.to(engineerRoom).emit("NEW_VENDOR_ORDER_REQUEST", {
         order_id:     orderId,
         _id:          orderId,
@@ -123,6 +123,7 @@ export const notifyEngineersForOrder = async (order) => {
         branch_name: order.branch_name,
         state_name:  order.state_name,
         type:        order.support_type,
+        isVendorOrder: true,
         price:       order.order_price ? `₹${order.order_price}` : 'To Be Decided',
         location:    order.location,
       }
@@ -134,6 +135,7 @@ export const notifyEngineersForOrder = async (order) => {
           call_id:         order.orderId,
           address:         order.bookingDetails?.address ?? 'nearby location',
           type:            servicePlanNames,
+          isVendorOrder:   false,
           price:           order.amount ? `₹${order.amount}` : 'To Be Decided',
           location:        order.location,
           scheduledAt:     order.scheduledAt,
