@@ -62,7 +62,15 @@ export const unAssignEngineerFromOrderController = async (req, res) => {
             assignedEngineer: null,
             acceptedBy: null,
             status: 'Searching',
-            work_status: 'Searching'
+            work_status: 'Searching',
+            $push: {
+                tracking: {
+                    status: 'SEARCHING_DELAYED',
+                    title: 'Partner Declined Visit',
+                    subTitle: 'Finding a new expert for you',
+                    timestamp: new Date()
+                }
+            }
         }, { new: true })
         .populate('userId')
         .populate('servicePlan servicePlans');

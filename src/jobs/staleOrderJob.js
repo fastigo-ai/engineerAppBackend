@@ -28,6 +28,14 @@ export const initStaleOrderJob = () => {
             serviceName: order.servicePlan?.name || 'your service'
           });
           order.searchingDelayedNotificationSent = true;
+          
+          order.tracking.push({
+            status: 'SEARCHING_DELAYED',
+            title: 'Expert Not Found',
+            subTitle: 'Still searching for an expert...',
+            timestamp: new Date()
+          });
+
           await order.save();
           console.log(`[StaleJob] Unassigned Alert sent for ${order._id}`);
         } catch (err) { console.error(`[StaleJob] Error notifying unassigned ${order._id}:`, err); }
@@ -82,6 +90,14 @@ export const initStaleOrderJob = () => {
           order.assignedEngineer = null;
           order.orderStatus = 'Upcoming'; // Set back to upcoming to trigger SEARCHING UI
           order.noShowPhase = 2; // Final state
+          
+          order.tracking.push({
+            status: 'UNAVAILABLE',
+            title: 'Expert Unavailable',
+            subTitle: 'Partner could not reach location',
+            timestamp: new Date()
+          });
+
           await order.save();
 
           // Notify User

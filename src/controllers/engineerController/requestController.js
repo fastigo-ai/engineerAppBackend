@@ -286,6 +286,23 @@ export const acceptRequest = async (req, res) => {
         order.acceptedBy = engineerId;
         order.assignedEngineer = engineerId;
         order.work_status = 'Accepted';
+        
+        // --- NEW: Generate Completion OTP on assignment ---
+        const otp = Math.floor(1000 + Math.random() * 9000).toString();
+        order.completionOtp = otp;
+        order.isOtpVerified = false; // Reset verification state if reassigned
+        // --------------------------------------------------
+        
+        // Add to tracking history
+        order.tracking = order.tracking || [];
+        const wasPreviouslyAssigned = order.tracking.some(t => t.status === 'ACCEPTED');
+        
+        order.tracking.push({
+          status: 'ACCEPTED',
+          title: wasPreviouslyAssigned ? 'Expert Reassigned' : 'Expert Assigned',
+          subTitle: `Partner ${req.user.name || 'Partner'} identified`,
+          timestamp: new Date()
+        });
         console.log(' Order fields updated for acceptance');
         console.log(' Engineer saved in acceptedBy:', engineerId);
 
@@ -680,6 +697,12 @@ export const updateRequestStatus = async (req, res) => {
                 order.acceptedBy = engineerId;
                 order.assignedEngineer = engineerId;
                 order.work_status = 'Accepted'; // Update work_status as well
+
+                // --- NEW: Generate Completion OTP on assignment ---
+                const otp = Math.floor(1000 + Math.random() * 9000).toString();
+                order.completionOtp = otp;
+                order.isOtpVerified = false; // Reset verification state if reassigned
+                // --------------------------------------------------
                 console.log('✅ Order fields updated for acceptance');
                 console.log('✅ Engineer saved in acceptedBy:', engineerId);
             } else if (status === 'Rejected' && !isAcceptedByThisEngineer && !isAssignedToThisEngineer) {
@@ -883,6 +906,29 @@ export const updateWorkStatus = async (req, res) => {
             }
 
             order.work_status = work_status;
+            
+            // Add tracking event
+            let trackingTitle = '';
+            let trackingStatus = '';
+            if (work_status === 'Arrived') {
+                trackingTitle = 'Partner Arrived';
+                trackingStatus = 'ARRIVED';
+            } else if (work_status === 'In Progress') {
+                trackingTitle = 'Job Started';
+                trackingStatus = 'STARTED';
+            } else if (work_status === 'Completed') {
+                trackingTitle = 'Service Completed';
+                trackingStatus = 'COMPLETED';
+            }
+
+            if (trackingTitle) {
+                order.tracking.push({
+                    status: trackingStatus,
+                    title: trackingTitle,
+                    timestamp: new Date()
+                });
+            }
+
             if (work_status === 'Completed') {
                 if (!order.isOtpVerified) {
                     return res.status(STATUS_CODES.BAD_REQUEST).json({
@@ -940,18 +986,47 @@ export const updateWorkStatus = async (req, res) => {
         }
 
         // 2. Try updating Vendor Order if regular Order not found
-        // Convert to vendor format if needed, e.g., "In Progress" -> "IN_PROGRESS"
-        const vendorWorkStatus = work_status.toUpperCase().replace(/\s+/g, '_');
-        const vendorOrder = await vendorOrderModal.findOneAndUpdate(
-            { _id: id, assigned_engineer_id: engineerId },
-            { work_status: vendorWorkStatus },
-            { new: true }
-        );
+            // Add tracking event for Vendor Order
+            let trackingTitle = '';
+            let trackingStatus = '';
+            let trackingSub = '';
 
-        if (vendorOrder) {
-            // If completed, sync main status too
-            if (work_status === 'Completed') {
-                await vendorOrderModal.findByIdAndUpdate(id, { status: 'COMPLETED' });
+            if (work_status === 'Arrived') {
+                trackingTitle = 'Partner Arrived';
+                trackingStatus = 'ARRIVED';
+                trackingSub = 'Expert has reached your location';
+            } else if (work_status === 'In Progress') {
+                trackingTitle = 'Job Started';
+                trackingStatus = 'STARTED';
+                trackingSub = 'Work is currently in progress';
+            } else if (work_status === 'Completed') {
+                trackingTitle = 'Service Completed';
+                trackingStatus = 'COMPLETED';
+                trackingSub = 'Job finished successfully';
+            }
+
+            const vendorUpdate = { work_status: vendorWorkStatus };
+            if (trackingTitle) {
+                vendorUpdate.$push = {
+                    tracking: {
+                        status: trackingStatus,
+                        title: trackingTitle,
+                        subTitle: trackingSub,
+                        timestamp: new Date()
+                    }
+                };
+            }
+
+            const vendorOrder = await vendorOrderModal.findOneAndUpdate(
+                { _id: id, assigned_engineer_id: engineerId },
+                vendorUpdate,
+                { new: true }
+            );
+
+            if (vendorOrder) {
+                // If completed, sync main status too
+                if (work_status === 'Completed') {
+                    await vendorOrderModal.findByIdAndUpdate(id, { status: 'COMPLETED' });
 
                 // --- NEW: CREDIT WALLET FOR COMPLETED VENDOR WORK ---
                 try {

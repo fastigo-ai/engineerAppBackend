@@ -846,7 +846,17 @@ export const cancelBooking = async (req, res) => {
     const { id } = req.params;
     const order = await Order.findByIdAndUpdate(
       id,
-      { orderStatus: 'Cancelled', work_status: 'Cancelled', status: 'cancelled' },
+      { 
+        $set: { orderStatus: 'Cancelled', work_status: 'Cancelled', status: 'cancelled' },
+        $push: { 
+          tracking: {
+            status: 'CANCELLED',
+            title: 'Booking Cancelled',
+            subTitle: 'Cancelled by user',
+            timestamp: new Date()
+          }
+        }
+      },
       { new: true }
     );
 
@@ -885,6 +895,11 @@ export const rescheduleBooking = async (req, res) => {
       updateData.bookingDetails = bookingDetails;
     }
 
+    const existingOrder = await Order.findById(id);
+    if (!existingOrder) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
     // When rescheduling, reset the engineer assignment to dispatch it again
     updateData.assignedEngineer = null;
     updateData.acceptedBy = null;
@@ -892,10 +907,38 @@ export const rescheduleBooking = async (req, res) => {
     updateData.orderStatus = 'Upcoming';
     updateData.work_status = 'Upcoming';
     updateData.isRescheduled = true;
+    updateData.noShowPhase = 0;
+    updateData.noShowPingedAt = null;
+
+    // Build tracking array
+    const trackingEvents = [];
+    
+    // 1. Reschedule Event
+    const newTimeStr = scheduledAt ? new Date(scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+    const newDateStr = scheduledAt ? new Date(scheduledAt).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+    trackingEvents.push({
+      status: 'RESCHEDULED',
+      title: 'Booking Rescheduled',
+      subTitle: `New slot: ${newDateStr}, ${newTimeStr}`,
+      timestamp: new Date()
+    });
+
+    // 2. Reassignment Event (if someone was already assigned)
+    if (existingOrder.assignedEngineer) {
+      trackingEvents.push({
+        status: 'SEARCHING_DELAYED',
+        title: 'Partner Reassigned',
+        subTitle: 'Finding a new expert for the new time',
+        timestamp: new Date(Date.now() + 1000) // Slight offset for ordering
+      });
+    }
 
     const order = await Order.findByIdAndUpdate(
       id,
-      updateData,
+      { 
+        $set: updateData,
+        $push: { tracking: { $each: trackingEvents } }
+      },
       { new: true }
     ).populate('servicePlan servicePlans');
 
@@ -976,10 +1019,25 @@ export const updateOrderStatus = async (req, res) => {
     console.log(id, "id");
     console.log(status, "status");
 
+    // Map status to tracking info
+    let trackingEntry = null;
+    if (status === 'Arrived') {
+      trackingEntry = { status: 'ARRIVED', title: 'Partner Arrived', subTitle: 'Expert has reached your location', timestamp: new Date() };
+    } else if (status === 'Started') {
+      trackingEntry = { status: 'STARTED', title: 'Service Started', subTitle: 'Work is currently in progress', timestamp: new Date() };
+    } else if (status === 'Completed') {
+      trackingEntry = { status: 'COMPLETED', title: 'Service Completed', subTitle: 'Job finished successfully', timestamp: new Date() };
+    }
+
+    const updateQuery = { orderStatus: status };
+    if (trackingEntry) {
+      updateQuery.$push = { tracking: trackingEntry };
+    }
+
     // Update the order status
     const updatedOrder = await Order.findByIdAndUpdate(
       id,
-      { orderStatus: status },
+      updateQuery,
       { new: true }
     ).populate('servicePlan', 'name subtitle price image features category')
       .populate('servicePlan.category', 'name description image')

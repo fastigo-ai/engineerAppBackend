@@ -128,7 +128,15 @@ const VendorOrderSchema = new mongoose.Schema(
     },
     description: {
       type: String,
-    }
+    },
+    tracking: [
+      {
+        status: { type: String, required: true },
+        title: { type: String, required: true },
+        subTitle: { type: String, default: null },
+        timestamp: { type: Date, default: Date.now },
+      }
+    ],
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

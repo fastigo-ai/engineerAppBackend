@@ -168,7 +168,12 @@ export const createCheckoutService = async ({
         email: user.email,
         phone: user.mobile
       },
-      notes: { servicePlanNames }
+      notes: { servicePlanNames },
+      tracking: [{
+        status: 'CONFIRMED',
+        title: 'Booking Confirmed',
+        timestamp: new Date()
+      }]
     }], { session });
 
     await session.commitTransaction();

@@ -412,7 +412,15 @@ const handlePaymentCaptured = async (payload) => {
     // Update order status
     await Order.findByIdAndUpdate(order._id, {
       status: 'paid',
-      razorpayPaymentId: paymentEntity.id
+      razorpayPaymentId: paymentEntity.id,
+      $push: {
+        tracking: {
+          status: 'CONFIRMED',
+          title: 'Booking Confirmed',
+          subTitle: 'Payment received successfully',
+          timestamp: new Date()
+        }
+      }
     }, { session });
 
     // Update payment record
@@ -477,7 +485,15 @@ const handlePaymentFailed = async (payload) => {
 
     await Order.findByIdAndUpdate(order._id, {
       status: 'failed',
-      failureReason: paymentEntity.error_description || 'Payment failed'
+      failureReason: paymentEntity.error_description || 'Payment failed',
+      $push: {
+        tracking: {
+          status: 'CANCELLED',
+          title: 'Payment Failed',
+          subTitle: paymentEntity.error_description || 'Transaction declined by bank',
+          timestamp: new Date()
+        }
+      }
     }, { session });
 
     // Update coupon status if applicable
@@ -537,7 +553,15 @@ const handleOrderPaid = async (payload) => {
 
     // Update order status
     await Order.findByIdAndUpdate(order._id, {
-      status: 'paid'
+      status: 'paid',
+      $push: {
+        tracking: {
+          status: 'CONFIRMED',
+          title: 'Booking Confirmed',
+          subTitle: 'Payment successful',
+          timestamp: new Date()
+        }
+      }
     }, { session });
 
     // Update coupon status if applicable
@@ -589,6 +613,14 @@ const handleRefundCreated = async (payload) => {
           amount: refundEntity.amount / 100,
           status: refundEntity.status,
           refundedAt: new Date()
+        },
+        $push: {
+          tracking: {
+            status: 'CANCELLED',
+            title: 'Refund Initiated',
+            subTitle: `Amount: ₹${refundEntity.amount / 100}`,
+            timestamp: new Date()
+          }
         }
       });
     }
@@ -618,7 +650,15 @@ const handleRefundProcessed = async (payload) => {
     const order = await Order.findById(payment.orderId);
     if (order) {
       await Order.findByIdAndUpdate(order._id, {
-        'refundDetails.status': 'processed'
+        'refundDetails.status': 'processed',
+        $push: {
+          tracking: {
+            status: 'CANCELLED',
+            title: 'Refund Successful',
+            subTitle: 'Funds credited to your account',
+            timestamp: new Date()
+          }
+        }
       });
     }
 

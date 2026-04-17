@@ -260,6 +260,14 @@ const OrderSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    tracking: [
+      {
+        status: { type: String, required: true },
+        title: { type: String, required: true },
+        subTitle: { type: String, default: null },
+        timestamp: { type: Date, default: Date.now },
+      }
+    ],
   },
   {
     timestamps: true,
