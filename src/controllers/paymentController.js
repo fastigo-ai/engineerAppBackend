@@ -815,6 +815,74 @@ export const createCheckoutController = async (req, res) => {
   }
 };
 
+export const initiateOrderPayment = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const userId = req.user.id;
+
+    // Search by both custom orderId and MongoDB _id for robustness
+    const query = { userId };
+    if (mongoose.Types.ObjectId.isValid(orderId)) {
+      query.$or = [{ _id: orderId }, { orderId: orderId }];
+    } else {
+      query.orderId = orderId;
+    }
+
+    const order = await Order.findOne(query);
+    
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    if (order.status === 'paid' || order.paymentStatus === 'PAID' || order.paymentStatus === 'SUCCESS') {
+      return res.status(400).json({ success: false, message: 'Order is already paid' });
+    }
+
+    if (!razorpay) {
+      return res.status(500).json({ success: false, message: 'Razorpay is not configured' });
+    }
+
+    // Use existing razorpayOrderId if available, otherwise create a new one
+    let razorpayOrderId = order.razorpayOrderId;
+    
+    if (!razorpayOrderId) {
+      const razorpayOrder = await razorpay.orders.create({
+        amount: order.finalAmount || (order.amount * 100),
+        currency: "INR",
+        receipt: order.receipt || `receipt_${Date.now()}`,
+        notes: {
+          orderId: order.orderId,
+          userId: userId.toString(),
+          isRetry: "true"
+        },
+      });
+      
+      razorpayOrderId = razorpayOrder.id;
+      
+      // Update order with new razorpayOrderId
+      await Order.findByIdAndUpdate(order._id, { razorpayOrderId });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        razorpayOrderId,
+        amount: order.amount,
+        finalAmount: order.finalAmount / 100, // as rupees for prefill if needed
+        keyId: process.env.RAZORPAY_KEY_ID,
+        orderId: order.orderId
+      }
+    });
+
+  } catch (error) {
+    console.error("Initiate order payment error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Internal Server Error",
+    });
+  }
+};
+
 // export const verifyPayment = async (req, res) => {
 //   try {
 //     const {
