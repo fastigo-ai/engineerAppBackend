@@ -549,6 +549,13 @@ export const getPlanTypes = async (req, res) => {
 
 export const getAllServicePlans = async (req, res) => {
   try {
+    const { page = 1, limit = 10 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const limitNum = parseInt(limit);
+
+    // Get total count first for pagination info
+    const totalCount = await ServicePlan.countDocuments();
+
     const servicePlans = await ServicePlan.aggregate([
       // Lookup for category details
       {
@@ -588,12 +595,25 @@ export const getAllServicePlans = async (req, res) => {
           features: 1,
           featuresFormatted: 1,
           category: '$categoryDetails',
-          planType: '$planTypeDetails'
+          planType: '$planTypeDetails',
+          createdAt: 1 // For stable sorting
         }
-      }
+      },
+      { $sort: { createdAt: -1 } }, // Newest first
+      { $skip: skip },
+      { $limit: limitNum }
     ]);
 
-    res.status(200).json({ success: true, data: servicePlans });
+    res.status(200).json({ 
+      success: true, 
+      data: servicePlans,
+      pagination: {
+        totalCount,
+        page: parseInt(page),
+        limit: limitNum,
+        hasMore: skip + servicePlans.length < totalCount
+      }
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: 'Server Error' });
