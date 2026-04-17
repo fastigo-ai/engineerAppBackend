@@ -44,12 +44,21 @@ export const validateCoupon = async ({ userId, couponCode, amount, servicePlans 
   }
 
   // First-time user check
-  if (coupon.targeting?.firstTimeUserOnly) {
-    const hasPreviousOrders = await Order.findOne({ 
-      userId, 
-      status: { $in: ['paid', 'completed'] } 
-    }).lean();
-    if (hasPreviousOrders) throw new Error('This coupon is only for first-time users');
+  const hasPreviousOrders = await Order.findOne({ 
+    userId, 
+    status: { $in: ['paid', 'completed'] } 
+  }).lean();
+
+  if (coupon.targeting?.firstTimeUserOnly && hasPreviousOrders) {
+    throw new Error('This coupon is only for first-time users');
+  }
+
+  // User Segment check
+  if (coupon.targeting?.userSegments?.length > 0) {
+    const userSegment = hasPreviousOrders ? 'ACTIVE' : 'NEW';
+    if (!coupon.targeting.userSegments.includes(userSegment)) {
+      throw new Error(`This coupon is only valid for ${coupon.targeting.userSegments.join('/')} users`);
+    }
   }
 
   // City check
@@ -163,24 +172,33 @@ const generateDescription = (coupon) => {
 export const getAvailableCoupons = async (userId) => {
   const coupons = await couponRepository.findAllActive();
   
-  // Get user order history for first-time user check
-  const hasPreviousOrders = await Order.findOne({ 
-    userId, 
-    status: { $in: ['paid', 'completed'] } 
-  }).lean();
+  // 1. Get user data (orders and profile) once
+  const [hasPreviousOrders, user] = await Promise.all([
+    Order.findOne({ userId, status: { $in: ['paid', 'completed'] } }).lean(),
+    User.findById(userId).select('city').lean()
+  ]);
+
+  const userSegment = hasPreviousOrders ? 'ACTIVE' : 'NEW';
 
   const filtered = [];
   for (const coupon of coupons) {
-    // 1. Overall usage limit
+    // 2. Overall usage limit
     if (coupon.usageLimit > 0 && coupon.usedCount >= coupon.usageLimit) continue;
 
-    // 2. First-time user filter
+    // 3. First-time user filter
     if (coupon.targeting?.firstTimeUserOnly && hasPreviousOrders) continue;
 
-    // 3. User segment filter (simplified: assume ACTIVE for now if not specified)
-    // In a full implementation, you'd match the user's segment here
+    // 4. User segment filter
+    if (coupon.targeting?.userSegments?.length > 0) {
+      if (!coupon.targeting.userSegments.includes(userSegment)) continue;
+    }
 
-    // 4. Per-user limit check
+    // 5. City filter
+    if (coupon.targeting?.cities?.length > 0) {
+      if (!user?.city || !coupon.targeting.cities.includes(user.city)) continue;
+    }
+
+    // 6. Per-user limit check
     const userUsageCount = await usageRepository.countUserUsage(userId, coupon._id, 'USED');
     if (userUsageCount >= coupon.perUserLimit) continue;
 
