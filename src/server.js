@@ -15,7 +15,8 @@ import { isFirebaseConnected } from './config/firebase.js';
 import engineerAuthRoutes from './routes/engineerRoutes/authRoutes.js';
 import mapRoutes from './routes/mapRoutes.js';
 import errorHandler from './middleware/errorHandler.js';
-import { handleRazorpayWebhook } from './controllers/razorpayWebhookController.js';
+import { handleRazorpayWebhook as handlePayoutWebhook } from './controllers/razorpayWebhookController.js';
+import { handleRazorpayWebhook as handlePaymentWebhook } from './controllers/paymentController.js';
 import { initPayoutCron } from './utils/payoutCron.js';
 import couponRoutes from './modules/coupon/coupon.routes.js';
 import { initCouponCron } from './modules/coupon/coupon.cron.js';
@@ -35,7 +36,8 @@ initSocket(httpServer);
 
 // 1. Razorpay Webhook (Needs raw body for signature verification)
 // Must be defined BEFORE express.json()
-app.post('/api/webhook/razorpay/payment', express.text({ type: 'application/json' }), handleRazorpayWebhook);
+app.post('/api/webhook/razorpay/payment', express.text({ type: 'application/json' }), handlePaymentWebhook);
+app.post('/api/webhook/razorpay/payout', express.text({ type: 'application/json' }), handlePayoutWebhook);
 
 // Middleware
 app.use(helmet());

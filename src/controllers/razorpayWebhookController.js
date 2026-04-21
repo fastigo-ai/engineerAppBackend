@@ -36,6 +36,13 @@ export const handleRazorpayWebhook = async (req, res) => {
 
     const event = JSON.parse(rawBody);
     const { payload, event: eventType } = event;
+
+    // Check if this is a payout event
+    if (!payload || !payload.payout) {
+        console.log(`Ignoring non-payout event: ${eventType}`);
+        return res.status(200).send('Event ignored');
+    }
+
     const payout = payload.payout.entity;
     const payoutId = payout.id;
     const referenceId = payout.reference_id;
