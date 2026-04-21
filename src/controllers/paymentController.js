@@ -1305,23 +1305,40 @@ export const updateOrderStatus = async (req, res) => {
       });
     }
 
-    const order = await Order.findOneAndUpdate(
-      { orderId, userId },
-      { 
-        $set: { 
-          status, 
-          failureReason: failureReason || 'Updated by user/system' 
-        } 
-      },
-      { new: true }
-    );
-
+    const order = await Order.findOne({ orderId, userId });
     if (!order) {
       return res.status(404).json({
         success: false,
         message: 'Order not found'
       });
     }
+
+    // Prepare tracking entries
+    const trackingEntries = [
+      {
+        status: status.toUpperCase(),
+        title: `Order ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+        subTitle: failureReason || `The order has been marked as ${status}`,
+        timestamp: new Date()
+      }
+    ];
+
+    // If cancelling a paid order, add refund pending tracking for admin review
+    if (status === 'cancelled' && order.paymentStatus === 'PAID') {
+      trackingEntries.push({
+        status: 'REFUND_PENDING',
+        title: 'Refund Processing',
+        subTitle: 'Order cancelled. Your refund has been queued and is awaiting admin review.',
+        timestamp: new Date()
+      });
+    }
+
+    // Apply updates
+    order.status = status;
+    order.failureReason = failureReason || 'Updated by user/system';
+    order.tracking.push(...trackingEntries);
+    
+    await order.save();
 
     return res.status(200).json({
       success: true,
