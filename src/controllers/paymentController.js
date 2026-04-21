@@ -276,9 +276,15 @@ export const handleRazorpayWebhook = async (req, res) => {
     }
 
     // Verify the webhook signature
+    // req.body should be the raw string (from express.text) or Buffer (from express.raw)
+    let rawBody = req.body;
+    if (Buffer.isBuffer(req.body)) {
+      rawBody = req.body.toString('utf8');
+    }
+    
     const expectedSignature = crypto
       .createHmac('sha256', webhookSecret)
-      .update(JSON.stringify(req.body))
+      .update(rawBody)
       .digest('hex');
 
     if (signature !== expectedSignature) {
@@ -290,8 +296,11 @@ export const handleRazorpayWebhook = async (req, res) => {
     }
 
     // Process webhook event
-    const event = req.body.event;
-    const payload = req.body.payload;
+    const body = (typeof req.body === 'string' || Buffer.isBuffer(req.body)) 
+      ? JSON.parse(req.body.toString()) 
+      : req.body;
+    const event = body.event;
+    const payload = body.payload;
 
     console.log(`Webhook received: ${event}`);
 
