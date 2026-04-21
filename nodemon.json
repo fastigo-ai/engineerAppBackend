@@ -1,3 +1,7 @@
 {
-  "ignore": ["scratch/", "node_modules/", ".git/"]
+  "ignore": [
+    "scratch/",
+    "node_modules/",
+    ".git/"
+  ]
 }

@@ -35,7 +35,7 @@ initSocket(httpServer);
 
 // 1. Razorpay Webhook (Needs raw body for signature verification)
 // Must be defined BEFORE express.json()
-app.post('/api/webhook/razorpay', express.text({ type: 'application/json' }), handleRazorpayWebhook);
+app.post('/api/webhook/razorpay/payment', express.text({ type: 'application/json' }), handleRazorpayWebhook);
 
 // Middleware
 app.use(helmet());

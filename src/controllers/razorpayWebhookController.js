@@ -14,14 +14,24 @@ export const handleRazorpayWebhook = async (req, res) => {
     const rawBody = req.body; // Needs to be raw string or Buffer
 
     // 1. Verify Signature
-    const expectedSignature = crypto
-        .createHmac('sha256', webhookSecret)
-        .update(rawBody)
-        .digest('hex');
+    if (!webhookSecret) {
+        console.error("RAZORPAY_WEBHOOK_SECRET is not defined in environment variables");
+        return res.status(500).send('Webhook secret not configured');
+    }
 
-    if (signature !== expectedSignature) {
-        console.warn("Invalid Razorpay Webhook Signature");
-        return res.status(400).send('Invalid signature');
+    try {
+        const expectedSignature = crypto
+            .createHmac('sha256', webhookSecret)
+            .update(rawBody)
+            .digest('hex');
+
+        if (signature !== expectedSignature) {
+            console.warn("Invalid Razorpay Webhook Signature");
+            return res.status(400).send('Invalid signature');
+        }
+    } catch (err) {
+        console.error("Error verifying Razorpay signature:", err);
+        return res.status(500).send('Signature verification failed');
     }
 
     const event = JSON.parse(rawBody);
