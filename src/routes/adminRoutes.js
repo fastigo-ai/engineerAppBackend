@@ -1,6 +1,7 @@
 import express from 'express';
 import AdminSubscription from '../models/AdminSubscription.js';
 import * as notificationController from '../modules/notification/notification.controller.js';
+import * as adminController from '../controllers/adminController.js';
 import { authenticate, authorize } from '../middleware/authMiddleWare.js';
 
 const router = express.Router();
@@ -38,6 +39,11 @@ router.post('/subscribe', async (req, res) => {
  */
 router.post('/notification/send', notificationController.adminSendNotification);
 router.post('/notification/campaign', notificationController.adminSendCampaign);
+
+/**
+ * Refund Tracking
+ */
+router.get('/refunds/pending', adminController.getPendingRefunds);
 
 /**
  * Unregister a subscription

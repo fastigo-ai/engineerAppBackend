@@ -617,6 +617,7 @@ const handleRefundCreated = async (payload) => {
     if (order) {
       await Order.findByIdAndUpdate(order._id, {
         status: 'refunded',
+        refundStatus: 'PROCESSED',
         refundDetails: {
           refundId: refundEntity.id,
           amount: refundEntity.amount / 100,
@@ -659,6 +660,7 @@ const handleRefundProcessed = async (payload) => {
     const order = await Order.findById(payment.orderId);
     if (order) {
       await Order.findByIdAndUpdate(order._id, {
+        refundStatus: 'PROCESSED',
         'refundDetails.status': 'processed',
         $push: {
           tracking: {
@@ -1325,6 +1327,7 @@ export const updateOrderStatus = async (req, res) => {
 
     // If cancelling a paid order, add refund pending tracking for admin review
     if (status === 'cancelled' && order.paymentStatus === 'PAID') {
+      order.refundStatus = 'PENDING';
       trackingEntries.push({
         status: 'REFUND_PENDING',
         title: 'Refund Processing',

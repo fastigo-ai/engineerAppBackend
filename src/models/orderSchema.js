@@ -209,6 +209,11 @@ const OrderSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    refundStatus: {
+      type: String,
+      enum: ["NONE", "PENDING", "PROCESSED", "FAILED"],
+      default: "NONE",
+    },
     refundDetails: {
       refundId: String,
       amount: Number,
