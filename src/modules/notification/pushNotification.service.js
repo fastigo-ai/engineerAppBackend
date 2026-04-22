@@ -9,6 +9,7 @@ import { Engineer } from '../../models/engineersModal.js';
  * Extracted from original notification.service.js
  */
 export async function sendPushNotification(notification) {
+  console.log('--- DEBUG: DISPATCHING FCM ---', notification.userId, notification.userModel);
   let tokens = await DeviceToken.find({
     userId: notification.userId,
     userModel: notification.userModel,

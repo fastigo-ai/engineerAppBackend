@@ -1,5 +1,6 @@
 import express from 'express';
 import dotenv from 'dotenv';
+dotenv.config();
 import cors from 'cors';
 import helmet from 'helmet';
 import config from './config/config.js';
@@ -27,7 +28,6 @@ import { startAllNotificationCrons } from './modules/notification/notification.c
 import { initStaleOrderJob } from './jobs/staleOrderJob.js';
 
 // Load environment variables
-dotenv.config();
 
 // Initialize Express app
 const app = express();
