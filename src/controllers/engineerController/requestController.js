@@ -235,7 +235,7 @@ export const acceptRequest = async (req, res) => {
         const engineerId = req.user.id;
 
         console.log('=== ACCEPT REQUEST ===');
-        console.log('Order ID:', id);
+        console.log('Order ID from params:', id);
         console.log('Engineer ID:', engineerId);
 
         // Find the order

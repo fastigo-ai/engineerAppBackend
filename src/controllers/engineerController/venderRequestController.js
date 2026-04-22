@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { Engineer } from "../../models/engineersModal.js";
 import VendorOrder from "../../models/vendorOrderModal.js";
 import { createAndMatchVendorOrder, acceptOrderService, rejectOrderService } from "../../services/vendorRequestService.js";
@@ -198,7 +199,13 @@ export const acceptVendorOrder = async (req, res) => {
     const { orderId, distance } = req.body;
     const engineerId = req.user.id;
 
+    console.log('=== ACCEPT VENDOR ORDER ===');
+    console.log('Order ID:', orderId);
+    console.log('Engineer ID:', engineerId);
+    console.log('Distance:', distance);
+
     if (!orderId) {
+      console.log('❌ Missing orderId in request body');
       return res.status(400).json({
         success: false,
         message: "OrderId is required"
@@ -346,25 +353,42 @@ export const updateVendorOrderWorkStatus = async (req, res) => {
     const { orderId } = req.params;
     const { workStatus } = req.body;
     const engineerId = req.user.id;
+
+    console.log('=== UPDATE VENDOR WORK STATUS ===');
+    console.log('Order ID:', orderId);
+    console.log('Engineer ID:', engineerId);
+    console.log('Target Work Status:', workStatus);
+
     if (!["NOT_STARTED", "IN_PROGRESS", "COMPLETED", "STARTED"].includes(workStatus)) {
+      console.log('❌ Invalid workStatus:', workStatus);
       return res.status(400).json({
         success: false,
         message: "Invalid work status value"
       });
     }
 
+    const query = {
+      _id: new mongoose.Types.ObjectId(orderId),
+      assigned_engineer_id: new mongoose.Types.ObjectId(engineerId)
+    };
+    console.log('[UpdateWorkStatus] Querying with:', query);
+
     const order = await VendorOrder.findOneAndUpdate(
-      { _id: orderId, assigned_engineer_id: engineerId },
+      query,
       { work_status: workStatus },
       { new: true }
     );
 
     if (!order) {
+      console.log('❌ Order not found or not assigned to this engineer:', { orderId, engineerId });
       return res.status(404).json({
         success: false,
-        message: "Order not found or not assigned to this engineer"
+        message: `Order ${orderId} not found or not assigned to engineer ${engineerId}`,
+        debug: { orderId, engineerId }
       });
     }
+
+    console.log('✅ Work status updated to:', order.work_status);
 
     const payload = {
       call_id: order.call_id,
@@ -406,9 +430,20 @@ export const completeOrder = async (req, res) => {
     }
 
     // 2. Parallel Upload to Cloudinary
-    // We map over req.files and call your utility for each buffer
+    console.log(`[CompleteOrder] Uploading ${files.length} images to Cloudinary...`);
     const uploadResults = await Promise.all(
-      files.map(file => uploadToCloudinary(file.buffer, "order_completions"))
+      files.map((file, index) => {
+        console.log(`[CompleteOrder] Starting upload for image ${index + 1}/${files.length}`);
+        return uploadToCloudinary(file.buffer, "order_completions")
+          .then(res => {
+            console.log(`[CompleteOrder] Image ${index + 1} uploaded successfully`);
+            return res;
+          })
+          .catch(err => {
+            console.error(`[CompleteOrder] Image ${index + 1} upload failed:`, err.message);
+            throw err;
+          });
+      })
     );
 
     // Extract only the URLs for the database

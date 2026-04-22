@@ -261,6 +261,10 @@ const OrderSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    reminder5mSent: {
+      type: Boolean,
+      default: false,
+    },
     isRescheduled: {
       type: Boolean,
       default: false,

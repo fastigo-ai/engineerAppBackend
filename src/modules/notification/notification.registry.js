@@ -88,6 +88,11 @@ export const NOTIFICATION_TEMPLATES = {
     title: 'Professional Unavailable',
     body: 'The assigned professional for your {{serviceName}} is unable to reach your location due to some technical issues. You can now reschedule this booking or cancel it for a full refund.',
     type: 'ORDER_UPDATE',
+  },
+  ENGINEER_REMINDER_5M: {
+    title: 'Upcoming Order!',
+    body: 'Hi {{name}}, you have a scheduled order for {{serviceName}} starting in 5 minutes. Please reach location on time.',
+    type: 'MATCHING',
   }
 };
 
