@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import DeviceToken from './DeviceToken.model.js';
 import { admin } from '../../config/firebase.js';
 import { logger } from '../../utils/logger.js';
@@ -9,18 +10,26 @@ import { Engineer } from '../../models/engineersModal.js';
  * Extracted from original notification.service.js
  */
 export async function sendPushNotification(notification) {
-  console.log('--- DEBUG: DISPATCHING FCM ---', notification.userId, notification.userModel);
+  const userId = new mongoose.Types.ObjectId(notification.userId.toString());
   let tokens = await DeviceToken.find({
-    userId: notification.userId,
+    userId: userId,
     userModel: notification.userModel,
     isActive: true,
   }).select('fcmToken platform isActive lastSeenAt isLegacy').lean();
+
+  logger.info(`[FCM] Found ${tokens.length} tokens in DeviceToken for ${userId}`);
+  if (tokens.length > 0) {
+    logger.info(`[FCM] First token snippet: ${tokens[0].fcmToken?.substring(0, 10)}...`);
+  }
 
   const Model = notification.userModel === 'Engineer' ? Engineer : User;
 
   // --- INTEGRITY FALLBACK: Check old tokens if new ones missing ---
   if (tokens.length === 0) {
-    const legacyEntity = await Model.findById(notification.userId).select('fcmTokens').lean();
+    logger.info(`[FCM] No tokens in DeviceToken for ${notification.userId}, checking legacy...`);
+    const legacyEntity = await Model.findById(userId).select('fcmTokens').lean();
+    logger.info(`[FCM] Legacy entity found: ${!!legacyEntity} | Tokens: ${legacyEntity?.fcmTokens?.length || 0}`);
+    
     if (legacyEntity?.fcmTokens?.length > 0) {
       logger.info(`[FCM] Fallback: Found ${legacyEntity.fcmTokens.length} legacy tokens for ${notification.userModel} ${notification.userId}`);
       
@@ -34,7 +43,7 @@ export async function sendPushNotification(notification) {
       setImmediate(async () => {
         try {
           const newTokens = legacyEntity.fcmTokens.map(t => ({
-            userId: notification.userId,
+            userId: userId,
             userModel: notification.userModel,
             fcmToken: t.token,
             platform: t.device || 'android',
@@ -52,7 +61,7 @@ export async function sendPushNotification(notification) {
 
   if (tokens.length === 0) {
     logger.warn(`[FCM] No active tokens for ${notification.userModel} ${notification.userId}`);
-    return { success: false, reason: 'NO_TOKENS' };
+    return { success: false, reason: 'NO_TOKENS', skipped: true };
   }
 
   const stringData = {
@@ -94,6 +103,7 @@ export async function sendPushNotification(notification) {
 
       try {
         const messageId = await admin.messaging().send(singleMessage);
+        logger.info(`[FCM] Single send successful, ID: ${messageId}`);
         response = { successCount: 1, failureCount: 0, responses: [{ success: true, messageId }] };
       } catch (sendErr) {
         response = { successCount: 0, failureCount: 1, responses: [{ success: false, error: sendErr }] };
@@ -124,7 +134,7 @@ export async function sendPushNotification(notification) {
               DeviceToken.findOneAndUpdate({ fcmToken: expiredToken }, { isActive: false, invalidatedAt: new Date() })
             );
             invalidations.push(
-              Model.findByIdAndUpdate(notification.userId, { $pull: { fcmTokens: { token: expiredToken } } })
+              Model.findByIdAndUpdate(userId, { $pull: { fcmTokens: { token: expiredToken } } })
             );
           }
         }
@@ -133,6 +143,11 @@ export async function sendPushNotification(notification) {
 
     if (invalidations.length > 0) {
       await Promise.allSettled(invalidations);
+    }
+
+    logger.info(`[FCM] Final response for ${notification._id}: successCount=${response.successCount}, failureCount=${response.failureCount}`);
+    if (response.responses && response.responses.length > 0) {
+      logger.info(`[FCM] First response sample:`, JSON.stringify(response.responses[0]));
     }
 
     const firstError = errorCodes.length > 0 ? errorCodes[0] : null;

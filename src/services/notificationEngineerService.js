@@ -178,6 +178,7 @@ export async function matchEngineersByLocation({ location, excludeEngineers = []
       isDeleted:   false,
       isBlocked:   false,
       isSuspended: false,
+      lastHeartbeat: { $gte: new Date(Date.now() - 5 * 60 * 1000) }, // Active within last 5 mins
       ...(excludeSet.size > 0 && { _id: { $nin: [...excludeSet] } }),
     })
       .select("_id name mobile rating fcmTokens location h3Index")

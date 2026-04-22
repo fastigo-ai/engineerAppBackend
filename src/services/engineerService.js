@@ -145,7 +145,7 @@ export const heartbeatService = async ({ engineerId }) => {
   const engineer = await Engineer.findOneAndUpdate(
     {
       _id: engineerId,
-      status: "ONLINE"
+      isActive: true
     },
     {
       $set: {

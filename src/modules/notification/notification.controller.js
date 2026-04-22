@@ -118,13 +118,13 @@ export const getUnreadCount = catchAsync(async (req, res) => {
  * Admin: Send individual or list of notifications with staggering
  */
 export const adminSendNotification = catchAsync(async (req, res) => {
-  const { 
-    userIds, 
-    userModel = 'User', 
-    type = 'SYSTEM', 
-    title, 
-    body, 
-    data = {}, 
+  const {
+    userIds,
+    userModel = 'User',
+    type = 'SYSTEM',
+    title,
+    body,
+    data = {},
     scheduledAt,
     batchSize, // Optional: Number of users per stagger wave
     staggerMinutes = 0 // Optional: Minutes between waves
@@ -136,12 +136,12 @@ export const adminSendNotification = catchAsync(async (req, res) => {
 
   const baseDelayMs = scheduledAt ? Math.max(0, new Date(scheduledAt).getTime() - Date.now()) : 0;
   const effectiveBatchSize = batchSize || userIds.length;
-  
+
   const docs = [];
   userIds.forEach((userId, index) => {
     const batchIndex = Math.floor(index / effectiveBatchSize);
     const staggerDelayMs = batchIndex * (staggerMinutes * 60000);
-    
+
     docs.push({
       userId,
       userModel,
@@ -171,7 +171,7 @@ export const adminSendNotification = catchAsync(async (req, res) => {
  * Admin: Run a targeted campaign with staggering
  */
 export const adminSendCampaign = catchAsync(async (req, res) => {
-  const { 
+  const {
     target, // 'all' | 'segment' | 'city'
     segment, // 'NEW' | 'ACTIVE' | 'INACTIVE' | 'VIP'
     city,
@@ -221,7 +221,7 @@ export const adminSendCampaign = catchAsync(async (req, res) => {
   const docs = targetUserIds.map((userId, index) => {
     const batchIndex = Math.floor(index / effectiveBatchSize);
     const staggerDelayMs = batchIndex * (staggerMinutes * 60000);
-    
+
     return {
       userId,
       userModel,

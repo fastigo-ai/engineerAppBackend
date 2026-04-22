@@ -42,6 +42,8 @@ export async function dispatchNotification(notification) {
   // In a more complex system, we might check user settings here to see if Push is enabled.
   const pushResult = await sendPushNotification(notification);
 
+  logger.info(`[Dispatcher] Full Push result for ${notification._id}:`, JSON.stringify(pushResult, null, 2));
+
   // Return a combined result for the worker to track
   // We prioritize Push result for the worker's status (RETRY logic usually follows FCM failure)
   return {
@@ -49,7 +51,7 @@ export async function dispatchNotification(notification) {
     pushResult,
     inAppResult,
     fcmMessageId: pushResult.fcmMessageId,
-    reason: pushResult.reason,
+    reason: pushResult.success ? null : pushResult.reason,
     skipped: pushResult.skipped
   };
 }

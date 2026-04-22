@@ -31,7 +31,7 @@ export const getNearbyOrdersService = async ({ engineer, type = "all" }) => {
         { orderType: "INSTANT" },
         { 
           orderType: "SCHEDULED", 
-          scheduledAt: { $lte: tomorrow } // Show orders for today/tomorrow
+          scheduledAt: { $gte: new Date() } // Show only future scheduled orders
         }
       ]
     })
