@@ -11,7 +11,7 @@ const SEARCH_RING_SIZE = 30;
 
 export const servicableLocation = async (req, res) => {
   try {
-    const { project_id, calls } = req.body;
+    const { projectId, calls } = req.body;
 
     if (!Array.isArray(calls) || calls.length === 0) {
       return res.status(400).json({
@@ -121,7 +121,7 @@ export const servicableLocation = async (req, res) => {
     ---------------------------------------------------- */
     return res.status(200).json({
       success: true,
-      project_id,
+      projectId,
       meta: {
         total_calls: calls.length,
         serviceable_count: serviceable.length,

@@ -756,7 +756,7 @@ const getDistanceInMeters = (lat1, lon1, lat2, lon2) => {
 
 export const servicableLocation = async (req, res) => {
   try {
-    const { project_id, calls } = req.body;
+    const { projectId, calls } = req.body;
 
     if (!Array.isArray(calls) || calls.length === 0) {
       return res.status(400).json({
@@ -866,7 +866,7 @@ export const servicableLocation = async (req, res) => {
     ---------------------------------------------------- */
     return res.status(200).json({
       success: true,
-      project_id,
+      projectId,
       meta: {
         total_calls: calls.length,
         serviceable_count: serviceable.length,
@@ -997,7 +997,7 @@ export const getVendorRequests = async (req, res) => {
 //       {
 //         $setOnInsert: {
 //           vendor_id,
-//           project_id: payload.project_id,
+//           projectId: payload.projectId || payload.project_id,
 //           call_id,
 
 //           state_name: payload.state,

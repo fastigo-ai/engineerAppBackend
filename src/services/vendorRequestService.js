@@ -32,7 +32,7 @@ export const createAndMatchVendorOrder = async (payload) => {
     {
       $setOnInsert: {
         vendor_id,
-        project_id: payload.project_id,
+        projectId: payload.projectId || payload.project_id,
         call_id,
 
         state_name: payload.state,

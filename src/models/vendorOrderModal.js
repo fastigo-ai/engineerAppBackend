@@ -7,7 +7,7 @@ const VendorOrderSchema = new mongoose.Schema(
   {
     /* -------- Vendor / Project Info -------- */
     vendor_id: { type: String, required: true, index: true },
-    project_id: { type: String, required: true },
+    projectId: { type: String, required: true },
     call_id: { type: String, required: true },
 
     state_name: { type: String, required: true },
