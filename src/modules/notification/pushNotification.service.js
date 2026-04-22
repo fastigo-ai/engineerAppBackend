@@ -9,13 +9,6 @@ import { Engineer } from '../../models/engineersModal.js';
  * Extracted from original notification.service.js
  */
 export async function sendPushNotification(notification) {
-  // --- MULTI-PROJECT GUARD ---
-  // Engineer App uses a different Firebase project. Skip FCM until configured.
-  if (notification.userModel === 'Engineer') {
-    logger.info(`[FCM] Skipping Engineer notification (Engineer Firebase not yet configured). NotifId: ${notification._id}`);
-    return { success: true, reason: 'ENGINEER_FCM_PENDING', skipped: true };
-  }
-
   let tokens = await DeviceToken.find({
     userId: notification.userId,
     userModel: notification.userModel,

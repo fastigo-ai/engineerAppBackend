@@ -55,8 +55,6 @@ export const initStaleOrderJob = () => {
       for (const order of overduePing) {
         try {
           const eng = order.assignedEngineer;
-          /* 
-          // HOLD: Engineer App notification part held for now
           if (eng) {
             await sendPushToEngineer(eng._id, {
               title: 'Are you coming?',
@@ -64,7 +62,6 @@ export const initStaleOrderJob = () => {
               data: { type: 'MATCHING', orderId: order._id.toString() }
             });
           }
-          */
 
           // REMOVED: This should not go to User App as a notification
           // await notifyBookingUpdate(order.userId, order._id, 'ENGINEER_NOSHOW_PING', { name: eng.name });

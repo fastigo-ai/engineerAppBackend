@@ -37,8 +37,8 @@ export const validateCoupon = async ({ userId, couponCode, amount, servicePlans 
     throw new Error('Coupon usage limit reached');
   }
 
-  // Check per-user limit
-  const userUsageCount = await usageRepository.countUserUsage(userId, coupon._id, 'USED');
+  // Check per-user limit (including active reservations)
+  const userUsageCount = await usageRepository.countUserUsage(userId, coupon._id, ['USED', 'RESERVED']);
   if (userUsageCount >= coupon.perUserLimit) {
     throw new Error('You have already reached the usage limit for this coupon');
   }
@@ -46,7 +46,7 @@ export const validateCoupon = async ({ userId, couponCode, amount, servicePlans 
   // First-time user check
   const hasPreviousOrders = await Order.findOne({ 
     userId, 
-    status: { $in: ['paid', 'completed'] } 
+    status: { $nin: ['failed', 'cancelled'] } 
   }).lean();
 
   if (coupon.targeting?.firstTimeUserOnly && hasPreviousOrders) {
@@ -172,11 +172,19 @@ const generateDescription = (coupon) => {
 export const getAvailableCoupons = async (userId) => {
   const coupons = await couponRepository.findAllActive();
   
-  // 1. Get user data (orders and profile) once
-  const [hasPreviousOrders, user] = await Promise.all([
-    Order.findOne({ userId, status: { $in: ['paid', 'completed'] } }).lean(),
-    User.findById(userId).select('city').lean()
+  // 1. Get user data (orders, profile, and coupon usage) once
+  const [hasPreviousOrders, user, userUsages] = await Promise.all([
+    Order.findOne({ userId, status: { $nin: ['failed', 'cancelled'] } }).lean(),
+    User.findById(userId).select('city').lean(),
+    usageRepository.findAllForUser(userId, ['USED', 'RESERVED'])
   ]);
+
+  // Create a map of usage counts for efficiency
+  const usageMap = userUsages.reduce((acc, usage) => {
+    const cid = usage.couponId.toString();
+    acc[cid] = (acc[cid] || 0) + 1;
+    return acc;
+  }, {});
 
   const userSegment = hasPreviousOrders ? 'ACTIVE' : 'NEW';
 
@@ -198,9 +206,9 @@ export const getAvailableCoupons = async (userId) => {
       if (!user?.city || !coupon.targeting.cities.includes(user.city)) continue;
     }
 
-    // 6. Per-user limit check
-    const userUsageCount = await usageRepository.countUserUsage(userId, coupon._id, 'USED');
-    if (userUsageCount >= coupon.perUserLimit) continue;
+    // 6. Per-user limit check (using the pre-fetched usage map)
+    const usageCount = usageMap[coupon._id.toString()] || 0;
+    if (usageCount >= coupon.perUserLimit) continue;
 
     // Decorate with description
     filtered.push({
@@ -240,5 +248,52 @@ export const getBestCoupon = async ({ userId, amount, servicePlans }) => {
   }
   
   return best;
+};
+
+/**
+ * Admin: Create a new coupon
+ */
+export const createCoupon = async (couponData) => {
+  // Normalize code
+  if (couponData.code) {
+    couponData.code = couponData.code.toUpperCase().trim();
+    
+    // Check for duplicate code
+    const existing = await couponRepository.findByCode(couponData.code);
+    if (existing) {
+      throw new Error(`Coupon with code ${couponData.code} already exists`);
+    }
+  }
+
+  // Set default dates if not provided
+  if (!couponData.startDate) couponData.startDate = new Date();
+  if (!couponData.endDate) {
+    const nextMonth = new Date();
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    couponData.endDate = nextMonth;
+  }
+
+  return couponRepository.create(couponData);
+};
+
+/**
+ * Admin: List all coupons
+ */
+export const getAllCoupons = async () => {
+  return couponRepository.findAll();
+};
+
+/**
+ * Admin: Update coupon active status
+ */
+export const updateCouponStatus = async (couponId, isActive) => {
+  return couponRepository.updateStatus(couponId, isActive);
+};
+
+/**
+ * Admin: Delete a coupon
+ */
+export const deleteCoupon = async (couponId) => {
+  return couponRepository.delete(couponId);
 };
 

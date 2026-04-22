@@ -42,13 +42,25 @@ export class CouponUsageRepository {
 
   /**
    * Count usage by user and coupon
+   * status can be a string or an array of strings
    */
   async countUserUsage(userId, couponId, status = 'USED') {
+    const statusQuery = Array.isArray(status) ? { $in: status } : status;
     return CouponUsage.countDocuments({
       userId,
       couponId,
-      status
+      status: statusQuery
     });
+  }
+
+  /**
+   * Find all usage records for a user with specific statuses
+   */
+  async findAllForUser(userId, statuses) {
+    return CouponUsage.find({
+      userId,
+      status: { $in: statuses }
+    }).lean();
   }
 }
 

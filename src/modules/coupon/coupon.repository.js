@@ -56,6 +56,38 @@ export class CouponRepository {
       { session, new: true }
     );
   }
+
+  /**
+   * Create a new coupon
+   */
+  async create(data) {
+    return Coupon.create(data);
+  }
+
+  /**
+   * Find all coupons (admin)
+   */
+  async findAll() {
+    return Coupon.find().sort({ createdAt: -1 }).lean();
+  }
+
+  /**
+   * Update coupon status
+   */
+  async updateStatus(id, isActive) {
+    return Coupon.findByIdAndUpdate(
+      id,
+      { isActive },
+      { new: true }
+    );
+  }
+
+  /**
+   * Delete a coupon
+   */
+  async delete(id) {
+    return Coupon.findByIdAndDelete(id);
+  }
 }
 
 export default new CouponRepository();
