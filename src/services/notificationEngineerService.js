@@ -8,10 +8,11 @@ const H3_RESOLUTION  = 8;
 const MAX_RADIUS_M   = 25_000;
 const MAX_RESULTS    = 15;
 const MIN_CANDIDATES = 15;
-const RING_START     = 2;
+const RING_START     = 0;
 const RING_MAX       = 20;
 const RING_STEP      = 2;
 const MAX_EXCLUSIONS = 100;
+const HEARTBEAT_WINDOW = 30 * 60 * 1000; // 30 minutes
 
 export const notifyMatchedEngineers = async (engineers, orderData) => {
   const io = getIO();
@@ -22,38 +23,45 @@ export const notifyMatchedEngineers = async (engineers, orderData) => {
   for (const eng of engineers) {
     const engineerRoom = eng._id.toString(); 
 
-    if (orderData.isVendorOrder) {
-      io.to(engineerRoom).emit("NEW_VENDOR_ORDER_REQUEST", {
-        order_id:     orderId,
-        _id:          orderId,
-        call_id:      orderData.call_id    ?? null,
-        address:      orderData.address    ?? orderData.addressText,
-        branch_name:  orderData.branch_name ?? null,
-        state_name:   orderData.state_name  ?? null,
-        distance:     eng.distanceKm,
-        support_type: orderData.type,
-        order_price:  orderData.price,
-        timer:        30,
-        location:     orderData.location,
-      });
-    } else {
-      io.to(engineerRoom).emit("NEW_USER_ORDER_REQUEST", {
-        order_id:      orderId,
-        _id:           orderId,
-        address:       orderData.addressText ?? orderData.address ?? 'nearby location',
-        addressText:   orderData.addressText,
-        paymentMode:   orderData.paymentMode,
-        servicePlan:   orderData.notes?.servicePlanNames ?? "New Job",
-        userDetail:    orderData.customerDetails,
-        scheduledAt:   orderData.scheduledAt,
-        totalDuration: orderData.totalDuration,
-        distance:      eng.distanceKm,
-        support_type:  orderData.type,
-        order_price:   orderData.amount,
-        timer:         30,
-        location:      orderData.location,
-      });
-    }
+    const socketPayload = orderData.isVendorOrder 
+      ? {
+          order_id:     orderId,
+          _id:          orderId,
+          call_id:      orderData.call_id    ?? null,
+          address:      orderData.address    ?? orderData.addressText,
+          branch_name:  orderData.branch_name ?? null,
+          state_name:   orderData.state_name  ?? null,
+          distance:     eng.distanceKm,
+          support_type: orderData.type,
+          order_price:  orderData.price,
+          timer:        30,
+          location:     orderData.location,
+        }
+      : {
+          order_id:      orderId,
+          _id:           orderId,
+          address:       orderData.addressText ?? orderData.address ?? 'nearby location',
+          addressText:   orderData.addressText,
+          paymentMode:   orderData.paymentMode,
+          servicePlan:   orderData.notes?.servicePlanNames ?? "New Job",
+          userDetail:    orderData.customerDetails,
+          scheduledAt:   orderData.scheduledAt,
+          totalDuration: orderData.totalDuration,
+          distance:      eng.distanceKm,
+          support_type:  orderData.type,
+          order_price:   orderData.price, // Fixed: was orderData.amount
+          timer:         30,
+          location:      orderData.location,
+        };
+
+    // 1. Emit specific event
+    const eventName = orderData.isVendorOrder ? "NEW_VENDOR_ORDER_REQUEST" : "NEW_USER_ORDER_REQUEST";
+    io.to(engineerRoom).emit(eventName, socketPayload);
+
+    // 2. Emit generic fallback event for app compatibility
+    io.to(engineerRoom).emit("NEW_ORDER_REQUEST", socketPayload);
+    
+    console.log(`[Socket] Emitted ${eventName} & NEW_ORDER_REQUEST to engineer ${engineerRoom}`);
   }
 
   const engineerIds = engineers.map(e => e._id);
@@ -178,7 +186,7 @@ export async function matchEngineersByLocation({ location, excludeEngineers = []
       isDeleted:   false,
       isBlocked:   false,
       isSuspended: false,
-      lastHeartbeat: { $gte: new Date(Date.now() - 5 * 60 * 1000) }, // Active within last 5 mins
+      lastHeartbeat: { $gte: new Date(Date.now() - HEARTBEAT_WINDOW) },
       ...(excludeSet.size > 0 && { _id: { $nin: [...excludeSet] } }),
     })
       .select("_id name mobile rating fcmTokens location h3Index")

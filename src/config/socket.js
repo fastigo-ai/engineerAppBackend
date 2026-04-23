@@ -14,8 +14,16 @@ export const initSocket = (httpServer) => {
     // Engineers join their private room
     console.log("!!! CONNECTION ATTEMPT DETECTED !!!", socket.id);
     socket.on('join', (userId) => {
-      socket.join(userId);
-      console.log(`📡 Socket: User ${userId} joined their private room.`);
+      if (!userId) {
+        console.error("!!! [SOCKET] Join attempt with missing userId !!!");
+        return;
+      }
+      socket.join(userId.toString());
+      console.log(`📡 Socket: User/Engineer ${userId} joined their private room ${userId}.`);
+      
+      // Verification: Check if room join was successful
+      const rooms = Array.from(socket.rooms);
+      console.log(`📡 Socket: current rooms for ${socket.id}:`, rooms);
     });
 
     socket.on('disconnect', () => {
