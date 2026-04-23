@@ -25,7 +25,7 @@ router.post("/remove-fcm-token", authenticateEngineer, unregisterDevice);
 router.get("/notifications/history", authenticateEngineer, getHistory);
 router.get("/notifications/unread-count", authenticateEngineer, getUnreadCount);
 router.put("/notifications/mark-opened/:id", authenticateEngineer, markOpened);
-router.delete("/notifications/:id", authenticateEngineer, deleteNotification);
 router.delete("/notifications/clear-all", authenticateEngineer, clearAllNotifications);
+router.delete("/notifications/:id", authenticateEngineer, deleteNotification);
 
 export default router;

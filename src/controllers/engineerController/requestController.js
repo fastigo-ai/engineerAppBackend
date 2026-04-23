@@ -8,6 +8,7 @@ import { getDistanceInMeters } from "../../utils/distance.js";
 import razorpay from "../../config/razorpay.js";
 import { notifyEngineersForOrder } from "../../services/notificationEngineerService.js";
 import { notifyBookingUpdate } from "../../services/notification/notificationService.js";
+import { uploadToCloudinary } from "../../utils/uploadToCloudinary.js";
 
 
 // Controller functions follow
@@ -1235,7 +1236,7 @@ export const generatePaymentQRCode = async (req, res) => {
             });
         }
 
-        const amountInPaise = Math.round(order.amount * 100);
+        const amountInPaise = Math.round(order.finalAmount || (order.amount * 100));
 
         // Generate Razorpay QR Code
         const qrCode = await razorpay.qrCode.create({
@@ -1268,3 +1269,90 @@ export const generatePaymentQRCode = async (req, res) => {
     }
 };
 
+
+// Upload Order Photos (Regular Order)
+export const uploadOrderPhotos = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const engineerId = req.user.id;
+        const files = req.files;
+
+        console.log('>>> [BACKEND] Received uploadOrderPhotos request for ID:', id);
+        console.log('>>> [BACKEND] Files received count:', files?.length || 0);
+
+        if (!id) return res.status(STATUS_CODES.BAD_REQUEST).json({ success: false, message: "Order ID is required." });
+        if (!files || files.length === 0) {
+            return res.status(STATUS_CODES.BAD_REQUEST).json({ success: false, message: "Please upload at least one completion image." });
+        }
+
+        const order = await Order.findById(id);
+        if (!order) {
+            return res.status(STATUS_CODES.NOT_FOUND).json({ success: false, message: "Order not found." });
+        }
+
+        if (order.assignedEngineer?.toString() !== engineerId.toString()) {
+            return res.status(STATUS_CODES.FORBIDDEN).json({ success: false, message: "Not authorized." });
+        }
+
+        // Parallel Upload to Cloudinary
+        const uploadResults = await Promise.all(
+            files.map((file) => uploadToCloudinary(file.buffer, "order_completions"))
+        );
+
+        const imageUrls = uploadResults.map(result => result.url);
+
+        // Update Order with Image URLs
+        order.completion_images = imageUrls;
+        await order.save();
+
+        res.status(STATUS_CODES.SUCCESS).json({
+            success: true,
+            message: "Work proof photos uploaded successfully.",
+            data: imageUrls
+        });
+    } catch (error) {
+        console.error(">>> [BACKEND] uploadOrderPhotos Error:", error);
+        res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message });
+    }
+};
+
+export const getRequestDetails = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { type } = req.query;
+
+        let order;
+        if (type === 'vendor') {
+            const VendorOrder = (await import('../../models/vendorOrderModal.js')).default;
+            order = await VendorOrder.findById(id);
+        } else {
+            order = await Order.findById(id)
+                .populate('servicePlan servicePlans')
+                .populate('userId', 'name mobile email');
+        }
+
+        if (!order) {
+            // Try fallback to the other type if not specified or not found
+            if (type !== 'vendor') {
+                const VendorOrder = (await import('../../models/vendorOrderModal.js')).default;
+                order = await VendorOrder.findById(id);
+            } else {
+                order = await Order.findById(id)
+                    .populate('servicePlan servicePlans')
+                    .populate('userId', 'name mobile email');
+            }
+        }
+
+        if (!order) {
+            return res.status(404).json({ success: false, message: "Order not found" });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: order
+        });
+    } catch (error) {
+        console.error("Get Request Details Error:", error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};

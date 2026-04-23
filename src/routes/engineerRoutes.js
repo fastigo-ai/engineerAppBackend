@@ -30,6 +30,8 @@ import {
   sendCompletionOTP,
   verifyCompletionOTP,
   generatePaymentQRCode,
+  uploadOrderPhotos,
+  getRequestDetails,
 } from "../controllers/engineerController/requestController.js";
 import { getNearbyOrdersController } from "../controllers/engineerController/nearbyController.js";
 import { 
@@ -97,8 +99,10 @@ router.put(
   updateWorkStatus,
 );
 router.get("/requests/completed", authenticateEngineer, getCompletedRequests);
+router.get("/requests/details/:id", authenticateEngineer, getRequestDetails);
 
 // OTP verification for job completion
+router.post("/requests/upload-photos/:id", upload.array("images", 10), authenticateEngineer, uploadOrderPhotos);
 router.post("/requests/otp/send/:id", authenticateEngineer, sendCompletionOTP);
 router.post("/requests/otp/verify/:id", authenticateEngineer, verifyCompletionOTP);
 router.get("/requests/payment-qr/:id", authenticateEngineer, generatePaymentQRCode);

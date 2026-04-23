@@ -233,6 +233,7 @@ const OrderSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    completion_images: [String],
     couponId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Coupon",

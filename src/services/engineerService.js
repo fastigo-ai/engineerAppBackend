@@ -22,11 +22,16 @@ export const getEngineerStatsService = async (engineerId) => {
     { $group: { _id: null, total: { $sum: "$amount" } } }
   ]);
 
+  // 4. Get Wallet Balance
+  const { Wallet } = await import("../models/Wallet.js");
+  const walletPromise = Wallet.findOne({ engineerId }).select('availableBalance').lean();
 
-  const [standardOrders, vendorOrders, verifiedPayments] = await Promise.all([
+
+  const [standardOrders, vendorOrders, verifiedPayments, wallet] = await Promise.all([
     standardOrdersPromise,
     vendorOrdersPromise,
-    verifiedPaymentsPromise
+    verifiedPaymentsPromise,
+    walletPromise
   ]);
 
   // --- PROCESSING STANDARD ORDERS ---
@@ -49,10 +54,12 @@ export const getEngineerStatsService = async (engineerId) => {
 
   return {
     summary: {
-      totalEarnings: standardEarnings + vendorEarnings,
+      totalEarnings: wallet?.availableBalance || 0, // Using wallet balance as per user request
+      actualLifetimeEarnings: standardEarnings + vendorEarnings,
       totalCompletedOrders: stdCompleted.length + vendorCompleted.length,
-      totalActiveOrders: stdActive.length + vendorActive.length, // Now explicitly Active
-      totalInProgressOrders: stdInProgress.length + vendorInProgress.length, // New field
+      totalActiveOrders: stdActive.length + vendorActive.length,
+      totalInProgressOrders: stdInProgress.length + vendorInProgress.length,
+      walletBalance: wallet?.availableBalance || 0
     },
     details: {
       standard: {
