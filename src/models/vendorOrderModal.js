@@ -115,10 +115,6 @@ const VendorOrderSchema = new mongoose.Schema(
       type: String,
       index: true,
     },
-    sop: {
-      type: String,
-    },
-    image_url: [String],
     completion_images: [String],
     sla_priority: {
       type: String,

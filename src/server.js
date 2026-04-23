@@ -44,6 +44,13 @@ app.use(cors({ origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(logger);
+app.use((req, res, next) => {
+  res.setTimeout(300000, () => {
+    console.log(`!!! [TIMEOUT] Request to ${req.url} timed out after 5 minutes`);
+    res.status(408).send('Request Timeout');
+  });
+  next();
+});
 
 // Check Firebase connection
 console.log('Firebase connected:', isFirebaseConnected);

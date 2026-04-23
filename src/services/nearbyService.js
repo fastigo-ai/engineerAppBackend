@@ -62,24 +62,31 @@ export const getNearbyOrdersService = async ({ engineer, type = "all" }) => {
 
   console.log(`🔍 Nearby Search: Found ${allRegularOrders.length} user orders (10km), ${allVendorOrders.length} vendor orders (25km)`);
 
-  // 3. Mark types, unify address, and REDACT sensitive customer info
-  const mappedRegular = allRegularOrders.map(o => ({ 
-    ...o, 
-    isVendorOrder: false,
-    address: o.addressText || o.bookingDetails?.address || "Address available after acceptance",
-    customerDetails: {
-      name: "Customer",
-      phone: "Hidden"
-    }
-  }));
+  // 3. Mark types, unify address, and STRICTLY REDACT sensitive info
+  const mappedRegular = allRegularOrders.map(o => {
+    // Completely remove sensitive keys from the spread
+    const { addressText, location, customerDetails, bookingDetails, notes, ...safeOrder } = o;
+    return { 
+      ...safeOrder, 
+      isVendorOrder: false,
+      address: "Hidden until acceptance",
+      customerName: "Customer",
+      customerPhone: "Hidden",
+      // Only keep non-sensitive parts of bookingDetails if needed
+      description: bookingDetails?.description || notes
+    };
+  });
 
-  const mappedVendor = allVendorOrders.map(o => ({ 
-    ...o, 
-    isVendorOrder: true,
-    address: o.complete_address || o.address || "Address available after acceptance",
-    contact_name: "Customer",
-    contact_phone: "Hidden"
-  }));
+  const mappedVendor = allVendorOrders.map(o => {
+    const { complete_address, location, contact_phone, contact_name, ...safeOrder } = o;
+    return { 
+      ...safeOrder, 
+      isVendorOrder: true,
+      address: "Hidden until acceptance",
+      customerName: "Customer",
+      customerPhone: "Hidden"
+    };
+  });
 
   const merged = [...mappedRegular, ...mappedVendor].sort((a, b) => {
     const timeA = new Date(a.createdAt || a.created_at).getTime();

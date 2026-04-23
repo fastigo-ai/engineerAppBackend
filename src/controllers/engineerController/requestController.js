@@ -164,19 +164,19 @@ export const getNearbyRequests = async (req, res) => {
                 $project: {
                     _id: 1,
                     customerDetails: {
-                        name: { $ifNull: ["$contact_name", "$l1_support_name"] },
-                        phone: { $ifNull: ["$contact_phone", "$l1_support_number"] },
-                        email: { $literal: "vendor@order.com" }
+                        name: "Customer",
+                        phone: "Hidden",
+                        email: "Hidden"
                     },
                     servicePlan: { name: "$support_type" },
                     amount: "$order_price",
                     orderStatus: "Upcoming",
                     work_status: "$work_status",
-                    location: "$location",
+                    location: { type: "Point", coordinates: [0, 0] }, // Mask coordinates
                     createdAt: "$created_at",
                     updatedAt: "$updated_at",
-                    address: "$complete_address",
-                    pincode: "$pincode",
+                    address: "Hidden until acceptance",
+                    pincode: "Hidden",
                     notes: {
                         orderId: "$call_id",
                         serviceCount: "$assets_count"
@@ -194,7 +194,24 @@ export const getNearbyRequests = async (req, res) => {
                 const d = getDistanceInMeters(coordinates[1], coordinates[0], orderCoords[1], orderCoords[0]);
                 distance = (d / 1000).toFixed(2);
             }
-            return { ...order, distance };
+            
+            // Strictly redact for unaccepted nearby requests
+            return { 
+                ...order, 
+                distance,
+                address: "Hidden until acceptance",
+                addressText: "Hidden until acceptance",
+                customerDetails: {
+                    name: "Customer",
+                    phone: "Hidden",
+                    email: "Hidden"
+                },
+                location: { type: "Point", coordinates: [0, 0] },
+                bookingDetails: {
+                    ...order.bookingDetails,
+                    address: "Hidden until acceptance"
+                }
+            };
         });
 
         const mappedVendorRequests = vendorRequests.map(order => {
@@ -784,7 +801,7 @@ export const getAcceptedRequests = async (req, res) => {
         const skip = (page - 1) * limit;
 
         // 2. Fetch Direct Orders
-        const requests = await Order.find({
+        const rawRequests = await Order.find({
             assignedEngineer: engineerId,
             orderStatus: 'Accepted'
         })
@@ -795,7 +812,22 @@ export const getAcceptedRequests = async (req, res) => {
             .limit(limit)
             .lean();
 
-        // 5. Final Sort (Closest distance first) - Optional if paginated
+        // Map and Redact sensitive info based on work_status
+        const requests = rawRequests.map(order => {
+            const showPhone = order.work_status === 'Started' || order.work_status === 'In Progress' || order.work_status === 'Completed';
+            return {
+                ...order,
+                customerDetails: {
+                    name: order.userId?.name || "Customer",
+                    phone: showPhone ? (order.userId?.phone || "N/A") : "Hidden until work starts",
+                    email: showPhone ? (order.userId?.email || "N/A") : "Hidden until work starts"
+                },
+                // Optionally mask userId to prevent direct access
+                userId: undefined 
+            };
+        });
+
+        // 5. Final Sort
         requests.sort((a, b) => (a.distance || 0) - (b.distance || 0));
 
         res.status(STATUS_CODES.SUCCESS).json({
@@ -1077,7 +1109,7 @@ export const getCompletedRequests = async (req, res) => {
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
 
-        const requests = await Order.find({
+        const rawRequests = await Order.find({
             assignedEngineer: engineerId,
             orderStatus: 'Completed'
         })
@@ -1087,6 +1119,16 @@ export const getCompletedRequests = async (req, res) => {
             .skip(skip)
             .limit(limit)
             .lean();
+
+        const requests = rawRequests.map(order => ({
+            ...order,
+            customerDetails: {
+                name: order.userId?.name || "Customer",
+                phone: order.userId?.phone || "N/A",
+                email: order.userId?.email || "N/A"
+            },
+            userId: undefined
+        }));
 
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,

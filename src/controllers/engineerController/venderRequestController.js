@@ -324,10 +324,16 @@ export const getNearbyVendorOrders = async (req, res) => {
         orderLng
       );
 
+      // STRICT REDACTION for Nearby (Pending) orders
+      const { complete_address, location, contact_phone, contact_name, l1_support_number, l1_support_name, ...safeOrder } = order;
+
       return {
-        ...order,
+        ...safeOrder,
         distance: (distanceInMeters / 1000).toFixed(2), // Convert to KM with 2 decimals
-        distanceUnit: "km"
+        distanceUnit: "km",
+        address: "Hidden until acceptance",
+        customerName: "Customer",
+        customerPhone: "Hidden"
       };
     });
 
@@ -423,6 +429,9 @@ export const completeOrder = async (req, res) => {
     const engineerId = req.user.id;
     const files = req.files;
 
+    console.log('>>> [BACKEND] Received completeOrder request for ID:', orderId);
+    console.log('>>> [BACKEND] Files received count:', files?.length || 0);
+
     // 1. Basic Validation
     if (!orderId) return res.status(400).json({ success: false, message: "Order ID is required." });
     if (!files || files.length === 0) {
@@ -506,14 +515,15 @@ export const completeOrder = async (req, res) => {
     axios.post("https://door2fyvendor-gv4g4.ondigitalocean.app/calls/engineer/assignment-result", webhookPayload)
       .catch(err => console.error("Vendor Webhook Error:", err.message));
 
+    console.log('>>> [BACKEND] Order completed successfully for ID:', orderId);
     return res.status(200).json({
       success: true,
-      message: "Job completed successfully!",
-      order
+      message: "Order completed successfully.",
+      order,
     });
 
   } catch (err) {
-    console.error("Complete Order Error:", err);
+    console.error(">>> [BACKEND] Complete Order Error:", err);
     res.status(500).json({ success: false, message: err.message || "Internal server error" });
   }
 };
@@ -534,7 +544,15 @@ export const getAcceptedVendorOrders = async (req, res) => {
       .limit(limit)
       .lean();
 
-    const mappedOrders = orders.map(order => ({ ...order, isVendorOrder: true }));
+    const mappedOrders = orders.map(order => {
+      const showPhone = order.work_status === 'STARTED' || order.work_status === 'IN_PROGRESS' || order.status === 'COMPLETED';
+      return { 
+        ...order, 
+        isVendorOrder: true,
+        contact_phone: showPhone ? order.contact_phone : "Hidden until work starts",
+        l1_support_number: showPhone ? order.l1_support_number : "Hidden until work starts"
+      };
+    });
 
     return res.status(200).json({
       success: true,
@@ -602,7 +620,15 @@ export const getCompletedVendorOrders = async (req, res) => {
       .limit(limit)
       .lean();
 
-    const mappedOrders = orders.map(order => ({ ...order, isVendorOrder: true }));
+    const mappedOrders = orders.map(order => {
+      const showPhone = order.work_status === 'STARTED' || order.work_status === 'IN_PROGRESS' || order.status === 'COMPLETED';
+      return { 
+        ...order, 
+        isVendorOrder: true,
+        contact_phone: showPhone ? order.contact_phone : "Hidden until work starts",
+        l1_support_number: showPhone ? order.l1_support_number : "Hidden until work starts"
+      };
+    });
 
     return res.status(200).json({
       success: true,
