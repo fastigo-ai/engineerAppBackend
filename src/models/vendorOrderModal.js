@@ -125,6 +125,9 @@ const VendorOrderSchema = new mongoose.Schema(
     description: {
       type: String,
     },
+    sop: {
+      type: String,
+    },
     tracking: [
       {
         status: { type: String, required: true },

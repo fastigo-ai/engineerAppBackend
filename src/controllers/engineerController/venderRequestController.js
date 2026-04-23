@@ -545,7 +545,7 @@ export const getAcceptedVendorOrders = async (req, res) => {
       .lean();
 
     const mappedOrders = orders.map(order => {
-      const showPhone = order.work_status === 'STARTED' || order.work_status === 'IN_PROGRESS' || order.status === 'COMPLETED';
+      const showPhone = order.status === 'ACCEPTED' || order.work_status === 'STARTED' || order.work_status === 'IN_PROGRESS' || order.status === 'COMPLETED';
       return { 
         ...order, 
         isVendorOrder: true,
@@ -621,7 +621,7 @@ export const getCompletedVendorOrders = async (req, res) => {
       .lean();
 
     const mappedOrders = orders.map(order => {
-      const showPhone = order.work_status === 'STARTED' || order.work_status === 'IN_PROGRESS' || order.status === 'COMPLETED';
+      const showPhone = order.status === 'ACCEPTED' || order.work_status === 'STARTED' || order.work_status === 'IN_PROGRESS' || order.status === 'COMPLETED';
       return { 
         ...order, 
         isVendorOrder: true,

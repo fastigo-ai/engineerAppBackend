@@ -52,7 +52,7 @@ export const getNearbyOrdersService = async ({ engineer, type = "all" }) => {
       assigned_engineer_id: null,
       rejected_engineers: { $ne: engineer._id }
     })
-      .select("call_id location order_price support_type branch_name complete_address created_at payment_status payout_amount")
+      .select("call_id location order_price support_type branch_name complete_address created_at payment_status payout_amount description sop")
       .sort({ created_at: -1 })
       .limit(MAX_ORDERS)
       .lean();
@@ -65,15 +65,20 @@ export const getNearbyOrdersService = async ({ engineer, type = "all" }) => {
   // 3. Mark types, unify address, and STRICTLY REDACT sensitive info
   const mappedRegular = allRegularOrders.map(o => {
     // Completely remove sensitive keys from the spread
-    const { addressText, location, customerDetails, bookingDetails, notes, ...safeOrder } = o;
+    const { addressText, location, customerDetails, ...safeOrder } = o;
     return { 
       ...safeOrder, 
       isVendorOrder: false,
       address: "Hidden until acceptance",
       customerName: "Customer",
       customerPhone: "Hidden",
-      // Only keep non-sensitive parts of bookingDetails if needed
-      description: bookingDetails?.description || notes
+      // Include non-sensitive job details
+      bookingDetails: o.bookingDetails ? {
+        services: o.bookingDetails.services,
+        category: o.bookingDetails.category,
+        description: o.bookingDetails.description
+      } : undefined,
+      notes: o.notes
     };
   });
 

@@ -138,7 +138,7 @@ export const getNearbyRequests = async (req, res) => {
                     }
                 }
             })
-                .populate('userId', 'name phone address')
+                .populate('userId', 'name mobile address')
                 .populate('servicePlan', 'name')
                 .populate('servicePlans', 'name')
                 .lean();
@@ -336,7 +336,7 @@ export const acceptRequest = async (req, res) => {
 
         console.log(' Fetching updated order with populated fields...');
         const updatedOrder = await Order.findById(id)
-            .populate('userId', 'name phone address')
+            .populate('userId', 'name mobile address')
             .populate('servicePlan', 'name')
             .populate('assignedEngineer', 'name mobile email')
             .populate('acceptedBy', 'name mobile email');
@@ -468,7 +468,7 @@ export const rejectRequest = async (req, res) => {
 
         console.log('🔍 Fetching updated order with populated fields...');
         const updatedOrder = await Order.findById(id)
-            .populate('userId', 'name phone address')
+            .populate('userId', 'name mobile address')
             .populate('servicePlan', 'name');
         console.log('✅ Updated order fetched');
 
@@ -557,7 +557,7 @@ export const completeRequest = async (req, res) => {
 
         console.log('🔍 Fetching updated order with populated fields...');
         const updatedOrder = await Order.findById(id)
-            .populate('userId', 'name phone address')
+            .populate('userId', 'name mobile address')
             .populate('servicePlan', 'name')
             .populate('assignedEngineer', 'name mobile email')
             .populate('acceptedBy', 'name mobile email');
@@ -755,7 +755,7 @@ export const updateRequestStatus = async (req, res) => {
 
         console.log('🔍 Fetching updated order with populated fields...');
         const updatedOrder = await Order.findById(id)
-            .populate('userId', 'name phone address')
+            .populate('userId', 'name mobile address')
             .populate('servicePlan', 'name')
             .populate('assignedEngineer', 'name mobile email')
             .populate('acceptedBy', 'name mobile email');
@@ -805,7 +805,7 @@ export const getAcceptedRequests = async (req, res) => {
             assignedEngineer: engineerId,
             orderStatus: 'Accepted'
         })
-            .populate('userId', 'name phone address')
+            .populate('userId', 'name mobile address')
             .populate('servicePlan', 'name')
             .sort({ createdAt: -1 })
             .skip(skip)
@@ -814,12 +814,12 @@ export const getAcceptedRequests = async (req, res) => {
 
         // Map and Redact sensitive info based on work_status
         const requests = rawRequests.map(order => {
-            const showPhone = order.work_status === 'Started' || order.work_status === 'In Progress' || order.work_status === 'Completed';
+            const showPhone = order.orderStatus === 'Accepted' || order.work_status === 'Started' || order.work_status === 'In Progress' || order.work_status === 'Completed';
             return {
                 ...order,
                 customerDetails: {
                     name: order.userId?.name || "Customer",
-                    phone: showPhone ? (order.userId?.phone || "N/A") : "Hidden until work starts",
+                    phone: showPhone ? (order.userId?.mobile || "N/A") : "Hidden until work starts",
                     email: showPhone ? (order.userId?.email || "N/A") : "Hidden until work starts"
                 },
                 // Optionally mask userId to prevent direct access
@@ -856,7 +856,7 @@ export const getRejectedRequests = async (req, res) => {
         const requests = await Order.find({
             rejectedBy: engineerId
         })
-            .populate('userId', 'name phone address')
+            .populate('userId', 'name mobile address')
             .populate('servicePlan', 'name')
             .sort({ updatedAt: -1 })
             .skip(skip)
@@ -1113,7 +1113,7 @@ export const getCompletedRequests = async (req, res) => {
             assignedEngineer: engineerId,
             orderStatus: 'Completed'
         })
-            .populate('userId', 'name phone address')
+            .populate('userId', 'name mobile address')
             .populate('servicePlan', 'name')
             .sort({ updatedAt: -1 })
             .skip(skip)
@@ -1124,8 +1124,8 @@ export const getCompletedRequests = async (req, res) => {
             ...order,
             customerDetails: {
                 name: order.userId?.name || "Customer",
-                phone: order.userId?.phone || "N/A",
-                email: order.userId?.email || "N/A"
+                mobile: "Hidden until acceptance",
+                email: "Hidden until acceptance"
             },
             userId: undefined
         }));
@@ -1150,7 +1150,7 @@ export const getCompletedRequests = async (req, res) => {
 export const sendCompletionOTP = async (req, res) => {
     try {
         const { id } = req.params;
-        const order = await Order.findById(id).populate('userId', 'phone');
+        const order = await Order.findById(id).populate('userId', 'mobile');
 
         if (!order) {
             return res.status(STATUS_CODES.NOT_FOUND).json({
