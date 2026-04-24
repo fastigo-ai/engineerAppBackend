@@ -816,8 +816,8 @@ export const getAcceptedRequests = async (req, res) => {
                 ...order,
                 customerDetails: {
                     name: order.userId?.name || "Customer",
-                    phone: showPhone ? (order.userId?.mobile || "N/A") : "Hidden until work starts",
-                    email: showPhone ? (order.userId?.email || "N/A") : "Hidden until work starts"
+                    phone: order.userId?.mobile || "N/A",
+                    email: order.userId?.email || "N/A"
                 },
                 // Optionally mask userId to prevent direct access
                 userId: undefined 
@@ -1134,8 +1134,8 @@ export const getCompletedRequests = async (req, res) => {
             ...order,
             customerDetails: {
                 name: order.userId?.name || "Customer",
-                mobile: "Hidden until acceptance",
-                email: "Hidden until acceptance"
+                phone: order.userId?.mobile || "N/A",
+                email: order.userId?.email || "N/A"
             },
             userId: undefined
         }));

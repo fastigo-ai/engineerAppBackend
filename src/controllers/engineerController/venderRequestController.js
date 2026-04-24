@@ -580,8 +580,8 @@ export const getAcceptedVendorOrders = async (req, res) => {
       return { 
         ...order, 
         isVendorOrder: true,
-        contact_phone: showPhone ? order.contact_phone : "Hidden until work starts",
-        l1_support_number: showPhone ? order.l1_support_number : "Hidden until work starts"
+        contact_phone: order.contact_phone || "N/A",
+        l1_support_number: order.l1_support_number || "N/A"
       };
     });
 
@@ -656,8 +656,8 @@ export const getCompletedVendorOrders = async (req, res) => {
       return { 
         ...order, 
         isVendorOrder: true,
-        contact_phone: showPhone ? order.contact_phone : "Hidden until work starts",
-        l1_support_number: showPhone ? order.l1_support_number : "Hidden until work starts"
+        contact_phone: order.contact_phone || "N/A",
+        l1_support_number: order.l1_support_number || "N/A"
       };
     });
 
