@@ -1494,3 +1494,32 @@ export const getEngineerEarnings = async (req, res) => {
         });
     }
 };
+
+export const sendQuickReply = async (req, res) => {
+    try {
+        const { orderId, message } = req.body;
+        const engineerId = req.user.id;
+
+        if (!orderId || !message) {
+            return res.status(400).json({ success: false, message: 'OrderId and message are required' });
+        }
+
+        const order = await Order.findById(orderId);
+        if (!order) {
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+
+        // Notify User
+        if (order.userId) {
+            await notifyBookingUpdate(order.userId, order._id, 'QUICK_REPLY', {
+                engineerName: req.user.name || 'Partner',
+                message: message
+            });
+        }
+
+        res.status(200).json({ success: true, message: 'Quick reply sent successfully' });
+    } catch (error) {
+        console.error('sendQuickReply error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

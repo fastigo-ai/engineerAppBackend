@@ -33,6 +33,7 @@ import {
     uploadOrderPhotos,
     getRequestDetails,
     getEngineerEarnings,
+    sendQuickReply,
 } from "../controllers/engineerController/requestController.js";
 import { getNearbyOrdersController } from "../controllers/engineerController/nearbyController.js";
 import { 
@@ -108,6 +109,7 @@ router.post("/requests/upload-photos/:id", upload.array("images", 10), authentic
 router.post("/requests/otp/send/:id", authenticateEngineer, sendCompletionOTP);
 router.post("/requests/otp/verify/:id", authenticateEngineer, verifyCompletionOTP);
 router.get("/requests/payment-qr/:id", authenticateEngineer, generatePaymentQRCode);
+router.post("/requests/quick-reply", authenticateEngineer, sendQuickReply);
 
 // Vender-specific routes can be added here
 

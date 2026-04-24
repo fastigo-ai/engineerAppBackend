@@ -93,6 +93,11 @@ export const NOTIFICATION_TEMPLATES = {
     title: 'Upcoming Order!',
     body: 'Hi {{name}}, you have a scheduled order for {{serviceName}} starting in 5 minutes. Please reach location on time.',
     type: 'MATCHING',
+  },
+  QUICK_REPLY: {
+    title: 'Message from Expert',
+    body: '{{message}}',
+    type: 'ORDER_UPDATE',
   }
 };
 
