@@ -201,7 +201,7 @@ export const findMatchingEngineers = async (order, startTime, endTime) => {
 export const dispatchOrder = async (orderId) => {
     try {
         // 1️ Fetch Order
-        const order = await Order.findById(orderId);
+        const order = await Order.findById(orderId).populate('servicePlan servicePlans');
 
         if (!order) throw new Error("Order not found");
 

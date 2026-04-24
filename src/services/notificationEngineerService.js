@@ -14,8 +14,69 @@ const RING_STEP      = 2;
 const MAX_EXCLUSIONS = 100;
 const HEARTBEAT_WINDOW = 30 * 60 * 1000; // 30 minutes
 
-export const notifyMatchedEngineers = async (engineers, orderData) => {
+export const mapOrderToNotificationData = (order) => {
+  const isVendor = !!order.vendor_id;
+
+  if (isVendor) {
+    return {
+      id:          order._id,
+      call_id:     order.call_id,
+      address:     order.complete_address,
+      branch_name: order.branch_name,
+      state_name:  order.state_name,
+      type:        order.support_type,
+      isVendorOrder: true,
+      price:       order.order_price ? `₹${order.order_price}` : 'To Be Decided',
+      location:    order.location,
+      description: order.description,
+      sop:         order.sop,
+    };
+  } else {
+    // CRITICAL: If bookingDetails.services is missing or empty, populate it from servicePlans array
+    let services = order.bookingDetails?.services || [];
+    if (services.length === 0 && order.servicePlans && order.servicePlans.length > 0) {
+      services = order.servicePlans.map(plan => ({
+        id: plan._id || plan.id,
+        name: plan.name,
+        price: plan.price,
+        quantity: 1
+      }));
+    }
+
+    const servicePlanNames =
+      order.servicePlan?.name ?? order.servicePlans?.[0]?.name ?? 'New Job';
+
+    return {
+      id:              order._id,
+      call_id:         order.orderId,
+      address:         order.bookingDetails?.address ?? 'nearby location',
+      type:            servicePlanNames,
+      isVendorOrder:   false,
+      price:           order.amount ? `₹${order.amount}` : 'To Be Decided',
+      location:        order.location,
+      scheduledAt:     order.scheduledAt,
+      addressText:     order.addressText,
+      paymentMode:     order.paymentMode,
+      notes:           { ...order.notes, servicePlanNames },
+      customerDetails: order.customerDetails,
+      totalDuration:   order.totalDuration,
+      bookingDetails:  {
+        ...(order.bookingDetails || {}),
+        services: services
+      },
+      services:        services
+    };
+  }
+};
+
+export const notifyMatchedEngineers = async (engineers, order) => {
   const io = getIO();
+  
+  // Ensure order is mapped to notification data
+  const orderData = (order instanceof mongoose.Document || order._id) 
+    ? mapOrderToNotificationData(order) 
+    : order;
+
   const orderId = orderData.id || orderData._id;
 
   console.log(`[Notify] Dispatching order ${orderId} to ${engineers.length} engineers`);
@@ -36,6 +97,8 @@ export const notifyMatchedEngineers = async (engineers, orderData) => {
           order_price:  orderData.price,
           timer:        30,
           location:     orderData.location,
+          description:  orderData.description,
+          sop:          orderData.sop,
         }
       : {
           order_id:      orderId,
@@ -49,9 +112,11 @@ export const notifyMatchedEngineers = async (engineers, orderData) => {
           totalDuration: orderData.totalDuration,
           distance:      eng.distanceKm,
           support_type:  orderData.type,
-          order_price:   orderData.price, // Fixed: was orderData.amount
+          order_price:   orderData.price,
           timer:         30,
           location:      orderData.location,
+          bookingDetails: orderData.bookingDetails,
+          services:       orderData.services
         };
 
     // 1. Emit specific event
@@ -131,40 +196,7 @@ export const notifyEngineersForOrder = async (order, options = {}) => {
     return { success: true, count: 0 };
   }
 
-  const orderData = isVendor
-    ? {
-        id:          order._id,
-        call_id:     order.call_id,
-        address:     order.complete_address,
-        branch_name: order.branch_name,
-        state_name:  order.state_name,
-        type:        order.support_type,
-        isVendorOrder: true,
-        price:       order.order_price ? `₹${order.order_price}` : 'To Be Decided',
-        location:    order.location,
-        description: order.description,
-        sop:         order.sop,
-      }
-    : (() => {
-        const servicePlanNames =
-          order.servicePlan?.name ?? order.servicePlans?.[0]?.name ?? 'New Job';
-        return {
-          id:              order._id,
-          call_id:         order.orderId,
-          address:         order.bookingDetails?.address ?? 'nearby location',
-          type:            servicePlanNames,
-          isVendorOrder:   false,
-          price:           order.amount ? `₹${order.amount}` : 'To Be Decided',
-          location:        order.location,
-          scheduledAt:     order.scheduledAt,
-          addressText:     order.addressText,
-          paymentMode:     order.paymentMode,
-          notes:           { ...order.notes, servicePlanNames },
-          customerDetails: order.customerDetails,
-          totalDuration:   order.totalDuration,
-          bookingDetails:  order.bookingDetails, // CRITICAL: Added for service list visibility
-        };
-      })();
+  const orderData = mapOrderToNotificationData(order);
 
   // Mark as dispatched to prevent duplicates (Mongoose update)
   if (typeof order.save === 'function') {
