@@ -927,6 +927,7 @@ export const rescheduleBooking = async (req, res) => {
     updateData.orderStatus = 'Upcoming';
     updateData.work_status = 'Upcoming';
     updateData.isRescheduled = true;
+    updateData.isDispatched = false;
     updateData.noShowPhase = 0;
     updateData.noShowPingedAt = null;
 
@@ -967,7 +968,7 @@ export const rescheduleBooking = async (req, res) => {
     }
 
     // Trigger re-dispatch
-    await notifyEngineersForOrder(order);
+    await notifyEngineersForOrder(order, { forceDispatch: true });
 
     res.status(200).json({
       success: true,
