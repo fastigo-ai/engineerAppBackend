@@ -428,7 +428,7 @@ export const rejectRequest = async (req, res) => {
         console.log('💾 Saving order...');
         await order.save();
         if (typeof shouldReDispatch !== 'undefined' && shouldReDispatch) {
-            await notifyEngineersForOrder(order);
+            await notifyEngineersForOrder(order, { forceDispatch: true });
 
             // 🔔 Notify User: Partner is being reassigned
             if (order.userId) {
@@ -733,7 +733,7 @@ export const updateRequestStatus = async (req, res) => {
         console.log('💾 Saving order...');
         await order.save();
         if (typeof shouldReDispatchLegacy !== 'undefined' && shouldReDispatchLegacy) {
-            await notifyEngineersForOrder(order);
+            await notifyEngineersForOrder(order, { forceDispatch: true });
         }
 
         console.log('✅ Order saved successfully');
