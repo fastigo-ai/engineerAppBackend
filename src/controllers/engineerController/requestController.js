@@ -265,8 +265,20 @@ export const acceptRequest = async (req, res) => {
         const order = await Order.findOneAndUpdate(
             {
                 _id: id,
-                acceptedBy: { $exists: false }, // or null
-                assignedEngineer: { $exists: false }
+                $and: [
+                    { 
+                        $or: [
+                            { acceptedBy: null },
+                            { acceptedBy: { $exists: false } }
+                        ] 
+                    },
+                    { 
+                        $or: [
+                            { assignedEngineer: null },
+                            { assignedEngineer: { $exists: false } }
+                        ] 
+                    }
+                ]
             },
             {
                 $set: {
