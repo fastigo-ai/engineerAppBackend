@@ -1179,7 +1179,6 @@ export const verifyPayment = async (req, res) => {
           },
 
           location: location || undefined,
-          isDispatched: false,
         },
       },
       { new: true }
@@ -1245,27 +1244,14 @@ export const verifyPayment = async (req, res) => {
       { upsert: true }
     );
 
-    // 8️ Dispatch ONLY ONCE (atomic)
-    const dispatchLock = await Order.findOneAndUpdate(
-      {
-        _id: order._id,
-        isDispatched: false,
-      },
-      {
-        $set: { isDispatched: true },
-      },
-      { new: true }
-    );
-
-    if (dispatchLock) {
-      dispatchOrder(order._id); // 🔥 NON-BLOCKING
-      
-      // 🔔 Notify User: Order Confirmed
-      if (order.userId) {
-        notifyBookingUpdate(order.userId, order._id, 'BOOKING_CONFIRMED', {
-          serviceName: order.servicePlan?.name || 'Service'
-        }).catch(err => console.error('[PaymentController] Confirmation push failed:', err));
-      }
+    // 8️ Dispatch
+    dispatchOrder(order._id); // 🔥 NON-BLOCKING
+    
+    // 🔔 Notify User: Order Confirmed
+    if (order.userId) {
+      notifyBookingUpdate(order.userId, order._id, 'BOOKING_CONFIRMED', {
+        serviceName: order.servicePlan?.name || 'Service'
+      }).catch(err => console.error('[PaymentController] Confirmation push failed:', err));
     }
 
     // 9️ Response

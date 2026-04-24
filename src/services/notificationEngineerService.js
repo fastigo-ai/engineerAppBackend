@@ -153,17 +153,9 @@ export const notifyMatchedEngineers = async (engineers, order) => {
 };
 
 export const notifyEngineersForOrder = async (order, options = {}) => {
-  const { forceDispatch = false } = options;
-
   if (!order.location?.coordinates) {
     console.warn(`[Dispatch] Order ${order._id} missing location — skipping`);
     return { success: false, reason: 'missing_location' };
-  }
-
-  // Prevent double-dispatching for the same order unless forced (e.g. on re-dispatch)
-  if (!forceDispatch && order.isDispatched) {
-    console.log(`[Dispatch] Order ${order._id} already dispatched — skipping duplicate notification`);
-    return { success: true, count: 0, alreadyDispatched: true };
   }
 
   const isVendor = !!order.vendor_id;
@@ -197,12 +189,6 @@ export const notifyEngineersForOrder = async (order, options = {}) => {
   }
 
   const orderData = mapOrderToNotificationData(order);
-
-  // Mark as dispatched to prevent duplicates (Mongoose update)
-  if (typeof order.save === 'function') {
-    order.isDispatched = true;
-    await order.save().catch(e => console.error('[Dispatch] Save error:', e));
-  }
 
   await notifyMatchedEngineers(matchedEngineers, orderData);
   console.log(`[Dispatch] Order ${order._id} sent to ${matchedEngineers.length} engineers`);

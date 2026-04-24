@@ -926,8 +926,6 @@ export const rescheduleBooking = async (req, res) => {
     updateData.status = 'Searching';
     updateData.orderStatus = 'Upcoming';
     updateData.work_status = 'Upcoming';
-    updateData.isRescheduled = true;
-    updateData.isDispatched = false;
     updateData.noShowPhase = 0;
     updateData.noShowPingedAt = null;
 
@@ -958,6 +956,7 @@ export const rescheduleBooking = async (req, res) => {
       id,
       { 
         $set: updateData,
+        $inc: { rescheduleCount: 1 },
         $push: { tracking: { $each: trackingEvents } }
       },
       { new: true }

@@ -220,9 +220,9 @@ const OrderSchema = new mongoose.Schema(
       status: String,
       refundedAt: Date,
     },
-    isDispatched: {
-      type: Boolean,
-      default: false,
+    rescheduleCount: {
+      type: Number,
+      default: 0,
     },
     completionOtp: {
       type: String,
@@ -263,10 +263,6 @@ const OrderSchema = new mongoose.Schema(
       default: null,
     },
     reminder5mSent: {
-      type: Boolean,
-      default: false,
-    },
-    isRescheduled: {
       type: Boolean,
       default: false,
     },
