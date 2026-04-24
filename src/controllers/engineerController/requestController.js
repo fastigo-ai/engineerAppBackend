@@ -3,6 +3,7 @@ import User from "../../models/user.js";
 import { Engineer } from "../../models/engineersModal.js";
 import STATUS_CODES from "../../constants/statusCodes.js";
 import vendorOrderModal from "../../models/vendorOrderModal.js";
+import { Wallet } from "../../models/Wallet.js";
 import mongoose from "mongoose";
 import { getDistanceInMeters } from "../../utils/distance.js";
 import razorpay from "../../config/razorpay.js";
@@ -256,77 +257,51 @@ export const acceptRequest = async (req, res) => {
         console.log('Order ID from params:', id);
         console.log('Engineer ID:', engineerId);
 
-        // Find the order
-        const order = await Order.findById(id);
+        // --- ATOMIC UPDATE START ---
+        // We use findOneAndUpdate with a filter that ensures the order is NOT already accepted.
+        // This prevents race conditions where two engineers click 'Accept' simultaneously.
+        const otp = Math.floor(1000 + Math.random() * 9000).toString();
+        
+        const order = await Order.findOneAndUpdate(
+            {
+                _id: id,
+                acceptedBy: { $exists: false }, // or null
+                assignedEngineer: { $exists: false }
+            },
+            {
+                $set: {
+                    status: 'paid',
+                    orderStatus: 'Accepted',
+                    acceptedBy: engineerId,
+                    assignedEngineer: engineerId,
+                    work_status: 'Accepted',
+                    completionOtp: otp,
+                    isOtpVerified: false
+                },
+                $pull: { rejectedBy: engineerId }, // Remove from rejectedBy if they previously rejected
+                $push: {
+                    tracking: {
+                        status: 'ACCEPTED',
+                        title: 'Expert Assigned',
+                        subTitle: `Partner ${req.user.name || 'Partner'} identified`,
+                        timestamp: new Date()
+                    }
+                }
+            },
+            { new: true }
+        );
 
         if (!order) {
-            console.log(' Order not found:', id);
-            return res.status(STATUS_CODES.NOT_FOUND).json({
-                success: false,
-                message: 'Order not found'
-            });
-        }
-        console.log(' Order found:', order._id);
-        console.log('Order acceptedBy:', order.acceptedBy);
-        console.log('Order assignedEngineer:', order.assignedEngineer);
-        console.log('Order rejectedBy:', order.rejectedBy);
-
-        // Check if already assigned (accepted by someone)
-        if (order.acceptedBy || order.assignedEngineer) {
-            console.log(' Order already assigned');
-            console.log('acceptedBy:', order.acceptedBy);
-            console.log('assignedEngineer:', order.assignedEngineer);
-            return res.status(STATUS_CODES.BAD_REQUEST).json({
+            console.log('❌ Order already accepted or not found:', id);
+            return res.status(STATUS_CODES.CONFLICT || 409).json({
                 success: false,
                 message: 'Order already accepted by another engineer.',
-                details: {
-                    acceptedBy: order.acceptedBy,
-                    assignedEngineer: order.assignedEngineer
-                }
+                isAlreadyTaken: true
             });
         }
-        console.log(' Order is available for assignment');
+        // --- ATOMIC UPDATE END ---
 
-        console.log(' Processing ACCEPTANCE...');
-
-        // Remove engineer from rejectedBy array if they previously rejected this order
-        const rejectedByStrings = order.rejectedBy.map(id => id.toString());
-        const engineerIdString = engineerId.toString();
-
-        if (rejectedByStrings.includes(engineerIdString)) {
-            order.rejectedBy = order.rejectedBy.filter(id => id.toString() !== engineerIdString);
-            console.log(' Engineer removed from rejectedBy array');
-        }
-
-        // Update order status to accepted
-        order.status = 'paid';
-        order.orderStatus = 'Accepted';
-        order.acceptedBy = engineerId;
-        order.assignedEngineer = engineerId;
-        order.work_status = 'Accepted';
-        
-        // --- NEW: Generate Completion OTP on assignment ---
-        const otp = Math.floor(1000 + Math.random() * 9000).toString();
-        order.completionOtp = otp;
-        order.isOtpVerified = false; // Reset verification state if reassigned
-        // --------------------------------------------------
-        
-        // Add to tracking history
-        order.tracking = order.tracking || [];
-        const wasPreviouslyAssigned = order.tracking.some(t => t.status === 'ACCEPTED');
-        
-        order.tracking.push({
-          status: 'ACCEPTED',
-          title: wasPreviouslyAssigned ? 'Expert Reassigned' : 'Expert Assigned',
-          subTitle: `Partner ${req.user.name || 'Partner'} identified`,
-          timestamp: new Date()
-        });
-        console.log(' Order fields updated for acceptance');
-        console.log(' Engineer saved in acceptedBy:', engineerId);
-
-        console.log(' Saving order...');
-        await order.save();
-        console.log(' Order saved successfully');
+        console.log('✅ Order accepted successfully by:', engineerId);
 
         // 🔔 Notify User: Engineer Assigned
         if (order.userId) {
@@ -335,13 +310,11 @@ export const acceptRequest = async (req, res) => {
             }).catch(notifyError => console.error('Failed to send assignment notification to user:', notifyError));
         }
 
-        console.log(' Fetching updated order with populated fields...');
         const updatedOrder = await Order.findById(id)
             .populate('userId', 'name mobile address')
             .populate('servicePlan', 'name')
             .populate('assignedEngineer', 'name mobile email')
             .populate('acceptedBy', 'name mobile email');
-        console.log(' Updated order fetched');
 
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
@@ -698,31 +671,42 @@ export const updateRequestStatus = async (req, res) => {
             }
 
             if (status === 'Accepted') {
-                console.log('📝 Processing ACCEPTANCE...');
-
-                // Remove engineer from rejectedBy array if they previously rejected this order
-                const rejectedByStrings = order.rejectedBy.map(id => id.toString());
-                const engineerIdString = engineerId.toString();
-
-                if (rejectedByStrings.includes(engineerIdString)) {
-                    order.rejectedBy = order.rejectedBy.filter(id => id.toString() !== engineerIdString);
-                    console.log('✅ Engineer removed from rejectedBy array');
-                }
-
-                // Update order status to accepted
-                order.status = 'pending';
-                order.orderStatus = 'Accepted';
-                order.acceptedBy = engineerId;
-                order.assignedEngineer = engineerId;
-                order.work_status = 'Accepted'; // Update work_status as well
-
-                // --- NEW: Generate Completion OTP on assignment ---
+                console.log('📝 Processing ATOMIC ACCEPTANCE...');
                 const otp = Math.floor(1000 + Math.random() * 9000).toString();
-                order.completionOtp = otp;
-                order.isOtpVerified = false; // Reset verification state if reassigned
-                // --------------------------------------------------
-                console.log('✅ Order fields updated for acceptance');
-                console.log('✅ Engineer saved in acceptedBy:', engineerId);
+
+                const atomicOrder = await Order.findOneAndUpdate(
+                    {
+                        _id: id,
+                        acceptedBy: { $exists: false },
+                        assignedEngineer: { $exists: false }
+                    },
+                    {
+                        $set: {
+                            status: 'pending',
+                            orderStatus: 'Accepted',
+                            acceptedBy: engineerId,
+                            assignedEngineer: engineerId,
+                            work_status: 'Accepted',
+                            completionOtp: otp,
+                            isOtpVerified: false
+                        },
+                        $pull: { rejectedBy: engineerId }
+                    },
+                    { new: true }
+                );
+
+                if (!atomicOrder) {
+                    console.log('❌ Order already accepted by someone else in atomic check');
+                    return res.status(STATUS_CODES.CONFLICT).json({
+                        success: false,
+                        message: 'Order already accepted by another engineer.',
+                        isAlreadyTaken: true
+                    });
+                }
+                
+                order.acceptedBy = atomicOrder.acceptedBy;
+                order.assignedEngineer = atomicOrder.assignedEngineer;
+                console.log('✅ Atomic acceptance successful');
             } else if (status === 'Rejected' && !isAcceptedByThisEngineer && !isAssignedToThisEngineer) {
                 // Normal rejection (not un-accepting own order)
                 console.log('📝 Processing normal REJECTION...');
@@ -895,7 +879,7 @@ export const getRejectedRequests = async (req, res) => {
 export const updateWorkStatus = async (req, res) => {
     try {
         const { id } = req.params; // Order ID
-        const { work_status } = req.body; // 'In Progress', 'Completed', 'Cancelled'
+        const { work_status } = req.body; // 'In Progress', 'Completed', 'Cancelled', 'Arrived'
         const engineerId = req.user.id;
 
         if (!work_status) {
@@ -908,7 +892,7 @@ export const updateWorkStatus = async (req, res) => {
         // 1. Try updating regular Order first
         let order = await Order.findById(id);
         if (order) {
-            const validStatuses = ['In Progress', 'Completed', 'Cancelled'];
+            const validStatuses = ['In Progress', 'Completed', 'Cancelled', 'Arrived'];
             if (!validStatuses.includes(work_status)) {
                 return res.status(STATUS_CODES.BAD_REQUEST).json({
                     success: false,
@@ -923,10 +907,10 @@ export const updateWorkStatus = async (req, res) => {
                 });
             }
 
-            if (work_status === 'In Progress' || work_status === 'started' || work_status === 'started_work') {
-                const now = new Date();
-                const scheduledTime = order.scheduledAt ? new Date(order.scheduledAt) : null;
+            const now = new Date();
+            const scheduledTime = order.scheduledTime;
 
+            if (work_status === 'In Progress') {
                 if (scheduledTime && now < scheduledTime) {
                     const diffMs = scheduledTime.getTime() - now.getTime();
                     const diffMins = Math.ceil(diffMs / (1000 * 60));
@@ -935,6 +919,31 @@ export const updateWorkStatus = async (req, res) => {
                         success: false,
                         message: `Cannot start work yet. Scheduled time is in ${diffMins} minutes.`
                     });
+                }
+
+                // Geo-fencing verification
+                const { latitude, longitude } = req.body;
+                if (!latitude || !longitude) {
+                    return res.status(STATUS_CODES.BAD_REQUEST).json({
+                        success: false,
+                        message: 'Location verification is required to start work.'
+                    });
+                }
+
+                let orderLat, orderLng;
+                if (order.location && order.location.coordinates) {
+                    orderLat = order.location.coordinates[1];
+                    orderLng = order.location.coordinates[0];
+                }
+
+                if (orderLat && orderLng) {
+                    const distance = getDistanceInMeters(latitude, longitude, orderLat, orderLng);
+                    if (distance > 200) {
+                        return res.status(STATUS_CODES.BAD_REQUEST).json({
+                            success: false,
+                            message: `Location verification failed. You are ${distance.toFixed(0)}m away. Please be within 200m.`
+                        });
+                    }
                 }
             }
 
@@ -972,18 +981,15 @@ export const updateWorkStatus = async (req, res) => {
                 order.status = 'paid';
                 order.orderStatus = 'Completed';
 
-                // 🔔 Notify User: Job Completed
                 if (order.userId) {
                     notifyBookingUpdate(order.userId, order._id, 'JOB_COMPLETED', {
                         serviceName: order.servicePlan?.name || 'Service'
                     }).catch(err => console.error('[RequestController] Completion notification failed:', err));
                 }
 
-                // --- NEW: CREDIT WALLET FOR COMPLETED WORK ---
                 try {
                     const { creditEngineerWallet } = await import('../../services/walletService.js');
                     const payoutAmount = order.totalAmount || order.amount || 0;
-                    
                     if (payoutAmount > 0) {
                         await creditEngineerWallet({
                             engineerId,
@@ -991,20 +997,16 @@ export const updateWorkStatus = async (req, res) => {
                             orderId: order._id.toString(),
                             category: 'earning'
                         });
-                        console.log(`Credited ₹${payoutAmount} to wallet for engineer ${engineerId}`);
                     }
                 } catch (creditError) {
-                    console.error("Failed to credit wallet during order completion:", creditError);
-                    // We don't block order completion if wallet credit fails, as it's recorded in logs
+                    console.error("Failed to credit wallet:", creditError);
                 }
-                // ----------------------------------------------
             } else if (work_status === 'Cancelled') {
                 order.orderStatus = 'Cancelled';
             }
 
             await order.save();
 
-            // 🔔 Notify User: Work Started
             if (work_status === 'In Progress' && order.userId) {
                 notifyBookingUpdate(order.userId, order._id, 'JOB_STARTED', {
                     serviceName: order.servicePlan?.name || 'Service'
@@ -1018,54 +1020,51 @@ export const updateWorkStatus = async (req, res) => {
             });
         }
 
-        // 2. Try updating Vendor Order if regular Order not found
-            // Add tracking event for Vendor Order
-            let trackingTitle = '';
-            let trackingStatus = '';
-            let trackingSub = '';
+        // 2. Try updating Vendor Order
+        const vendorWorkStatus = work_status === 'In Progress' ? 'STARTED' : (work_status === 'Completed' ? 'COMPLETED' : work_status.toUpperCase());
+        
+        let trackingTitle = '';
+        let trackingStatus = '';
+        let trackingSub = '';
 
-            if (work_status === 'Arrived') {
-                trackingTitle = 'Partner Arrived';
-                trackingStatus = 'ARRIVED';
-                trackingSub = 'Expert has reached your location';
-            } else if (work_status === 'In Progress') {
-                trackingTitle = 'Job Started';
-                trackingStatus = 'STARTED';
-                trackingSub = 'Work is currently in progress';
-            } else if (work_status === 'Completed') {
-                trackingTitle = 'Service Completed';
-                trackingStatus = 'COMPLETED';
-                trackingSub = 'Job finished successfully';
-            }
+        if (work_status === 'Arrived') {
+            trackingTitle = 'Partner Arrived';
+            trackingStatus = 'ARRIVED';
+            trackingSub = 'Expert has reached your location';
+        } else if (work_status === 'In Progress') {
+            trackingTitle = 'Job Started';
+            trackingStatus = 'STARTED';
+            trackingSub = 'Work is currently in progress';
+        } else if (work_status === 'Completed') {
+            trackingTitle = 'Service Completed';
+            trackingStatus = 'COMPLETED';
+            trackingSub = 'Job finished successfully';
+        }
 
-            const vendorUpdate = { work_status: vendorWorkStatus };
-            if (trackingTitle) {
-                vendorUpdate.$push = {
-                    tracking: {
-                        status: trackingStatus,
-                        title: trackingTitle,
-                        subTitle: trackingSub,
-                        timestamp: new Date()
-                    }
-                };
-            }
+        const vendorUpdate = { work_status: vendorWorkStatus };
+        if (trackingTitle) {
+            vendorUpdate.$push = {
+                tracking: {
+                    status: trackingStatus,
+                    title: trackingStatus,
+                    subTitle: trackingSub,
+                    timestamp: new Date()
+                }
+            };
+        }
 
-            const vendorOrder = await vendorOrderModal.findOneAndUpdate(
-                { _id: id, assigned_engineer_id: engineerId },
-                vendorUpdate,
-                { new: true }
-            );
+        const vendorOrder = await vendorOrderModal.findOneAndUpdate(
+            { _id: id, assigned_engineer_id: engineerId },
+            vendorUpdate,
+            { new: true }
+        );
 
-            if (vendorOrder) {
-                // If completed, sync main status too
-                if (work_status === 'Completed') {
-                    await vendorOrderModal.findByIdAndUpdate(id, { status: 'COMPLETED' });
-
-                // --- NEW: CREDIT WALLET FOR COMPLETED VENDOR WORK ---
+        if (vendorOrder) {
+            if (work_status === 'Completed') {
+                await vendorOrderModal.findByIdAndUpdate(id, { status: 'COMPLETED' });
                 try {
                     const { creditEngineerWallet } = await import('../../services/walletService.js');
                     const payoutAmount = vendorOrder.totalAmount || vendorOrder.order_price || 0;
-                    
                     if (payoutAmount > 0) {
                         await creditEngineerWallet({
                             engineerId,
@@ -1073,12 +1072,10 @@ export const updateWorkStatus = async (req, res) => {
                             orderId: vendorOrder._id.toString(),
                             category: 'earning'
                         });
-                        console.log(`Credited ₹${payoutAmount} to wallet for vendor engineer ${engineerId}`);
                     }
                 } catch (creditError) {
-                    console.error("Failed to credit wallet during vendor order completion:", creditError);
+                    console.error("Failed to credit wallet for vendor:", creditError);
                 }
-                // ---------------------------------------------------
             }
 
             return res.status(STATUS_CODES.SUCCESS).json({
@@ -1090,7 +1087,7 @@ export const updateWorkStatus = async (req, res) => {
 
         return res.status(STATUS_CODES.NOT_FOUND).json({
             success: false,
-            message: 'Order not found in regular or vendor collections'
+            message: 'Order not found'
         });
 
     } catch (error) {
@@ -1354,5 +1351,134 @@ export const getRequestDetails = async (req, res) => {
     } catch (error) {
         console.error("Get Request Details Error:", error);
         return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Get Engineer Earnings with filtering and pagination
+export const getEngineerEarnings = async (req, res) => {
+    try {
+        const engineerId = req.user.id;
+        const { range = 'all', page = 1, limit = 10 } = req.query;
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        
+        const now = new Date();
+        let startDate;
+
+        if (range === 'today') {
+            startDate = new Date(now.setHours(0, 0, 0, 0));
+        } else if (range === 'week') {
+            startDate = new Date(now);
+            startDate.setDate(now.getDate() - now.getDay());
+            startDate.setHours(0, 0, 0, 0);
+        } else if (range === 'month') {
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        } else {
+            startDate = new Date(0); // All time
+        }
+        
+        // 1. Fetch Orders (Regular and Vendor)
+        const regularQuery = {
+            assignedEngineer: engineerId,
+            $or: [{ status: 'paid' }, { orderStatus: 'Completed' }]
+        };
+        if (startDate) regularQuery.createdAt = { $gte: startDate };
+
+        const vendorQuery = {
+            assigned_engineer_id: engineerId,
+            $or: [{ status: 'COMPLETED' }, { work_status: 'COMPLETED' }]
+        };
+        if (startDate) vendorQuery.created_at = { $gte: startDate };
+
+        const [regularOrders, vendorOrders] = await Promise.all([
+            Order.find(regularQuery).select('amount createdAt servicePlan servicePlanNames customerDetails').lean(),
+            vendorOrderModal.find(vendorQuery).select('payout_amount order_price createdAt created_at asset_type contact_name branch_name').lean()
+        ]);
+
+        // 2. Combine and format
+        const combined = [
+            ...regularOrders.map(o => ({
+                amount: o.amount || 0,
+                createdAt: o.createdAt,
+                service: o.servicePlanNames || 'General Service',
+                status: 'Paid',
+                id: o._id,
+                type: 'regular',
+                customerName: o.customerDetails?.name || 'Customer'
+            })),
+            ...vendorOrders.map(o => ({
+                amount: o.payout_amount || o.order_price || 0,
+                createdAt: o.createdAt || o.created_at,
+                service: o.asset_type || 'Vendor Service',
+                status: 'Completed',
+                id: o._id,
+                type: 'vendor',
+                customerName: o.contact_name || o.branch_name || 'Vendor'
+            }))
+        ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        // 3. Paginate the combined results
+        const paginatedEarnings = combined.slice(skip, skip + parseInt(limit));
+        const totalCount = combined.length;
+        const hasMore = skip + parseInt(limit) < totalCount;
+
+        // 4. Calculate Summary for the specific range
+        const filteredSummary = {
+            amount: combined.reduce((sum, item) => sum + item.amount, 0),
+            jobs: combined.length
+        };
+
+        // 5. Also calculate overall summary for the top cards (always)
+        const startOfToday = new Date();
+        startOfToday.setHours(0,0,0,0);
+        const startOfWeek = new Date();
+        startOfWeek.setDate(startOfToday.getDate() - startOfToday.getDay());
+        const startOfMonth = new Date(startOfToday.getFullYear(), startOfToday.getMonth(), 1);
+
+        const [allReg, allVen] = await Promise.all([
+            Order.find({ assignedEngineer: engineerId, $or: [{ status: 'paid' }, { orderStatus: 'Completed' }] }).select('amount createdAt').lean(),
+            vendorOrderModal.find({ assigned_engineer_id: engineerId, $or: [{ status: 'COMPLETED' }, { work_status: 'COMPLETED' }] }).select('payout_amount order_price createdAt created_at').lean()
+        ]);
+
+        const allCombined = [
+            ...allReg.map(o => ({ amount: o.amount, date: o.createdAt })),
+            ...allVen.map(v => ({ amount: v.payout_amount || v.order_price || 0, date: v.createdAt || v.created_at }))
+        ];
+
+        const summary = {
+            today: { amount: 0, jobs: 0 },
+            thisWeek: { amount: 0, jobs: 0 },
+            thisMonth: { amount: 0, jobs: 0 },
+            total: { amount: 0, jobs: 0 }
+        };
+
+        allCombined.forEach(item => {
+            const d = new Date(item.date);
+            summary.total.amount += item.amount;
+            summary.total.jobs += 1;
+            if (d >= startOfToday) { summary.today.amount += item.amount; summary.today.jobs += 1; }
+            if (d >= startOfWeek) { summary.thisWeek.amount += item.amount; summary.thisWeek.jobs += 1; }
+            if (d >= startOfMonth) { summary.thisMonth.amount += item.amount; summary.thisMonth.jobs += 1; }
+        });
+
+        res.status(STATUS_CODES.SUCCESS || 200).json({
+            success: true,
+            range,
+            filteredSummary,
+            summary,
+            recent: paginatedEarnings,
+            pagination: {
+                currentPage: parseInt(page),
+                limit: parseInt(limit),
+                totalCount,
+                hasMore
+            }
+        });
+
+    } catch (error) {
+        console.error("getEngineerEarnings error:", error);
+        res.status(STATUS_CODES.INTERNAL_SERVER_ERROR || 500).json({
+            success: false,
+            message: error.message
+        });
     }
 };

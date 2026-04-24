@@ -379,11 +379,42 @@ export const updateVendorOrderWorkStatus = async (req, res) => {
     };
     console.log('[UpdateWorkStatus] Querying with:', query);
 
-    const order = await VendorOrder.findOneAndUpdate(
-      query,
-      { work_status: workStatus },
-      { new: true }
-    );
+    const order = await VendorOrder.findOne(query);
+    if (!order) {
+      console.log('❌ Order not found or not assigned to this engineer:', { orderId, engineerId });
+      return res.status(404).json({
+        success: false,
+        message: `Order ${orderId} not found or not assigned to engineer ${engineerId}`
+      });
+    }
+
+    // Geo-fencing verification for STARTED status
+    if (workStatus === "STARTED") {
+      const { latitude, longitude } = req.body;
+      if (!latitude || !longitude) {
+        return res.status(400).json({
+          success: false,
+          message: "Location verification is required to start work."
+        });
+      }
+
+      if (order.location && order.location.coordinates) {
+        const orderLng = order.location.coordinates[0];
+        const orderLat = order.location.coordinates[1];
+        const distance = getDistanceInMeters(latitude, longitude, orderLat, orderLng);
+        console.log(`📏 Backend Vendor Distance Check: ${distance.toFixed(2)}m`);
+        
+        if (distance > 200) {
+          return res.status(400).json({
+            success: false,
+            message: `Location verification failed. You are ${distance.toFixed(0)}m away. Please be within 200m.`
+          });
+        }
+      }
+    }
+
+    order.work_status = workStatus;
+    await order.save();
 
     if (!order) {
       console.log('❌ Order not found or not assigned to this engineer:', { orderId, engineerId });
