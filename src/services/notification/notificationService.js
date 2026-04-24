@@ -100,6 +100,41 @@ export const notifyBookingUpdate = async (userId, orderId, eventType, data = {})
 };
 
 /**
+ * High-level helper for engineer-related updates
+ */
+export const notifyEngineerUpdate = async (engineerId, orderId, eventType, data = {}) => {
+  try {
+    const template = formatTemplate(eventType, data);
+    if (!template) {
+      console.warn(`[NotificationService] No template found for event: ${eventType}`);
+      return { success: false, error: 'Template not found' };
+    }
+
+    // Ensure orderId is in data for deep linking
+    const finalData = { 
+      ...data, 
+      orderId: orderId?.toString(),
+      type: template.type 
+    };
+
+    return await sendPushNotification({
+      targetId: engineerId,
+      targetModel: 'Engineer',
+      payload: {
+        notification: {
+          title: template.title,
+          body: template.body,
+        },
+        data: finalData
+      }
+    });
+  } catch (error) {
+    console.error(`[NotificationService] notifyEngineerUpdate error:`, error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
  * Shorthand for Bulk Engineer notifications
  */
 export const sendPushToMatchedEngineers = (engineerIds, payload) => {

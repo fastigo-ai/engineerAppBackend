@@ -418,15 +418,21 @@ const handlePaymentCaptured = async (payload) => {
       return;
     }
 
+    // Determine new status
+    // If it was already completed (PAS flow), keep it completed but update paymentStatus
+    const isPAS = order.paymentMode === 'Payment After Service';
+    const newStatus = order.status === 'completed' ? 'completed' : 'paid';
+
     // Update order status
     await Order.findByIdAndUpdate(order._id, {
-      status: 'paid',
+      status: newStatus,
+      paymentStatus: 'PAID',
       razorpayPaymentId: paymentEntity.id,
       $push: {
         tracking: {
-          status: 'CONFIRMED',
-          title: 'Booking Confirmed',
-          subTitle: 'Payment received successfully',
+          status: 'PAID',
+          title: 'Payment Successful',
+          subTitle: `Payment of ₹${paymentEntity.amount / 100} received via ${paymentEntity.method}`,
           timestamp: new Date()
         }
       }
@@ -450,30 +456,42 @@ const handlePaymentCaptured = async (payload) => {
     }
 
     await session.commitTransaction();
-    console.log(`Payment captured & order updated: ${paymentEntity.id}`);
+    console.log(`Payment captured and order updated: ${order.orderId}`);
 
-    // Post-transaction side effects
-    await notifyEngineersForOrder(order);
+    // --- SIDE EFFECTS (Post-Transaction) ---
+    
+    // 1. Trigger Dispatch for NEW orders (status was paid, not completed)
+    if (newStatus === 'paid') {
+      dispatchOrder(order._id);
+    }
 
-    // 🔔 Notify User: Payment Received & Order Confirmed
-    if (order.userId) {
-      notifyBookingUpdate(order.userId, order._id, 'PAYMENT_RECEIVED', {
-        amount: order.amount,
+    // 2. NOTIFICATIONS
+    const { notifyBookingUpdate, notifyEngineerUpdate } = await import('../services/notification/notificationService.js');
+    
+    // Notify User
+    notifyBookingUpdate(order.userId, order._id, 'PAYMENT_RECEIVED', {
+      amount: (paymentEntity.amount / 100).toString(),
+      orderId: order.orderId
+    }).catch(err => console.error('User payment notification failed:', err));
+
+    // Notify Assigned Engineer (Crucial for PAS)
+    if (order.assignedEngineer) {
+      notifyEngineerUpdate(order.assignedEngineer, order._id, 'ENGINEER_PAYMENT_RECEIVED', {
+        amount: (paymentEntity.amount / 100).toString(),
         orderId: order.orderId
-      }).catch(err => console.error('[PaymentController] Payment received notification failed:', err));
-
-      notifyBookingUpdate(order.userId, order._id, 'BOOKING_CONFIRMED', {
-        serviceName: order.servicePlan?.name || 'Service'
-      }).catch(err => console.error('[PaymentController] Order confirmed notification failed:', err));
+      }).catch(err => console.error('Engineer payment notification failed:', err));
     }
 
   } catch (error) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     console.error('Handle payment captured error:', error);
   } finally {
     session.endSession();
   }
 };
+
 
 // Handle payment.failed event
 const handlePaymentFailed = async (payload) => {

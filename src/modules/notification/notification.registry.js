@@ -62,6 +62,11 @@ export const NOTIFICATION_TEMPLATES = {
     body: 'Thank you! We have received your payment of ₹{{amount}} for order {{orderId}}.',
     type: 'PAYMENT',
   },
+  ENGINEER_PAYMENT_RECEIVED: {
+    title: 'Payment Confirmed!',
+    body: 'Great news! Customer has paid ₹{{amount}} for order {{orderId}}. You can now mark the job as finished if not already done.',
+    type: 'PAYMENT',
+  },
   REFUND_PROCESSED: {
     title: 'Refund Processed',
     body: 'A refund of ₹{{amount}} has been processed for your order {{orderId}}.',
