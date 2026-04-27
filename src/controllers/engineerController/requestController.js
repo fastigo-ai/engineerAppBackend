@@ -923,13 +923,15 @@ export const updateWorkStatus = async (req, res) => {
             const scheduledTime = order.scheduledTime;
 
             if (work_status === 'In Progress') {
-                if (scheduledTime && now < scheduledTime) {
+                const EARLY_START_BUFFER_MS = 15 * 60 * 1000; // 15 minutes
+                
+                if (scheduledTime && now < (scheduledTime.getTime() - EARLY_START_BUFFER_MS)) {
                     const diffMs = scheduledTime.getTime() - now.getTime();
                     const diffMins = Math.ceil(diffMs / (1000 * 60));
 
                     return res.status(STATUS_CODES.BAD_REQUEST).json({
                         success: false,
-                        message: `Cannot start work yet. Scheduled time is in ${diffMins} minutes.`
+                        message: `Cannot start work yet. Scheduled time is in ${diffMins} minutes. (You can start up to 15 mins early).`
                     });
                 }
 
