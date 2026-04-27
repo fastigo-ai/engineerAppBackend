@@ -364,9 +364,15 @@ const handlePaymentAuthorized = async (payload) => {
   try {
     const paymentEntity = payload.payment.entity;
 
-    const order = await Order.findOne({
+    let order = await Order.findOne({
       razorpayOrderId: paymentEntity.order_id
     });
+
+    // Fallback: If not found by Razorpay Order ID, check notes (e.g. for QR code payments)
+    if (!order && paymentEntity.notes?.orderId) {
+      console.log(`[FCM] Falling back to search by notes.orderId in Authorized: ${paymentEntity.notes.orderId}`);
+      order = await Order.findById(paymentEntity.notes.orderId);
+    }
 
     if (!order) {
       console.error('Order not found for payment authorization');
@@ -408,12 +414,20 @@ const handlePaymentCaptured = async (payload) => {
   try {
     const paymentEntity = payload.payment.entity;
 
-    const order = await Order.findOne({
+    let order = await Order.findOne({
       razorpayOrderId: paymentEntity.order_id
     }).populate('servicePlan servicePlans').session(session);
 
+    // Fallback: If not found by Razorpay Order ID, check notes (e.g. for QR code payments)
+    if (!order && paymentEntity.notes?.orderId) {
+      console.log(`[FCM] Falling back to search by notes.orderId: ${paymentEntity.notes.orderId}`);
+      order = await Order.findById(paymentEntity.notes.orderId)
+        .populate('servicePlan servicePlans')
+        .session(session);
+    }
+
     if (!order) {
-      console.error('Order not found for payment capture');
+      console.error('Order not found for payment capture. Payment ID:', paymentEntity.id);
       await session.abortTransaction();
       return;
     }

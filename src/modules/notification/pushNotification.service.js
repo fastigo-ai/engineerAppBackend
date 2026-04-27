@@ -73,8 +73,11 @@ export async function sendPushNotification(notification) {
     ),
   };
 
+  // Deduplicate tokens to prevent multiple notifications to the same device
+  const uniqueTokens = [...new Set(tokens.map(t => t.fcmToken))];
+
   const message = {
-    tokens: tokens.map(t => t.fcmToken),
+    tokens: uniqueTokens,
     notification: { title: notification.title, body: notification.body },
     data: stringData,
     android: {
@@ -92,9 +95,9 @@ export async function sendPushNotification(notification) {
 
     let response;
 
-    if (tokens.length === 1) {
+    if (uniqueTokens.length === 1) {
       const singleMessage = {
-        token: tokens[0].fcmToken,
+        token: uniqueTokens[0],
         notification: { title: notification.title, body: notification.body },
         data: stringData,
         android: { priority: 'high', notification: { sound: 'default' } },

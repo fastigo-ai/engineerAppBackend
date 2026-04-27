@@ -1,11 +1,11 @@
 import mongoose from "mongoose";
 import { Engineer } from "../../models/engineersModal.js";
 import VendorOrder from "../../models/vendorOrderModal.js";
-import { 
-  checkServiceability, 
-  createAndMatchVendorOrder, 
-  acceptOrderService, 
-  rejectOrderService 
+import {
+  checkServiceability,
+  createAndMatchVendorOrder,
+  acceptOrderService,
+  rejectOrderService
 } from "../../services/vendorRequestService.js";
 import { getDistanceInMeters } from "../../utils/distance.js";
 import { latLngToCell, gridDisk } from "h3-js";
@@ -195,70 +195,91 @@ export const getNearbyVendorOrders = async (req, res) => {
     const engineerId = req.user.id;
     const { latitude, longitude } = req.query;
 
-    if (!latitude || !longitude) {
-      return res.status(400).json({
-        success: false,
-        message: "Latitude and longitude are required"
-      });
-    }
+    /* ── CONFIGURATION ── */
+    const NEARBY_RESOLUTION = 8;
+    const NEARBY_RING_SIZE = 12;        // ~10 km at res 8
+    const NEARBY_RADIUS_METERS = 10000; // 10 km strict cutoff
+    const NEARBY_LIMIT = 20;
 
+    /* ── STEP 0: Input Validation ── */
     const latNum = parseFloat(latitude);
     const lngNum = parseFloat(longitude);
 
-    // 1. Get the H3 cell and neighboring hexagons
-    const centerCell = latLngToCell(latNum, lngNum, H3_RESOLUTION);
-    const searchCells = gridDisk(centerCell, SEARCH_RING_SIZE);
+    if (
+      !latitude || !longitude ||
+      isNaN(latNum) || isNaN(lngNum) ||
+      latNum < -90 || latNum > 90 ||
+      lngNum < -180 || lngNum > 180
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid latitude and longitude are required",
+      });
+    }
 
-    // 2. Find orders
-    const nearbyOrders = await VendorOrder.find({
+    /* ── STEP 1: H3 Search Area ── */
+    const centerCell = latLngToCell(latNum, lngNum, NEARBY_RESOLUTION);
+    const searchCells = gridDisk(centerCell, NEARBY_RING_SIZE);
+
+    /* ── STEP 2: DB Query — no limit here, filter first ── */
+    const candidateOrders = await VendorOrder.find({
       status: "PENDING",
       h3Index: { $in: searchCells },
       assigned_engineer_id: null,
-      rejected_engineers: { $ne: engineerId }
+      rejected_engineers: { $ne: engineerId },
     })
       .sort({ created_at: -1 })
-      .limit(20)
       .lean();
 
-    // 3. Map through orders to add calculated distance to each
-    const ordersWithDistance = nearbyOrders.map(order => {
-      // In MongoDB, coordinates are usually [lng, lat]
-      const orderLng = order.location.coordinates[0];
-      const orderLat = order.location.coordinates[1];
+    /* ── STEP 3: Exact Distance Filter + Map ── */
+    const ordersWithDistance = [];
 
-      const distanceInMeters = getDistanceInMeters(
-        latNum,
-        lngNum,
-        orderLat,
-        orderLng
-      );
+    for (const order of candidateOrders) {
+      const coords = order.location?.coordinates;
+      if (!coords || coords.length < 2) continue;
 
-      // STRICT REDACTION for Nearby (Pending) orders
-      const { complete_address, location, contact_phone, contact_name, l1_support_number, l1_support_name, ...safeOrder } = order;
+      const [orderLng, orderLat] = coords;
+      const distanceInMeters = getDistanceInMeters(latNum, lngNum, orderLat, orderLng);
 
-      return {
+      // Strict radius cutoff — H3 hexagon edges are not perfect circles
+      if (distanceInMeters > NEARBY_RADIUS_METERS) continue;
+
+      // Redact sensitive fields
+      const {
+        complete_address,
+        location,
+        contact_phone,
+        contact_name,
+        l1_support_number,
+        l1_support_name,
+        ...safeOrder
+      } = order;
+
+      ordersWithDistance.push({
         ...safeOrder,
-        distance: (distanceInMeters / 1000).toFixed(2), // Convert to KM with 2 decimals
+        distance: parseFloat((distanceInMeters / 1000).toFixed(2)), // number, not string
         distanceUnit: "km",
         address: "Hidden until acceptance",
         customerName: "Customer",
-        customerPhone: "Hidden"
-      };
-    });
+        customerPhone: "Hidden",
+      });
+    }
 
-    // 4. (Optional) Sort by closest distance after calculation
+    /* ── STEP 4: Sort by closest → then limit ── */
     ordersWithDistance.sort((a, b) => a.distance - b.distance);
+    const finalOrders = ordersWithDistance.slice(0, NEARBY_LIMIT);
 
     return res.status(200).json({
       success: true,
-      count: ordersWithDistance.length,
-      orders: ordersWithDistance,
+      count: finalOrders.length,
+      orders: finalOrders,
     });
+
   } catch (err) {
-    console.error("H3 Nearby Orders Error:", err);
+    console.error("Nearby Orders Error:", err);
     return res.status(500).json({
       success: false,
-      message: "Internal server error"
+      message: "Internal server error",
     });
   }
 };
@@ -312,13 +333,13 @@ export const updateVendorOrderWorkStatus = async (req, res) => {
         const orderLat = order.location.coordinates[1];
         const distance = getDistanceInMeters(latitude, longitude, orderLat, orderLng);
         console.log(`📏 Backend Vendor Distance Check: ${distance.toFixed(2)}m`);
-        
-        if (distance > 200) {
-          return res.status(400).json({
-            success: false,
-            message: `Location verification failed. You are ${distance.toFixed(0)}m away. Please be within 200m.`
-          });
-        }
+
+      if (distance > 300) {
+        return res.status(400).json({
+          success: false,
+          message: `Location verification failed. You are ${distance.toFixed(0)}m away. Please be within 300m.`
+        });
+      }
       }
     }
 
@@ -486,8 +507,8 @@ export const getAcceptedVendorOrders = async (req, res) => {
 
     const mappedOrders = orders.map(order => {
       const showPhone = order.status === 'ACCEPTED' || order.work_status === 'STARTED' || order.work_status === 'IN_PROGRESS' || order.status === 'COMPLETED';
-      return { 
-        ...order, 
+      return {
+        ...order,
         isVendorOrder: true,
         contact_phone: order.contact_phone || "N/A",
         l1_support_number: order.l1_support_number || "N/A"
@@ -562,8 +583,8 @@ export const getCompletedVendorOrders = async (req, res) => {
 
     const mappedOrders = orders.map(order => {
       const showPhone = order.status === 'ACCEPTED' || order.work_status === 'STARTED' || order.work_status === 'IN_PROGRESS' || order.status === 'COMPLETED';
-      return { 
-        ...order, 
+      return {
+        ...order,
         isVendorOrder: true,
         contact_phone: order.contact_phone || "N/A",
         l1_support_number: order.l1_support_number || "N/A"
@@ -583,5 +604,80 @@ export const getCompletedVendorOrders = async (req, res) => {
     return res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
+
+
+
+// export const getNearbyVendorOrders = async (req, res) => {
+//   try {
+//     const engineerId = req.user.id;
+//     const { latitude, longitude } = req.query;
+
+//     if (!latitude || !longitude) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Latitude and longitude are required"
+//       });
+//     }
+
+//     const latNum = parseFloat(latitude);
+//     const lngNum = parseFloat(longitude);
+
+//     // 1. Get the H3 cell and neighboring hexagons
+//     const centerCell = latLngToCell(latNum, lngNum, H3_RESOLUTION);
+//     const searchCells = gridDisk(centerCell, SEARCH_RING_SIZE);
+
+//     // 2. Find orders
+//     const nearbyOrders = await VendorOrder.find({
+//       status: "PENDING",
+//       h3Index: { $in: searchCells },
+//       assigned_engineer_id: null,
+//       rejected_engineers: { $ne: engineerId }
+//     })
+//       .sort({ created_at: -1 })
+//       .limit(20)
+//       .lean();
+
+//     // 3. Map through orders to add calculated distance to each
+//     const ordersWithDistance = nearbyOrders.map(order => {
+//       // In MongoDB, coordinates are usually [lng, lat]
+//       const orderLng = order.location.coordinates[0];
+//       const orderLat = order.location.coordinates[1];
+
+//       const distanceInMeters = getDistanceInMeters(
+//         latNum,
+//         lngNum,
+//         orderLat,
+//         orderLng
+//       );
+
+//       // STRICT REDACTION for Nearby (Pending) orders
+//       const { complete_address, location, contact_phone, contact_name, l1_support_number, l1_support_name, ...safeOrder } = order;
+
+//       return {
+//         ...safeOrder,
+//         distance: (distanceInMeters / 1000).toFixed(2), // Convert to KM with 2 decimals
+//         distanceUnit: "km",
+//         address: "Hidden until acceptance",
+//         customerName: "Customer",
+//         customerPhone: "Hidden"
+//       };
+//     });
+
+//     // 4. (Optional) Sort by closest distance after calculation
+//     ordersWithDistance.sort((a, b) => a.distance - b.distance);
+
+//     return res.status(200).json({
+//       success: true,
+//       count: ordersWithDistance.length,
+//       orders: ordersWithDistance,
+//     });
+//   } catch (err) {
+//     console.error("H3 Nearby Orders Error:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Internal server error"
+//     });
+//   }
+// };
 
 
