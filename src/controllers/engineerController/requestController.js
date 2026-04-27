@@ -399,20 +399,20 @@ export const rejectRequest = async (req, res) => {
             const rejectedByStrings = order.rejectedBy.map(id => id.toString());
             if (!rejectedByStrings.includes(engineerIdString)) {
                 order.rejectedBy.push(engineerId);
-                console.log('✅ Engineer removed from acceptedBy/assignedEngineer and added to rejectedBy');
+                console.log('Engineer removed from acceptedBy/assignedEngineer and added to rejectedBy');
             } else {
-                console.log('✅ Engineer removed from acceptedBy/assignedEngineer (already in rejectedBy)');
+                console.log('Engineer removed from acceptedBy/assignedEngineer (already in rejectedBy)');
             }
         } else if (order.acceptedBy || order.assignedEngineer) {
             // Order is assigned to a different engineer
-            console.log('❌ Order already assigned to another engineer');
+            console.log(' Order already assigned to another engineer');
             return res.status(STATUS_CODES.BAD_REQUEST).json({
                 success: false,
                 message: 'Order already accepted by another engineer. Cannot reject.'
             });
         } else {
             // Order is not assigned to anyone, normal rejection
-            console.log('📝 Processing normal REJECTION...');
+            console.log(' Processing normal REJECTION...');
 
             // Convert ObjectIds to strings for comparison
             const rejectedByStrings = order.rejectedBy.map(id => id.toString());
@@ -423,9 +423,9 @@ export const rejectRequest = async (req, res) => {
             // Add to rejectedBy array if not already present
             if (!rejectedByStrings.includes(engineerIdString)) {
                 order.rejectedBy.push(engineerId);
-                console.log('✅ Engineer added to rejectedBy array');
+                console.log('Engineer added to rejectedBy array');
             } else {
-                console.log('ℹ️ Engineer already in rejectedBy array');
+                console.log(' Engineer already in rejectedBy array');
                 return res.status(STATUS_CODES.SUCCESS).json({
                     success: true,
                     message: 'Order already rejected by you',
@@ -435,14 +435,14 @@ export const rejectRequest = async (req, res) => {
         }
 
         // Keep orderStatus as 'Upcoming' so other engineers can still accept it
-        console.log(`✅ Engineer ${engineerId} rejected order ${id}`);
+        console.log(` Engineer ${engineerId} rejected order ${id}`);
 
-        console.log('💾 Saving order...');
+        console.log(' Saving order...');
         await order.save();
         if (typeof shouldReDispatch !== 'undefined' && shouldReDispatch) {
             await notifyEngineersForOrder(order, { forceDispatch: true });
 
-            // 🔔 Notify User: Partner is being reassigned
+            //  Notify User: Partner is being reassigned
             if (order.userId) {
                 notifyBookingUpdate(order.userId, order._id, 'ENGINEER_DECLINED_REASSIGNING', {
                     serviceName: order.servicePlan?.name || 'Service'
@@ -450,22 +450,22 @@ export const rejectRequest = async (req, res) => {
             }
         }
 
-        console.log('✅ Order saved successfully');
+        console.log(' Order saved successfully');
 
-        console.log('🔍 Fetching updated order with populated fields...');
+        console.log(' Fetching updated order with populated fields...');
         const updatedOrder = await Order.findById(id)
             .populate('userId', 'name mobile address')
             .populate('servicePlan', 'name');
-        console.log('✅ Updated order fetched');
+        console.log(' Updated order fetched');
 
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
             message: 'Order rejected successfully',
             data: updatedOrder
         });
-        console.log('✅ Response sent successfully');
+        console.log(' Response sent successfully');
     } catch (error) {
-        console.error('❌ ERROR in rejectRequest:', error);
+        console.error(' ERROR in rejectRequest:', error);
         console.error('Error name:', error.name);
         console.error('Error message:', error.message);
         console.error('Error stack:', error.stack);
@@ -492,21 +492,21 @@ export const completeRequest = async (req, res) => {
         const order = await Order.findById(id);
 
         if (!order) {
-            console.log('❌ Order not found:', id);
+            console.log(' Order not found:', id);
             return res.status(STATUS_CODES.NOT_FOUND).json({
                 success: false,
                 message: 'Order not found'
             });
         }
-        console.log('✅ Order found:', order._id);
+        console.log(' Order found:', order._id);
         console.log('Order assignedEngineer:', order.assignedEngineer);
         console.log('Order work_status:', order.work_status);
 
-        console.log('📝 Processing COMPLETION...');
+        console.log(' Processing COMPLETION...');
 
         // Verify that the logged-in engineer is assigned to this order
         if (!order.assignedEngineer || order.assignedEngineer.toString() !== engineerId.toString()) {
-            console.log('❌ Engineer not assigned to this order');
+            console.log(' Engineer not assigned to this order');
             return res.status(STATUS_CODES.FORBIDDEN).json({
                 success: false,
                 message: 'You are not assigned to this order.'
@@ -535,19 +535,19 @@ export const completeRequest = async (req, res) => {
         order.status = 'paid'; // or 'completed' if that enum exists
         order.orderStatus = 'Completed';
         order.work_status = 'Completed';
-        console.log('✅ Order fields updated for completion');
+        console.log(' Order fields updated for completion');
 
-        console.log('💾 Saving order...');
+        console.log(' Saving order...');
         await order.save();
-        console.log('✅ Order saved successfully');
+        console.log(' Order saved successfully');
 
-        console.log('🔍 Fetching updated order with populated fields...');
+        console.log(' Fetching updated order with populated fields...');
         const updatedOrder = await Order.findById(id)
             .populate('userId', 'name mobile address')
             .populate('servicePlan', 'name')
             .populate('assignedEngineer', 'name mobile email')
             .populate('acceptedBy', 'name mobile email');
-        console.log('✅ Updated order fetched');
+        console.log(' Updated order fetched');
 
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
@@ -555,14 +555,14 @@ export const completeRequest = async (req, res) => {
             data: updatedOrder
         });
 
-        // 🔔 Notify User: Job Completed
+        //  Notify User: Job Completed
         if (updatedOrder.userId) {
             notifyBookingUpdate(updatedOrder.userId, updatedOrder._id, 'JOB_COMPLETED', {
                 serviceName: updatedOrder.servicePlan?.name || 'Service'
             }).catch(err => console.error('[RequestController] Completion notification failed:', err));
         }
 
-        console.log('✅ Response sent successfully');
+        console.log(' Response sent successfully');  
     } catch (error) {
         console.error('❌ ERROR in completeRequest:', error);
         console.error('Error name:', error.name);
