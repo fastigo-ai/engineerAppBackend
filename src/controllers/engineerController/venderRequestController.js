@@ -1,12 +1,18 @@
 import mongoose from "mongoose";
 import { Engineer } from "../../models/engineersModal.js";
 import VendorOrder from "../../models/vendorOrderModal.js";
-import { createAndMatchVendorOrder, acceptOrderService, rejectOrderService } from "../../services/vendorRequestService.js";
+import { 
+  checkServiceability, 
+  createAndMatchVendorOrder, 
+  acceptOrderService, 
+  rejectOrderService 
+} from "../../services/vendorRequestService.js";
 import { getDistanceInMeters } from "../../utils/distance.js";
 import { latLngToCell, gridDisk } from "h3-js";
 import { getIO } from "../../config/socket.js";
 import { uploadToCloudinary } from "../../utils/uploadToCloudinary.js";
 import axios from 'axios';
+
 const H3_RESOLUTION = 8;
 const SEARCH_RING_SIZE = 30;
 
@@ -17,109 +23,12 @@ export const servicableLocation = async (req, res) => {
     if (!Array.isArray(calls) || calls.length === 0) {
       return res.status(400).json({
         success: false,
-        message: "Calls array is required and cannot be empty",
+        message: "calls must be a non-empty array.",
       });
     }
 
-    const SERVICE_RADIUS = 20000;
-    const H3_RESOLUTION = 8;
-    const RING_SIZE = 22;
+    const { serviceable, non_serviceable } = await checkServiceability({ projectId, calls });
 
-    const callMap = new Map();
-    const allRequiredCells = new Set();
-
-    /* ----------------------------------------------------
-       STEP 1: PREPARE H3 SEARCH AREAS
-    ---------------------------------------------------- */
-    for (const call of calls) {
-      const { call_id, lat, lng } = call;
-
-      if (typeof lat !== "number" || typeof lng !== "number") continue;
-
-      try {
-        const centerCell = latLngToCell(lat, lng, H3_RESOLUTION);
-        const lookupCells = gridDisk(centerCell, RING_SIZE);
-
-        callMap.set(call_id, { lat, lng, lookupCells });
-
-        for (const cell of lookupCells) {
-          allRequiredCells.add(cell);
-        }
-      } catch (err) {
-        console.error(`H3 error for call ${call_id}`, err);
-      }
-    }
-
-    /* ----------------------------------------------------
-       STEP 2: SINGLE FAST DB QUERY
-    ---------------------------------------------------- */
-    const availableEngineers = await Engineer.find({
-      isActive: true,
-      isAvailable: true,
-      isDeleted: false,
-      isBlocked: false,
-      isSuspended: false,
-      h3Index: { $in: Array.from(allRequiredCells) }
-    }).select("h3Index location").lean();
-
-    /* ----------------------------------------------------
-       STEP 3: GROUP ENGINEERS BY H3 CELL
-    ---------------------------------------------------- */
-    const cellToEngineers = new Map();
-
-    for (const eng of availableEngineers) {
-      if (!cellToEngineers.has(eng.h3Index)) {
-        cellToEngineers.set(eng.h3Index, []);
-      }
-      cellToEngineers.get(eng.h3Index).push(eng);
-    }
-
-    /* ----------------------------------------------------
-       STEP 4: FINAL SERVICEABILITY CHECK (EXACT DISTANCE)
-    ---------------------------------------------------- */
-    const serviceable = [];
-    const non_serviceable = [];
-
-    for (const call of calls) {
-      const data = callMap.get(call.call_id);
-
-      if (!data) {
-        non_serviceable.push({ call_id: call.call_id, reason: "Invalid coordinates" });
-        continue;
-      }
-
-      const { lat, lng, lookupCells } = data;
-      let found = false;
-
-      // Only check engineers inside candidate cells
-      for (const cell of lookupCells) {
-        const engineersInCell = cellToEngineers.get(cell);
-        if (!engineersInCell) continue;
-
-        for (const eng of engineersInCell) {
-          const [engLng, engLat] = eng.location.coordinates;
-
-          const distance = getDistanceInMeters(lat, lng, engLat, engLng);
-
-          if (distance <= SERVICE_RADIUS) {
-            found = true;
-            break;
-          }
-        }
-
-        if (found) break;
-      }
-
-      if (found) {
-        serviceable.push({ call_id: call.call_id });
-      } else {
-        non_serviceable.push({ call_id: call.call_id });
-      }
-    }
-
-    /* ----------------------------------------------------
-       STEP 5: RESPONSE
-    ---------------------------------------------------- */
     return res.status(200).json({
       success: true,
       projectId,
@@ -133,7 +42,7 @@ export const servicableLocation = async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Bulk Serviceability Error:", err);
+    console.error("Bulk Serviceability Controller Error:", err);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
