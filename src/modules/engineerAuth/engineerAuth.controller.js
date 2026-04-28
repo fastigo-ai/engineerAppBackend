@@ -19,7 +19,9 @@ export const sendOTP = async (req, res) => {
       return res.status(400).json({ success: false, error: "Invalid phone number format. Use E.164 format (e.g., +911234567890)" });
     }
 
-    const engineer = await Engineer.findOne({ mobile });
+    // Normalize to 10 digits for DB lookup
+    const mobileForDb = mobile.length > 10 ? mobile.slice(-10) : mobile;
+    const engineer = await Engineer.findOne({ mobile: mobileForDb });
 
     if (!engineer) {
       return res.status(404).json({ success: false, error: "Engineer not found or not registered" });
@@ -52,7 +54,9 @@ export const verifyOTP = async (req, res) => {
       return res.status(400).json({ success: false, error: "Mobile number and OTP are required" });
     }
 
-    const engineer = await Engineer.findOne({ mobile });
+    // Normalize to 10 digits for DB lookup
+    const mobileForDb = mobile.length > 10 ? mobile.slice(-10) : mobile;
+    const engineer = await Engineer.findOne({ mobile: mobileForDb });
 
     if (!engineer) {
       return res.status(404).json({ success: false, error: "Engineer not found" });
@@ -109,8 +113,11 @@ export const register = async (req, res) => {
       });
     }
 
+    // Normalize to 10 digits for DB lookup
+    const mobileForDb = mobile.length > 10 ? mobile.slice(-10) : mobile;
+
     // Check if engineer already exists
-    const existingEngineer = await Engineer.findOne({ mobile });
+    const existingEngineer = await Engineer.findOne({ mobile: mobileForDb });
     if (existingEngineer) {
       return res.status(400).json({
         success: false,
@@ -119,9 +126,9 @@ export const register = async (req, res) => {
     }
 
     const engineer = new Engineer({
-      name: name || `Engineer ${mobile.slice(-4)}`,
-      mobile,
-      email: email || `${mobile}@temp.com`,
+      name: name || `Engineer ${mobileForDb.slice(-4)}`,
+      mobile: mobileForDb,
+      email: email || `${mobileForDb}@temp.com`,
       skills: skills || [],
       address: address || '',
       isActive: true,

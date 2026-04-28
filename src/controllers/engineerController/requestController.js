@@ -151,42 +151,42 @@ export const getNearbyRequests = async (req, res) => {
             vendorRequests = await vendorOrderModal.aggregate([
                 {
                     $geoNear: {
-                    near: { type: 'Point', coordinates: coordinates },
-                    distanceField: 'distance',
-                    maxDistance: parseInt(maxDistance),
-                    query: {
-                        status: 'PENDING',
-                        assigned_engineer_id: null,
-                        rejected_engineers: { $ne: new mongoose.Types.ObjectId(engineerId) }
-                    },
-                    spherical: true
+                        near: { type: 'Point', coordinates: coordinates },
+                        distanceField: 'distance',
+                        maxDistance: parseInt(maxDistance),
+                        query: {
+                            status: 'PENDING',
+                            assigned_engineer_id: null,
+                            rejected_engineers: { $ne: new mongoose.Types.ObjectId(engineerId) }
+                        },
+                        spherical: true
+                    }
+                },
+                {
+                    $project: {
+                        _id: 1,
+                        customerDetails: {
+                            name: "Customer",
+                            phone: "Hidden",
+                            email: "Hidden"
+                        },
+                        servicePlan: { name: "$support_type" },
+                        amount: "$order_price",
+                        orderStatus: "Upcoming",
+                        work_status: "$work_status",
+                        location: { type: "Point", coordinates: [0, 0] }, // Mask coordinates
+                        createdAt: "$created_at",
+                        updatedAt: "$updated_at",
+                        address: "Hidden until acceptance",
+                        pincode: "Hidden",
+                        notes: {
+                            orderId: "$call_id",
+                            serviceCount: "$assets_count"
+                        },
+                        isVendorOrder: { $literal: true }
+                    }
                 }
-            },
-            {
-                $project: {
-                    _id: 1,
-                    customerDetails: {
-                        name: "Customer",
-                        phone: "Hidden",
-                        email: "Hidden"
-                    },
-                    servicePlan: { name: "$support_type" },
-                    amount: "$order_price",
-                    orderStatus: "Upcoming",
-                    work_status: "$work_status",
-                    location: { type: "Point", coordinates: [0, 0] }, // Mask coordinates
-                    createdAt: "$created_at",
-                    updatedAt: "$updated_at",
-                    address: "Hidden until acceptance",
-                    pincode: "Hidden",
-                    notes: {
-                        orderId: "$call_id",
-                        serviceCount: "$assets_count"
-                    },
-                    isVendorOrder: { $literal: true }
-                }
-            }
-        ]);
+            ]);
         }
 
         const mappedRequests = requests.map(order => {
@@ -196,10 +196,10 @@ export const getNearbyRequests = async (req, res) => {
                 const d = getDistanceInMeters(coordinates[1], coordinates[0], orderCoords[1], orderCoords[0]);
                 distance = (d / 1000).toFixed(2);
             }
-            
+
             // Strictly redact for unaccepted nearby requests
-            return { 
-                ...order, 
+            return {
+                ...order,
                 distance,
                 address: "Hidden until acceptance",
                 addressText: "Hidden until acceptance",
@@ -261,22 +261,22 @@ export const acceptRequest = async (req, res) => {
         // We use findOneAndUpdate with a filter that ensures the order is NOT already accepted.
         // This prevents race conditions where two engineers click 'Accept' simultaneously.
         const otp = Math.floor(1000 + Math.random() * 9000).toString();
-        
+
         const order = await Order.findOneAndUpdate(
             {
                 _id: id,
                 $and: [
-                    { 
+                    {
                         $or: [
                             { acceptedBy: null },
                             { acceptedBy: { $exists: false } }
-                        ] 
+                        ]
                     },
-                    { 
+                    {
                         $or: [
                             { assignedEngineer: null },
                             { assignedEngineer: { $exists: false } }
-                        ] 
+                        ]
                     }
                 ]
             },
@@ -562,7 +562,7 @@ export const completeRequest = async (req, res) => {
             }).catch(err => console.error('[RequestController] Completion notification failed:', err));
         }
 
-        console.log(' Response sent successfully');  
+        console.log(' Response sent successfully');
     } catch (error) {
         console.error('❌ ERROR in completeRequest:', error);
         console.error('Error name:', error.name);
@@ -715,7 +715,7 @@ export const updateRequestStatus = async (req, res) => {
                         isAlreadyTaken: true
                     });
                 }
-                
+
                 order.acceptedBy = atomicOrder.acceptedBy;
                 order.assignedEngineer = atomicOrder.assignedEngineer;
                 console.log('✅ Atomic acceptance successful');
@@ -820,7 +820,7 @@ export const getAcceptedRequests = async (req, res) => {
                     email: order.userId?.email || "N/A"
                 },
                 // Optionally mask userId to prevent direct access
-                userId: undefined 
+                userId: undefined
             };
         });
 
@@ -924,7 +924,7 @@ export const updateWorkStatus = async (req, res) => {
 
             if (work_status === 'In Progress') {
                 const EARLY_START_BUFFER_MS = 15 * 60 * 1000; // 15 minutes
-                
+
                 if (scheduledTime && now < (scheduledTime.getTime() - EARLY_START_BUFFER_MS)) {
                     const diffMs = scheduledTime.getTime() - now.getTime();
                     const diffMins = Math.ceil(diffMs / (1000 * 60));
@@ -962,7 +962,7 @@ export const updateWorkStatus = async (req, res) => {
             }
 
             order.work_status = work_status;
-            
+
             // Add tracking event
             let trackingTitle = '';
             let trackingStatus = '';
@@ -1036,7 +1036,7 @@ export const updateWorkStatus = async (req, res) => {
 
         // 2. Try updating Vendor Order
         const vendorWorkStatus = work_status === 'In Progress' ? 'STARTED' : (work_status === 'Completed' ? 'COMPLETED' : work_status.toUpperCase());
-        
+
         let trackingTitle = '';
         let trackingStatus = '';
         let trackingSub = '';
@@ -1374,7 +1374,7 @@ export const getEngineerEarnings = async (req, res) => {
         const engineerId = req.user.id;
         const { range = 'all', page = 1, limit = 10 } = req.query;
         const skip = (parseInt(page) - 1) * parseInt(limit);
-        
+
         const now = new Date();
         let startDate;
 
@@ -1389,7 +1389,7 @@ export const getEngineerEarnings = async (req, res) => {
         } else {
             startDate = new Date(0); // All time
         }
-        
+
         // 1. Fetch Orders (Regular and Vendor)
         const regularQuery = {
             assignedEngineer: engineerId,
@@ -1443,7 +1443,7 @@ export const getEngineerEarnings = async (req, res) => {
 
         // 5. Also calculate overall summary for the top cards (always)
         const startOfToday = new Date();
-        startOfToday.setHours(0,0,0,0);
+        startOfToday.setHours(0, 0, 0, 0);
         const startOfWeek = new Date();
         startOfWeek.setDate(startOfToday.getDate() - startOfToday.getDay());
         const startOfMonth = new Date(startOfToday.getFullYear(), startOfToday.getMonth(), 1);

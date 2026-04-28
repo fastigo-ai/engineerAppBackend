@@ -1,6 +1,7 @@
 import { Order } from "../models/orderSchema.js";
 import VendorOrder from "../models/vendorOrderModal.js";
 import { gridDisk } from "h3-js";
+import { getDistanceInMeters } from "../utils/distance.js";
 
 const USER_RADIUS_RINGS = 12; // ~10km
 const VENDOR_RADIUS_RINGS = 30; // ~25km
@@ -10,6 +11,11 @@ export const getNearbyOrdersService = async ({ engineer, type = "all" }) => {
   if (!engineer.h3Index) {
     throw new Error("Engineer location not available");
   }
+
+  // Extract engineer coordinates for distance calculation
+  const engCoords = engineer.location?.coordinates;
+  const engLat = engCoords ? engCoords[1] : null;
+  const engLon = engCoords ? engCoords[0] : null;
 
   // Aggregate all orders within separate radii
   const allRegularOrders = [];
@@ -64,11 +70,19 @@ export const getNearbyOrdersService = async ({ engineer, type = "all" }) => {
 
   // 3. Mark types, unify address, and STRICTLY REDACT sensitive info
   const mappedRegular = allRegularOrders.map(o => {
+    // Calculate distance if coordinates available
+    let distance = "TBD";
+    if (engLat && engLon && o.location?.coordinates) {
+        const d = getDistanceInMeters(engLat, engLon, o.location.coordinates[1], o.location.coordinates[0]);
+        distance = (d / 1000).toFixed(2);
+    }
+
     // Completely remove sensitive keys from the spread
     const { addressText, location, customerDetails, ...safeOrder } = o;
     return { 
       ...safeOrder, 
       isVendorOrder: false,
+      distance,
       address: "Hidden until acceptance",
       customerName: "Customer",
       customerPhone: "Hidden",
@@ -83,10 +97,18 @@ export const getNearbyOrdersService = async ({ engineer, type = "all" }) => {
   });
 
   const mappedVendor = allVendorOrders.map(o => {
+    // Calculate distance if coordinates available
+    let distance = "TBD";
+    if (engLat && engLon && o.location?.coordinates) {
+        const d = getDistanceInMeters(engLat, engLon, o.location.coordinates[1], o.location.coordinates[0]);
+        distance = (d / 1000).toFixed(2);
+    }
+
     const { complete_address, location, contact_phone, contact_name, ...safeOrder } = o;
     return { 
       ...safeOrder, 
       isVendorOrder: true,
+      distance,
       address: "Hidden until acceptance",
       customerName: "Customer",
       customerPhone: "Hidden"

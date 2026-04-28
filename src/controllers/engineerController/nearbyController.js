@@ -13,7 +13,7 @@ export const getNearbyOrdersController = async (req, res) => {
 
     // 1. Fetch engineer profile to check status and H3 index
     const engineer = await Engineer.findById(engineerId)
-      .select("h3Index status name")
+      .select("h3Index status name location")
       .lean();
 
     if (!engineer) {
