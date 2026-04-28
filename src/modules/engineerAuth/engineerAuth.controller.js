@@ -21,15 +21,37 @@ export const sendOTP = async (req, res) => {
 
     // Normalize to 10 digits for DB lookup
     const mobileForDb = mobile.length > 10 ? mobile.slice(-10) : mobile;
-    const engineer = await Engineer.findOne({ mobile: mobileForDb });
+    let engineer = await Engineer.findOne({ mobile: mobileForDb });
 
     if (!engineer) {
-      return res.status(404).json({ success: false, error: "Engineer not found or not registered" });
+      // Check if it's a test number to auto-register for reviewers
+      const testNumbers = process.env.TEST_PHONE_NUMBERS ? process.env.TEST_PHONE_NUMBERS.split(',') : [];
+      if (testNumbers.some(num => mobile.includes(num.trim()))) {
+        console.log(`[Auth] Auto-registering test account: ${mobile}`);
+        engineer = new Engineer({
+          name: "Test Engineer",
+          mobile: mobileForDb,
+          email: `${mobileForDb}@test.com`,
+          isActive: true,
+          isAvailable: true,
+          skills: ["Test Service"]
+        });
+        await engineer.save();
+      } else {
+        return res.status(404).json({ success: false, error: "Engineer not found or not registered" });
+      }
     }
 
     if (engineer.isBlocked) return res.status(403).json({ success: false, error: "Your account has been blocked. Please contact support." });
     if (engineer.isSuspended) return res.status(403).json({ success: false, error: "Your account has been suspended. Please contact support." });
     if (engineer.isDeleted) return res.status(403).json({ success: false, error: "Your account has been deleted. Please contact support." });
+    
+    // Force active for test numbers
+    const testNumbers = process.env.TEST_PHONE_NUMBERS ? process.env.TEST_PHONE_NUMBERS.split(',') : [];
+    if (testNumbers.some(num => mobile.includes(num.trim()))) {
+      engineer.isActive = true;
+    }
+
     if (!engineer.isActive) return res.status(403).json({ success: false, error: "Your account is inactive. Please contact support." });
 
     const result = await engineerAuthService.sendOtp(mobile);
