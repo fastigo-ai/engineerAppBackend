@@ -183,7 +183,9 @@ export const getNearbyRequests = async (req, res) => {
                             orderId: "$call_id",
                             serviceCount: "$assets_count"
                         },
-                        isVendorOrder: { $literal: true }
+                        isVendorOrder: { $literal: true },
+                        l1_support_name: "$l1_support_name",
+                        l1_support_number: "$l1_support_number"
                     }
                 }
             ]);

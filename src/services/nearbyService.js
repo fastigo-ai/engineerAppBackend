@@ -58,7 +58,7 @@ export const getNearbyOrdersService = async ({ engineer, type = "all" }) => {
       assigned_engineer_id: null,
       rejected_engineers: { $ne: engineer._id }
     })
-      .select("call_id location order_price support_type branch_name complete_address created_at payment_status payout_amount description sop")
+      .select("call_id location order_price support_type branch_name complete_address created_at payment_status payout_amount description sop l1_support_name l1_support_number")
       .sort({ created_at: -1 })
       .limit(MAX_ORDERS)
       .lean();
@@ -66,7 +66,7 @@ export const getNearbyOrdersService = async ({ engineer, type = "all" }) => {
     allVendorOrders.push(...vendorOrders);
   }
 
-  console.log(`🔍 Nearby Search: Found ${allRegularOrders.length} user orders (10km), ${allVendorOrders.length} vendor orders (25km)`);
+  console.log(` Nearby Search: Found ${allRegularOrders.length} user orders (10km), ${allVendorOrders.length} vendor orders (25km)`);
 
   // 3. Mark types, unify address, and STRICTLY REDACT sensitive info
   const mappedRegular = allRegularOrders.map(o => {

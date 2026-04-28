@@ -31,6 +31,8 @@ export const mapOrderToNotificationData = (order) => {
       location:    order.location,
       description: order.description,
       sop:         order.sop,
+      l1_support_name: order.l1_support_name,
+      l1_support_number: order.l1_support_number,
     };
   } else {
     // CRITICAL: If bookingDetails.services is missing or empty, populate it from servicePlans array
@@ -100,6 +102,8 @@ export const notifyMatchedEngineers = async (engineers, order) => {
           location:     orderData.location,
           description:  orderData.description,
           sop:          orderData.sop,
+          l1_support_name: orderData.l1_support_name,
+          l1_support_number: orderData.l1_support_number,
         }
       : {
           order_id:      orderId,
