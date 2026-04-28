@@ -2,119 +2,98 @@ import { Engineer } from "../../models/engineersModal.js";
 import { BankAccount } from "../../models/BankAccount.js";
 import * as payoutService from "../../services/payoutService.js";
 import jwt from "jsonwebtoken";
-import { syncDeviceToken } from "../../modules/notification/notification.service.js";
+import { syncDeviceToken } from "../notification/notification.service.js";
+import { engineerAuthService } from "./engineerAuth.service.js";
 
-export const login = async (req, res) => {
+export const sendOTP = async (req, res) => {
   try {
     const { mobile } = req.body;
 
-    // Validate mobile number
     if (!mobile) {
-      return res.status(400).json({
-        success: false,
-        error: "Mobile number is required"
-      });
+      return res.status(400).json({ success: false, error: "Mobile number is required" });
     }
 
-    // Find engineer by mobile number
+    // Basic format validation
+    const phoneRegex = /^\+?[1-9]\d{1,14}$/;
+    if (!phoneRegex.test(mobile)) {
+      return res.status(400).json({ success: false, error: "Invalid phone number format. Use E.164 format (e.g., +911234567890)" });
+    }
+
     const engineer = await Engineer.findOne({ mobile });
 
-    // If engineer doesn't exist, return 404 error
     if (!engineer) {
-      return res.status(404).json({
-        success: false,
-        error: "User not found or not registered"
-      });
+      return res.status(404).json({ success: false, error: "Engineer not found or not registered" });
     }
 
-    // Check if engineer is blocked or suspended
-    if (engineer.isBlocked) {
-      return res.status(403).json({
-        success: false,
-        error: "Your account has been blocked. Please contact support."
-      });
-    }
+    if (engineer.isBlocked) return res.status(403).json({ success: false, error: "Your account has been blocked. Please contact support." });
+    if (engineer.isSuspended) return res.status(403).json({ success: false, error: "Your account has been suspended. Please contact support." });
+    if (engineer.isDeleted) return res.status(403).json({ success: false, error: "Your account has been deleted. Please contact support." });
+    if (!engineer.isActive) return res.status(403).json({ success: false, error: "Your account is inactive. Please contact support." });
 
-    if (engineer.isSuspended) {
-      return res.status(403).json({
-        success: false,
-        error: "Your account has been suspended. Please contact support."
-      });
-    }
-
-    if (engineer.isDeleted) {
-      return res.status(403).json({
-        success: false,
-        error: "Your account has been deleted. Please contact support."
-      });
-    }
-
-    if (!engineer.isActive) {
-      return res.status(403).json({
-        success: false,
-        error: "Your account is inactive. Please contact support."
-      });
-    }
-
-    // Generate JWT token
-    const token = jwt.sign(
-      {
-        userId: engineer._id,
-        id: engineer._id,
-        role: 'engineer',
-        userType: 'engineer'
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    // Prepare engineer details
-    const engineerDetails = {
-      id: engineer._id,
-      name: engineer.name,
-      mobile: engineer.mobile,
-      email: engineer.email,
-      address: engineer.address,
-      skills: engineer.skills,
-      isAvailable: engineer.isAvailable,
-      isActive: engineer.isActive,
-      isDeleted: engineer.isDeleted,
-      isBlocked: engineer.isBlocked,
-      isSuspended: engineer.isSuspended,
-      assignedOrders: engineer.assignedOrders,
-      location: engineer.location,
-      rating: engineer.rating,
-      totalJobs: engineer.totalJobs,
-      completedJobs: engineer.completedJobs,
-      createdAt: engineer.createdAt,
-      updatedAt: engineer.updatedAt
-    };
-
-    // Sync FCM Token if provided in request
-    const { fcmToken, deviceId, platform, appVersion } = req.body;
-    if (fcmToken) {
-      await syncDeviceToken({
-        userId: engineer._id,
-        userModel: 'Engineer',
-        fcmToken,
-        deviceId,
-        platform,
-        appVersion
-      }).catch(err => console.error('[EngineerLogin] FCM Sync failed:', err));
-    }
-
-    res.json({
+    const result = await engineerAuthService.sendOtp(mobile);
+    return res.json({
       success: true,
-      token,
-      engineer: engineerDetails,
-      message: "Login successful"
+      message: result.message,
+      mobile,
+      status: result.status,
+      expiresIn: "10 minutes"
     });
   } catch (err) {
-    console.error('Engineer login error:', err);
-    res.status(500).json({
-      success: false,
-      error: err.message
-    });
+    console.error('Engineer Send OTP error:', err);
+    res.status(500).json({ success: false, error: "Failed to send OTP", details: err.message });
+  }
+};
+
+export const verifyOTP = async (req, res) => {
+  try {
+    const { mobile, otp } = req.body;
+
+    if (!mobile || !otp) {
+      return res.status(400).json({ success: false, error: "Mobile number and OTP are required" });
+    }
+
+    const engineer = await Engineer.findOne({ mobile });
+
+    if (!engineer) {
+      return res.status(404).json({ success: false, error: "Engineer not found" });
+    }
+
+    const result = await engineerAuthService.verifyOtp(mobile, otp);
+
+    if (result.success) {
+      const token = jwt.sign(
+        { userId: engineer._id, id: engineer._id, role: 'engineer', userType: 'engineer' },
+        process.env.JWT_SECRET,
+        { expiresIn: "7d" }
+      );
+
+      const engineerDetails = {
+        id: engineer._id, name: engineer.name, mobile: engineer.mobile, email: engineer.email,
+        address: engineer.address, skills: engineer.skills, isAvailable: engineer.isAvailable,
+        isActive: engineer.isActive, location: engineer.location, rating: engineer.rating,
+        totalJobs: engineer.totalJobs, completedJobs: engineer.completedJobs
+      };
+
+      const { fcmToken, deviceId, platform, appVersion } = req.body;
+      if (fcmToken) {
+        await syncDeviceToken({
+          userId: engineer._id, userModel: 'Engineer', fcmToken, deviceId, platform, appVersion
+        }).catch(err => console.error('[EngineerVerifyOTP] FCM Sync failed:', err));
+      }
+
+      return res.json({
+        success: true,
+        message: result.message,
+        token,
+        engineer: engineerDetails
+      });
+    } else {
+      return res.status(400).json({ success: false, error: "Invalid OTP" });
+    }
+  } catch (err) {
+    console.error('Engineer Verify OTP error:', err);
+    if (err.code === 20404) return res.status(400).json({ success: false, error: "OTP has expired or not found" });
+    res.status(500).json({ success: false, error: "Failed to verify OTP", details: err.message });
   }
 };
 
@@ -188,22 +167,17 @@ export const register = async (req, res) => {
   }
 };
 
-/**
- * Onboard Engineer API - Called by FastAPI after engineer approval
- * This endpoint is used by your team's onboarding system to add approved engineers
- */
 export const onboardEngineer = async (req, res) => {
   try {
     const {
-      engineer_id, // Support both naming conventions
+      engineer_id,
       name,
       mobile,
       email,
       skills,
       address,
-      currentLocation, // Location as string
-      location, // GeoJSON format
-      // Optional fields
+      currentLocation,
+      location,
       pincode,
       categories,
       rating,
@@ -215,10 +189,8 @@ export const onboardEngineer = async (req, res) => {
       isverifed = true
     } = req.body;
 
-    // Use engineer_id from payload
     const finalEngineerId = engineer_id;
 
-    // Validate required fields
     if (!name || !mobile) {
       return res.status(400).json({
         success: false,
@@ -226,7 +198,6 @@ export const onboardEngineer = async (req, res) => {
       });
     }
 
-    // Validate mobile number format (basic validation)
     const mobileRegex = /^[0-9]{10}$/;
     if (!mobileRegex.test(mobile)) {
       return res.status(400).json({
@@ -235,7 +206,6 @@ export const onboardEngineer = async (req, res) => {
       });
     }
 
-    // Validate email format if provided
     if (email) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
@@ -246,7 +216,6 @@ export const onboardEngineer = async (req, res) => {
       }
     }
 
-    // Use findOneAndUpdate with upsert to support both initial onboarding and subsequent updates (re-syncs)
     const result = await Engineer.findOneAndUpdate(
       { mobile: mobile.trim() },
       {
@@ -277,30 +246,25 @@ export const onboardEngineer = async (req, res) => {
       {
         new: true,
         upsert: true,
-        rawResult: true // returns the raw mongo result to check updatedExisting
+        rawResult: true
       }
     );
 
     const engineer = result.value || result;
     const isNew = !result.lastErrorObject?.updatedExisting;
 
-    // Handle Bank Account Storage & Razorpay Registration
     if (account_number && ifsc_code) {
       try {
         let bankAccount = await BankAccount.findOne({ engineerId: engineer._id });
 
         if (!bankAccount) {
-          // 1. Create Razorpay Contact
           const contact = await payoutService.createContact(engineer);
-          
-          // 2. Create Razorpay Fund Account
           const fundAccount = await payoutService.createFundAccount(contact.id, {
             accountHolderName: name,
             accountNumber: account_number,
             ifsc: ifsc_code
           });
 
-          // 3. Save to our BankAccount collection
           bankAccount = new BankAccount({
             engineerId: engineer._id,
             accountNumber: account_number,
@@ -311,9 +275,7 @@ export const onboardEngineer = async (req, res) => {
             isVerified: isverifed
           });
           await bankAccount.save();
-          console.log(`Razorpay Payouts initialized for Engineer: ${name}`);
         } else {
-          // Update existing bank record if needed (logic can be expanded here)
           bankAccount.accountNumber = account_number;
           bankAccount.ifsc = ifsc_code;
           bankAccount.bankName = bank_name;
@@ -322,12 +284,9 @@ export const onboardEngineer = async (req, res) => {
         }
       } catch (bankError) {
         console.error("Failed to initialize Razorpay Bank Account for Onboarding:", bankError.message);
-        // We don't fail the whole onboarding if bank registration fails, 
-        // but we log it for manual intervention/retry.
       }
     }
 
-    // Generate JWT token for immediate use if needed
     const token = jwt.sign(
       {
         userId: engineer._id,
@@ -339,7 +298,6 @@ export const onboardEngineer = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    // Sync FCM Token if provided in request
     const { fcmToken, deviceId, platform, appVersion } = req.body;
     if (fcmToken) {
       await syncDeviceToken({
@@ -375,19 +333,16 @@ export const onboardEngineer = async (req, res) => {
         createdAt: engineer.createdAt,
         updatedAt: engineer.updatedAt
       },
-      token // Include token for immediate use
+      token
     });
   } catch (err) {
     console.error('Engineer onboarding error:', err);
-
-    // Handle duplicate key error
     if (err.code === 11000) {
       return res.status(409).json({
         success: false,
         error: "Engineer with this mobile number already exists"
       });
     }
-
     res.status(500).json({
       success: false,
       error: err.message
@@ -425,7 +380,6 @@ export const updateProfile = async (req, res) => {
     const engineerId = req.engineer.id;
     const updates = req.body;
 
-    // Prevent updating sensitive fields
     delete updates.password;
     delete updates.mobile;
     delete updates._id;

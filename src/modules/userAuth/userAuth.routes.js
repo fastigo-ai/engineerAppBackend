@@ -1,11 +1,19 @@
 import express from 'express';
-import { loginWithFirebase, updateName, getProfile, sendOTP, verifyOTP, resendOTP, uploadProfileImage, removeProfileImage } from '../controllers/authController.js';
-import { authenticate } from '../middleware/authMiddleWare.js';
-import { registerDevice, unregisterDevice } from '../modules/notification/notification.controller.js';
-import upload from '../middleware/multer.js';
+import { 
+  loginWithFirebase, 
+  updateName, 
+  getProfile, 
+  sendOTP, 
+  verifyOTP, 
+  resendOTP, 
+  uploadProfileImage, 
+  removeProfileImage 
+} from './userAuth.controller.js';
+import { authenticate } from '../../middleware/authMiddleWare.js';
+import { registerDevice, unregisterDevice } from '../notification/notification.controller.js';
+import upload from '../../middleware/multer.js';
 
 const router = express.Router();
-
 
 router.post("/login", loginWithFirebase);
 router.get("/profile", authenticate, getProfile);
@@ -23,6 +31,5 @@ router.post("/resend-otp", resendOTP);
 // Profile image routes
 router.post("/profile-image", authenticate, upload.single("profileImage"), uploadProfileImage);
 router.delete("/profile-image", authenticate, removeProfileImage);
-
 
 export default router;

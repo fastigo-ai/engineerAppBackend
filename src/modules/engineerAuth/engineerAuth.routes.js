@@ -1,5 +1,10 @@
 import express from 'express';
-import { login, register, onboardEngineer } from '../../controllers/engineerController/authController.js';
+import { 
+  sendOTP, 
+  verifyOTP, 
+  register, 
+  onboardEngineer 
+} from './engineerAuth.controller.js';
 import { authenticateEngineer } from '../../middleware/authMiddleWare.js';
 import { 
   registerDevice, 
@@ -9,11 +14,13 @@ import {
   markOpened,
   deleteNotification,
   clearAllNotifications
-} from '../../modules/notification/notification.controller.js';
+} from '../notification/notification.controller.js';
 
 const router = express.Router();
 
-router.post("/engineer/login", login);
+// Engineer Auth endpoints
+router.post("/engineer/send-otp", sendOTP);
+router.post("/engineer/verify-otp", verifyOTP);
 router.post("/engineer/register", register);
 router.post("/engineer/onboard", onboardEngineer);
 

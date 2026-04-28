@@ -15,7 +15,7 @@ import {
 import {
   getProfile,
   updateProfile
-} from "../controllers/engineerController/authController.js";
+} from "../modules/engineerAuth/engineerAuth.controller.js";
 import {
   updateEngineerLocation,
   getNearbyRequests,
