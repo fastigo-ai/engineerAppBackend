@@ -36,13 +36,15 @@ export const getEngineerStatsService = async (engineerId) => {
 
   // --- PROCESSING STANDARD ORDERS ---
   const stdCompleted = standardOrders.filter(o => o.work_status === "Completed");
-  const stdInProgress = standardOrders.filter(o => o.work_status === "In Progress" || o.work_status === "Started" || o.work_status === "STARTED");
-  const stdActive = standardOrders.filter(o => o.work_status === "Accepted" || o.work_status === "ACCEPTED");
+  // Include Accepted/ACCEPTED in In Progress as per user request
+  const stdInProgress = standardOrders.filter(o => ["In Progress", "Started", "STARTED", "Accepted", "ACCEPTED"].includes(o.work_status));
+  const stdActive = standardOrders.filter(o => ["Accepted", "ACCEPTED"].includes(o.work_status));
 
   // --- PROCESSING VENDOR ORDERS ---
   const vendorCompleted = vendorOrders.filter(o => o.work_status === "COMPLETED");
-  const vendorInProgress = vendorOrders.filter(o => o.work_status === "IN_PROGRESS" || o.work_status === "STARTED" || o.work_status === "Started");
-  const vendorActive = vendorOrders.filter(o => o.work_status === "ACCEPTED");
+  // Include ACCEPTED in IN_PROGRESS as per user request
+  const vendorInProgress = vendorOrders.filter(o => ["IN_PROGRESS", "STARTED", "Started", "ACCEPTED"].includes(o.work_status) || o.status === "ACCEPTED");
+  const vendorActive = vendorOrders.filter(o => o.work_status === "ACCEPTED" || o.status === "ACCEPTED");
 
   // --- EARNINGS CALCULATION ---
   // Standard Earning: Sum of amounts from Orders where status is 'paid' 
