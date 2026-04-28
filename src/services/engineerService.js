@@ -36,15 +36,20 @@ export const getEngineerStatsService = async (engineerId) => {
 
   // --- PROCESSING STANDARD ORDERS ---
   const stdCompleted = standardOrders.filter(o => o.work_status === "Completed");
-  // Include Accepted/ACCEPTED in In Progress as per user request
-  const stdInProgress = standardOrders.filter(o => ["In Progress", "Started", "STARTED", "Accepted", "ACCEPTED"].includes(o.work_status));
+  // In Progress: Work has started but not completed
+  const stdInProgress = standardOrders.filter(o => ["In Progress", "Started", "STARTED"].includes(o.work_status));
+  // Active: Accepted but work not yet started
   const stdActive = standardOrders.filter(o => ["Accepted", "ACCEPTED"].includes(o.work_status));
 
   // --- PROCESSING VENDOR ORDERS ---
   const vendorCompleted = vendorOrders.filter(o => o.work_status === "COMPLETED");
-  // Include ACCEPTED in IN_PROGRESS as per user request
-  const vendorInProgress = vendorOrders.filter(o => ["IN_PROGRESS", "STARTED", "Started", "ACCEPTED"].includes(o.work_status) || o.status === "ACCEPTED");
-  const vendorActive = vendorOrders.filter(o => o.work_status === "ACCEPTED" || o.status === "ACCEPTED");
+  // In Progress: Work has started but not completed
+  const vendorInProgress = vendorOrders.filter(o => ["IN_PROGRESS", "STARTED", "Started"].includes(o.work_status));
+  // Active: Accepted but work not yet started (Status is ACCEPTED and work_status is NOT_STARTED or similar)
+  const vendorActive = vendorOrders.filter(o => 
+    (o.status === "ACCEPTED" || o.work_status === "ACCEPTED") && 
+    !["IN_PROGRESS", "STARTED", "Started", "COMPLETED"].includes(o.work_status)
+  );
 
   // --- EARNINGS CALCULATION ---
   // Standard Earning: Sum of amounts from Orders where status is 'paid' 
