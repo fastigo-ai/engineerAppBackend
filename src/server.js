@@ -46,7 +46,7 @@ app.use(logger);
 app.use((req, res, next) => {
   res.setTimeout(300000, () => {
     console.log(`!!! [TIMEOUT] Request to ${req.url} timed out after 5 minutes`);
-    res.status(408).send('Request Timeout');
+    res.status(408).json({ success: false, error: 'Request Timeout' });
   });
   next();
 });
@@ -82,6 +82,17 @@ app.use('/api/notification', notificationRoutes);
 // Engineer auth routes
 app.use('/api/engineer/auth', engineerAuthRoutes);
 
+
+// Catch 404 and return JSON
+app.use((req, res, next) => {
+  if (req.originalUrl.startsWith('/api/')) {
+    return res.status(404).json({
+      success: false,
+      error: `API endpoint not found: ${req.method} ${req.originalUrl}`
+    });
+  }
+  next();
+});
 
 // Error handling middleware
 app.use(errorHandler);
