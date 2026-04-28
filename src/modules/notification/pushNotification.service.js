@@ -78,15 +78,18 @@ export async function sendPushNotification(notification) {
 
   const message = {
     tokens: uniqueTokens,
-    notification: { title: notification.title, body: notification.body },
-    data: stringData,
+    // notification: { title: notification.title, body: notification.body },
+    data: {
+      ...stringData,
+      title: notification.title,
+      body: notification.body,
+    },
     android: {
       priority: 'high',
-      notification: { sound: 'default' },
     },
-    apns: {
-      payload: { aps: { sound: 'default', badge: 1 } },
-    },
+    // apns: {
+    //   payload: { aps: { sound: 'default', badge: 1 } },
+    // },
   };
 
   try {
@@ -98,10 +101,14 @@ export async function sendPushNotification(notification) {
     if (uniqueTokens.length === 1) {
       const singleMessage = {
         token: uniqueTokens[0],
-        notification: { title: notification.title, body: notification.body },
-        data: stringData,
-        android: { priority: 'high', notification: { sound: 'default' } },
-        apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+        // notification: { title: notification.title, body: notification.body },
+        data: {
+          ...stringData,
+          title: notification.title,
+          body: notification.body,
+        },
+        android: { priority: 'high' },
+        // apns: { payload: { aps: { sound: 'default', badge: 1 } } },
       };
 
       try {
