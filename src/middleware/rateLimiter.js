@@ -4,17 +4,9 @@ import rateLimit from 'express-rate-limit';
 // Max 5 requests per 15 minutes per IP
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // Increased to 20 to be more permissive
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => {
-    const mobile = req.body?.mobile;
-    if (mobile) {
-      const testNumbers = process.env.TEST_PHONE_NUMBERS ? process.env.TEST_PHONE_NUMBERS.split(',') : [];
-      return testNumbers.some(num => mobile.includes(num.trim()));
-    }
-    return false;
-  },
+  max: 5, // Limit each IP to 5 requests per windowMs
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   message: {
     success: false,
     error: 'Too many authentication attempts from this IP, please try again after 15 minutes'
