@@ -12,10 +12,11 @@ import {
 import { authenticate } from '../../middleware/authMiddleWare.js';
 import { registerDevice, unregisterDevice } from '../notification/notification.controller.js';
 import upload from '../../middleware/multer.js';
+import { authLimiter } from '../../middleware/rateLimiter.js';
 
 const router = express.Router();
 
-router.post("/login", loginWithFirebase);
+router.post("/login", authLimiter, loginWithFirebase);
 router.get("/profile", authenticate, getProfile);
 router.put("/updateName", authenticate, updateName);
 
@@ -24,9 +25,9 @@ router.post("/update-fcm-token", authenticate, registerDevice);
 router.post("/remove-fcm-token", authenticate, unregisterDevice);
 
 // OTP routes
-router.post("/send-otp", sendOTP);
-router.post("/verify-otp", verifyOTP);
-router.post("/resend-otp", resendOTP);
+router.post("/send-otp", authLimiter, sendOTP);
+router.post("/verify-otp", authLimiter, verifyOTP);
+router.post("/resend-otp", authLimiter, resendOTP);
 
 // Profile image routes
 router.post("/profile-image", authenticate, upload.single("profileImage"), uploadProfileImage);

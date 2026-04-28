@@ -60,6 +60,7 @@ import {
   authenticateEngineer,
 } from "../middleware/authMiddleWare.js";
 import upload from "../middleware/multer.js";
+import { nearbyApiLimiter } from "../middleware/rateLimiter.js";
 
 const router = express.Router();
 
@@ -81,8 +82,8 @@ router.put("/goOnline", authenticateEngineer, goOnlineController);
 router.put("/goOffline", authenticateEngineer, goOfflineController);
 router.post("/heartbeat", authenticateEngineer, heartbeatController);
 router.post("/update/location", authenticateEngineer, updateLocationController);
-router.get("/requests/nearby", authenticateEngineer, getNearbyRequests);
-router.get("/requests/fetching-nearby", authenticateEngineer, getNearbyOrdersController);
+router.get("/requests/nearby", authenticateEngineer, nearbyApiLimiter, getNearbyRequests);
+router.get("/requests/fetching-nearby", authenticateEngineer, nearbyApiLimiter, getNearbyOrdersController);
 
 // Request status routes (Engineer-specific) - New dedicated endpoints
 router.put("/requests/accept/:id", authenticateEngineer, acceptRequest);
@@ -117,7 +118,7 @@ router.post("/vendorOrder/request", createVendorRequests);
 router.get("/vendorOrder/serviceable", servicableLocation);
 router.post("/vendorOrder/accept", authenticateEngineer, acceptVendorOrder);
 router.post("/vendorOrder/reject", authenticateEngineer, rejectVendorOrder);
-router.get("/vendorOrder/nearby", authenticateEngineer, getNearbyVendorOrders);
+router.get("/vendorOrder/nearby", authenticateEngineer, nearbyApiLimiter, getNearbyVendorOrders);
 router.post("/vendorOrder/updateVendorOrderStatus/:orderId", authenticateEngineer, updateVendorOrderWorkStatus);
 
 router.post("/vendorOrder/complete", upload.array("images", 20), authenticateEngineer, completeOrder);

@@ -6,6 +6,7 @@ import {
   onboardEngineer 
 } from './engineerAuth.controller.js';
 import { authenticateEngineer } from '../../middleware/authMiddleWare.js';
+import { authLimiter } from '../../middleware/rateLimiter.js';
 import { 
   registerDevice, 
   unregisterDevice,
@@ -19,10 +20,10 @@ import {
 const router = express.Router();
 
 // Engineer Auth endpoints
-router.post("/engineer/send-otp", sendOTP);
-router.post("/engineer/verify-otp", verifyOTP);
-router.post("/engineer/register", register);
-router.post("/engineer/onboard", onboardEngineer);
+router.post("/engineer/send-otp", authLimiter, sendOTP);
+router.post("/engineer/verify-otp", authLimiter, verifyOTP);
+router.post("/engineer/register", authLimiter, register);
+router.post("/engineer/onboard", authLimiter, onboardEngineer);
 
 // FCM Token management
 router.post("/update-fcm-token", authenticateEngineer, registerDevice);
