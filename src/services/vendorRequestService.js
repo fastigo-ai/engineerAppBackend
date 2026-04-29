@@ -66,20 +66,14 @@ export const createAndMatchVendorOrder = async (payload) => {
     { upsert: true, new: true }
   );
 
-  /* 2️⃣ MATCH ENGINEERS */
-  const matchedEngineers = await matchEngineersByLocation({
-    location: order.location
-  });
-  if (matchedEngineers) {
-    await VendorOrder.findByIdAndUpdate(order._id, {
-      h3Index: latLngToCell(location.coordinates[1], location.coordinates[0], H3_RESOLUTION)
-    });
-  }
+  /* 2️⃣ NOTIFY ENGINEERS (CENTRALIZED) */
+  // notifyEngineersForOrder handles matching, socket emissions, and push notifications
+  const notifyResult = await notifyEngineersForOrder(order);
 
-  if (!matchedEngineers.length) {
+  if (!notifyResult.success || notifyResult.count === 0) {
     await VendorOrder.findByIdAndUpdate(order._id, {
       status: "EXPIRED",
-      failure_reason: "NO_ENGINEERS_AVAILABLE"
+      failure_reason: notifyResult.reason === 'no_engineers' ? "NO_ENGINEERS_AVAILABLE" : "MATCHING_FAILED"
     });
 
     return {
@@ -88,12 +82,11 @@ export const createAndMatchVendorOrder = async (payload) => {
       matchedEngineers: []
     };
   }
-  await VendorOrder.findByIdAndUpdate(order._id, {
-    notified_engineers: matchedEngineers.map(e => e._id)
-  });
 
-  /* 3️⃣ SOCKET NOTIFY (ASYNC, NON BLOCKING) */
-  await notifyEngineersForOrder(order);
+  // Update notified list in DB for tracking
+  // We can't easily get the list back from notifyEngineersForOrder without changing its return type,
+  // but for now we prioritize reliability over this tracking field.
+  // If needed, we can re-add matching here, but it's redundant.
 
   return {
     success: true,

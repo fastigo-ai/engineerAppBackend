@@ -82,7 +82,8 @@ export const notifyMatchedEngineers = async (engineers, order) => {
 
   const orderId = orderData.id || orderData._id;
 
-  console.log(`[Notify] Dispatching order ${orderId} to ${engineers.length} engineers`);
+  console.log(`[Notify] === START NOTIFICATION FLOW for Order: ${orderId} ===`);
+  console.log(`[Notify] Target: ${engineers.length} engineers`);
 
   for (const eng of engineers) {
     const engineerRoom = eng._id.toString(); 
@@ -131,7 +132,10 @@ export const notifyMatchedEngineers = async (engineers, order) => {
     // 2. Emit generic fallback event for app compatibility
     io.to(engineerRoom).emit("NEW_ORDER_REQUEST", socketPayload);
     
-    console.log(`[Socket] Emitted ${eventName} & NEW_ORDER_REQUEST to engineer ${engineerRoom}`);
+    // Check if room has any connections
+    const sockets = await io.in(engineerRoom).fetchSockets();
+    console.log(`[Socket] Emitted to room ${engineerRoom}. Active connections in room: ${sockets.length}`);
+    console.log(`[Socket] Order: ${orderId}, Event: ${eventName}`);
   }
 
   const engineerIds = engineers.map(e => e._id);
@@ -190,7 +194,7 @@ export const notifyEngineersForOrder = async (order, options = {}) => {
 
   if (!matchedEngineers.length) {
     console.warn(`[Dispatch] No engineers found for order ${order._id} (${excludeEngineers.length} excluded)`);
-    return { success: true, count: 0 };
+    return { success: false, reason: 'no_engineers', count: 0 };
   }
 
   const orderData = mapOrderToNotificationData(order);
@@ -208,6 +212,8 @@ export async function matchEngineersByLocation({ location, excludeEngineers = []
   const [lng, lat]    = location.coordinates;
   const originCell    = latLngToCell(lat, lng, H3_RESOLUTION);
   const excludeSet    = new Set(excludeEngineers.map(String));
+  console.log(`[Matching] Starting match for location [${lat}, ${lng}]. Excluded: ${excludeSet.size}`);
+  
   const seenIds       = new Set();
   const matched       = [];
   const searchedCells = new Set();
