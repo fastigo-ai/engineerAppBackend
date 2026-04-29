@@ -364,13 +364,18 @@ const handlePaymentAuthorized = async (payload) => {
   try {
     const paymentEntity = payload.payment.entity;
 
-    let order = await Order.findOne({
-      razorpayOrderId: paymentEntity.order_id
-    });
+    let order = null;
+    
+    // 1. First try searching by Razorpay Order ID (if present)
+    if (paymentEntity.order_id) {
+      order = await Order.findOne({
+        razorpayOrderId: paymentEntity.order_id
+      });
+    }
 
-    // Fallback: If not found by Razorpay Order ID, check notes (e.g. for QR code payments)
+    // 2. Fallback: If not found or no order_id, check notes (common for QR code payments)
     if (!order && paymentEntity.notes?.orderId) {
-      console.log(`[FCM] Falling back to search by notes.orderId in Authorized: ${paymentEntity.notes.orderId}`);
+      console.log(`[FCM] Searching by notes.orderId in Authorized: ${paymentEntity.notes.orderId}`);
       order = await Order.findById(paymentEntity.notes.orderId);
     }
 
@@ -414,13 +419,18 @@ const handlePaymentCaptured = async (payload) => {
   try {
     const paymentEntity = payload.payment.entity;
 
-    let order = await Order.findOne({
-      razorpayOrderId: paymentEntity.order_id
-    }).populate('servicePlan servicePlans').session(session);
+    let order = null;
 
-    // Fallback: If not found by Razorpay Order ID, check notes (e.g. for QR code payments)
+    // 1. First try searching by Razorpay Order ID (if present)
+    if (paymentEntity.order_id) {
+      order = await Order.findOne({
+        razorpayOrderId: paymentEntity.order_id
+      }).populate('servicePlan servicePlans').session(session);
+    }
+
+    // 2. Fallback: If not found or no order_id, check notes (common for QR code payments)
     if (!order && paymentEntity.notes?.orderId) {
-      console.log(`[FCM] Falling back to search by notes.orderId: ${paymentEntity.notes.orderId}`);
+      console.log(`[FCM] Searching by notes.orderId in Capture: ${paymentEntity.notes.orderId}`);
       order = await Order.findById(paymentEntity.notes.orderId)
         .populate('servicePlan servicePlans')
         .session(session);
