@@ -16,7 +16,7 @@ const VendorOrderSchema = new mongoose.Schema(
     branch_code: { type: String, index: true },
 
     /* -------- Address Info -------- */
-    complete_address: { type: String, required: true },
+    complete_address: { type: String, default: "" },
     pincode: { type: String, index: true },
 
     /* -------- Contact -------- */
@@ -32,7 +32,7 @@ const VendorOrderSchema = new mongoose.Schema(
     },
     asset_type: {
       type: String,
-      enum: ["Laptop", "Printer", "Network", "ATM"],
+      enum: ["Laptop", "Printer", "Network", "ATM", "Desktop"],
       required: true,
     },
 

@@ -7,10 +7,13 @@ const USER_RADIUS_RINGS = 12; // ~10km
 const VENDOR_RADIUS_RINGS = 30; // ~25km
 const MAX_ORDERS = 15; // increased for mixed orders
 
-export const getNearbyOrdersService = async ({ engineer, type = "all" }) => {
+export const getNearbyOrdersService = async ({ engineer, type = "all", page = 1, limit = 15 }) => {
   if (!engineer.h3Index) {
     throw new Error("Engineer location not available");
   }
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const parsedLimit = parseInt(limit);
 
   // Extract engineer coordinates for distance calculation
   const engCoords = engineer.location?.coordinates;
@@ -20,8 +23,6 @@ export const getNearbyOrdersService = async ({ engineer, type = "all" }) => {
   // Aggregate all orders within separate radii
   const allRegularOrders = [];
   const allVendorOrders = [];
-
-  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
   // 1. Fetch Regular (User) Orders (within 10km / 12 rings)
   if (type === "all" || type === "user") {
@@ -37,13 +38,12 @@ export const getNearbyOrdersService = async ({ engineer, type = "all" }) => {
         { orderType: "INSTANT" },
         { 
           orderType: "SCHEDULED", 
-          scheduledAt: { $gte: new Date() } // Show only future scheduled orders
+          scheduledAt: { $gte: new Date() } 
         }
       ]
     })
       .select("orderId location amount totalDuration orderType scheduledAt addressText customerDetails servicePlan servicePlans created_at createdAt notes bookingDetails paymentMode paymentStatus")
       .sort({ createdAt: -1 })
-      .limit(MAX_ORDERS)
       .lean();
     
     allRegularOrders.push(...regularOrders);
@@ -60,24 +60,20 @@ export const getNearbyOrdersService = async ({ engineer, type = "all" }) => {
     })
       .select("call_id location order_price support_type branch_name complete_address created_at payment_status payout_amount description sop l1_support_name l1_support_number")
       .sort({ created_at: -1 })
-      .limit(MAX_ORDERS)
       .lean();
     
     allVendorOrders.push(...vendorOrders);
   }
 
-  console.log(` Nearby Search: Found ${allRegularOrders.length} user orders (10km), ${allVendorOrders.length} vendor orders (25km)`);
+  console.log(` Nearby Search: Found ${allRegularOrders.length} user orders, ${allVendorOrders.length} vendor orders`);
 
   // 3. Mark types, unify address, and STRICTLY REDACT sensitive info
   const mappedRegular = allRegularOrders.map(o => {
-    // Calculate distance if coordinates available
     let distance = "TBD";
     if (engLat && engLon && o.location?.coordinates) {
         const d = getDistanceInMeters(engLat, engLon, o.location.coordinates[1], o.location.coordinates[0]);
         distance = (d / 1000).toFixed(2);
     }
-
-    // Completely remove sensitive keys from the spread
     const { addressText, location, customerDetails, ...safeOrder } = o;
     return { 
       ...safeOrder, 
@@ -86,7 +82,6 @@ export const getNearbyOrdersService = async ({ engineer, type = "all" }) => {
       address: "Hidden until acceptance",
       customerName: "Customer",
       customerPhone: "Hidden",
-      // Include non-sensitive job details
       bookingDetails: o.bookingDetails ? {
         services: o.bookingDetails.services,
         category: o.bookingDetails.category,
@@ -97,13 +92,11 @@ export const getNearbyOrdersService = async ({ engineer, type = "all" }) => {
   });
 
   const mappedVendor = allVendorOrders.map(o => {
-    // Calculate distance if coordinates available
     let distance = "TBD";
     if (engLat && engLon && o.location?.coordinates) {
         const d = getDistanceInMeters(engLat, engLon, o.location.coordinates[1], o.location.coordinates[0]);
         distance = (d / 1000).toFixed(2);
     }
-
     const { complete_address, location, contact_phone, contact_name, ...safeOrder } = o;
     return { 
       ...safeOrder, 
@@ -118,10 +111,17 @@ export const getNearbyOrdersService = async ({ engineer, type = "all" }) => {
   const merged = [...mappedRegular, ...mappedVendor].sort((a, b) => {
     const timeA = new Date(a.createdAt || a.created_at).getTime();
     const timeB = new Date(b.createdAt || b.created_at).getTime();
-    return timeB - timeA; // Newest first
+    return timeB - timeA;
   });
 
-  return merged.slice(0, MAX_ORDERS);
+  const totalCount = merged.length;
+  const paginatedResults = merged.slice(skip, skip + parsedLimit);
 
-  return foundOrders;
+  return {
+    orders: paginatedResults,
+    totalCount,
+    currentPage: parseInt(page),
+    totalPages: Math.ceil(totalCount / parsedLimit),
+    hasMore: skip + parsedLimit < totalCount
+  };
 };

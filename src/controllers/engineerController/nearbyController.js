@@ -35,13 +35,20 @@ export const getNearbyOrdersController = async (req, res) => {
 
     // 3. Call the service to find nearby matches using H3 radius expansion
     const type = req.query.type || "all";
-    const orders = await getNearbyOrdersService({ engineer, type });
+    const page = req.query.page || 1;
+    const limit = req.query.limit || 15;
+    
+    const result = await getNearbyOrdersService({ engineer, type, page, limit });
 
     return res.status(STATUS_CODES.SUCCESS || 200).json({
       success: true,
-      count: orders.length,
-      message: orders.length ? "Nearby orders fetched successfully." : "No orders found in your area.",
-      data: orders
+      count: result.orders.length,
+      totalCount: result.totalCount,
+      currentPage: result.currentPage,
+      totalPages: result.totalPages,
+      hasMore: result.hasMore,
+      message: result.orders.length ? "Nearby orders fetched successfully." : "No orders found in your area.",
+      data: result.orders
     });
 
   } catch (error) {

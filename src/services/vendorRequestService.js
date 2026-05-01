@@ -36,11 +36,11 @@ export const createAndMatchVendorOrder = async (payload) => {
         projectId: payload.projectId || payload.project_id,
         call_id,
 
-        state_name: payload.state,
-        branch_name: payload.branch_name,
+        state_name: payload.state || "N/A",
+        branch_name: payload.branch_name || "N/A",
         branch_code: payload.branch_code,
 
-        complete_address: payload.address,
+        complete_address: payload.address || payload.complete_address || "Address not provided",
         pincode: payload.pincode,
 
         assets_count: payload.asset_count || 1,
@@ -63,7 +63,7 @@ export const createAndMatchVendorOrder = async (payload) => {
         h3Index: orderCell
       }
     },
-    { upsert: true, new: true }
+    { upsert: true, new: true, runValidators: true }
   );
 
   /* 2️⃣ NOTIFY ENGINEERS (CENTRALIZED) */
