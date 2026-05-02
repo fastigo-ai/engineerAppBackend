@@ -150,6 +150,8 @@ export const notifyMatchedEngineers = async (engineers, order) => {
       complete_address: orderData.address                    ?? orderData.addressText ?? '',
       customer_name:    orderData.customerDetails?.name      ?? '',
       type:             'NEW_ORDER',
+      isVendorOrder:    orderData.isVendorOrder,
+      orderType:        orderData.isVendorOrder ? 'vendor' : 'regular',
     },
   };
 
