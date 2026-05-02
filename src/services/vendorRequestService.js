@@ -107,6 +107,7 @@ export const acceptOrderService = async ({ orderId, engineerId, distance }) => {
     {
       _id: orderId,
       status: { $in: ["PENDING", "MATCHING"] },
+      work_status: { $nin: ["COMPLETED", "DONE"] }
     },
     {
       $set: {
@@ -161,6 +162,12 @@ export const rejectOrderService = async ({ orderId, engineerId }) => {
 
   // If the rejecting engineer is the one who was assigned, reset the assignment
   const currentOrder = await VendorOrder.findById(orderId);
+  
+  // --- BLOCK DECLINE IF COMPLETED ---
+  if (currentOrder && (currentOrder.status === 'COMPLETED' || currentOrder.work_status === 'COMPLETED' || currentOrder.work_status === 'DONE')) {
+    throw { status: 400, message: "Cannot decline a completed job" };
+  }
+
   let shouldReDispatch = false;
 
   if (currentOrder && currentOrder.assigned_engineer_id && currentOrder.assigned_engineer_id.toString() === engineerId.toString()) {

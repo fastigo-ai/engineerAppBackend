@@ -279,6 +279,12 @@ export const acceptRequest = async (req, res) => {
                             { assignedEngineer: null },
                             { assignedEngineer: { $exists: false } }
                         ]
+                    },
+                    {
+                        status: { $ne: 'completed' }
+                    },
+                    {
+                        orderStatus: { $ne: 'Completed' }
                     }
                 ]
             },
@@ -371,6 +377,18 @@ export const rejectRequest = async (req, res) => {
             });
         }
         console.log('✅ Order found:', order._id);
+
+        // --- BLOCK DECLINE IF COMPLETED ---
+        const orderStatusLower = (order.status || '').toLowerCase();
+        const workStatusLower = (order.work_status || '').toLowerCase();
+        if (orderStatusLower === 'completed' || orderStatusLower === 'done' || workStatusLower === 'completed' || workStatusLower === 'done') {
+            console.log('❌ Attempted to decline a completed order:', id);
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot decline a completed job'
+            });
+        }
+
         console.log('Order acceptedBy:', order.acceptedBy);
         console.log('Order assignedEngineer:', order.assignedEngineer);
         console.log('Order rejectedBy:', order.rejectedBy);
