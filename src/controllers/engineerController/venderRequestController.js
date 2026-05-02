@@ -303,18 +303,20 @@ export const updateVendorOrderWorkStatus = async (req, res) => {
       });
     }
 
-    const query = {
-      _id: new mongoose.Types.ObjectId(orderId),
-      assigned_engineer_id: new mongoose.Types.ObjectId(engineerId)
-    };
-    console.log('[UpdateWorkStatus] Querying with:', query);
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({ success: false, message: "Invalid Order ID format" });
+    }
 
-    const order = await VendorOrder.findOne(query);
+    const order = await VendorOrder.findOne({
+      _id: orderId,
+      assigned_engineer_id: engineerId
+    });
+
     if (!order) {
       console.log('❌ Order not found or not assigned to this engineer:', { orderId, engineerId });
       return res.status(404).json({
         success: false,
-        message: `Order ${orderId} not found or not assigned to engineer ${engineerId}`
+        message: `Order not found or not assigned to you`
       });
     }
 
@@ -334,46 +336,44 @@ export const updateVendorOrderWorkStatus = async (req, res) => {
         const distance = getDistanceInMeters(latitude, longitude, orderLat, orderLng);
         console.log(`📏 Backend Vendor Distance Check: ${distance.toFixed(2)}m`);
 
-      if (distance > 300) {
-        return res.status(400).json({
-          success: false,
-          message: `Location verification failed. You are ${distance.toFixed(0)}m away. Please be within 300m.`
-        });
-      }
+        if (distance > 300) {
+          return res.status(400).json({
+            success: false,
+            message: `Location verification failed. You are ${distance.toFixed(0)}m away. Please be within 300m.`
+          });
+        }
       }
     }
 
-    order.work_status = workStatus;
-    await order.save();
+    // Atomic update to avoid triggering validation errors on unrelated fields
+    const updatedOrder = await VendorOrder.findByIdAndUpdate(
+      orderId,
+      { $set: { work_status: workStatus } },
+      { new: true, runValidators: true }
+    );
 
-    if (!order) {
-      console.log('❌ Order not found or not assigned to this engineer:', { orderId, engineerId });
-      return res.status(404).json({
-        success: false,
-        message: `Order ${orderId} not found or not assigned to engineer ${engineerId}`,
-        debug: { orderId, engineerId }
-      });
-    }
+    console.log('✅ Work status updated to:', updatedOrder.work_status);
 
-    console.log('✅ Work status updated to:', order.work_status);
-
+    // Notify Vendor (Fire-and-forget with error logging)
     const payload = {
-      call_id: order.call_id,
-      status: order.work_status,
+      call_id: updatedOrder.call_id,
+      status: updatedOrder.work_status,
       engineer_id: engineerId
     };
 
-    console.log("Notifying Vendor of acceptance with payload:", payload);
+    console.log("Notifying Vendor of status update:", payload);
 
-    await axios.post(
+    axios.post(
       "https://door2fyvendor-gv4g4.ondigitalocean.app/calls/engineer/assignment-result",
       payload,
-    );
+    ).catch(webhookErr => {
+      console.error("⚠️ Vendor Webhook Notification Failed (Non-fatal):", webhookErr.message);
+    });
 
     return res.status(200).json({
       success: true,
       message: "Work status updated successfully",
-      data: order
+      data: updatedOrder
     });
   } catch (err) {
     console.error("Update Work Status Error:", err);

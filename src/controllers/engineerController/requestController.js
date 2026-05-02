@@ -933,7 +933,7 @@ export const updateWorkStatus = async (req, res) => {
 
                     return res.status(STATUS_CODES.BAD_REQUEST).json({
                         success: false,
-                        message: `Cannot start work yet. Scheduled time is in ${diffMins} minutes. (You can start up to 15 mins early).`
+                        message: `Cannot start work yet. Scheduled time is in ${diffMins} minutes. (You can start up to 60 mins early).`
                     });
                 }
 
@@ -994,7 +994,23 @@ export const updateWorkStatus = async (req, res) => {
                         message: 'OTP must be verified before completing the request.'
                     });
                 }
-                order.status = 'paid';
+
+                const isPAS = order.paymentMode && 
+                             order.paymentMode.toString().toLowerCase().trim() === 'payment after service';
+
+                // Enforce payment for PAS orders before completion
+                if (isPAS && order.paymentStatus !== 'PAID' && order.status !== 'paid') {
+                    return res.status(STATUS_CODES.BAD_REQUEST).json({
+                        success: false,
+                        message: 'Payment must be collected via QR code before completing this order.'
+                    });
+                }
+
+                if (!isPAS) {
+                    order.status = 'paid';
+                    order.paymentStatus = 'PAID';
+                }
+                
                 order.orderStatus = 'Completed';
 
                 if (order.userId) {
@@ -1249,12 +1265,21 @@ export const generatePaymentQRCode = async (req, res) => {
             });
         }
 
-        const amountInPaise = Math.round(order.finalAmount || (order.amount * 100));
+        // If already paid, return early so the app can auto-verify
+        if (order.paymentStatus === 'PAID' || order.status === 'paid' || order.status === 'completed') {
+            return res.status(STATUS_CODES.SUCCESS).json({
+                success: true,
+                data: { isPaid: true }
+            });
+        }
+
+        // finalAmount is already in paise, amount is in rupees.
+        const amountInPaise = order.finalAmount ? Math.round(order.finalAmount) : Math.round(order.amount * 100);
 
         // Generate Razorpay QR Code
         const qrCode = await razorpay.qrCode.create({
             type: 'upi_qr',
-            name: `Door2fy Order ${order.orderId}`,
+            name: `Fastigo Payment`,
             usage: 'single_use',
             fixed_amount: true,
             payment_amount: amountInPaise,
@@ -1270,7 +1295,8 @@ export const generatePaymentQRCode = async (req, res) => {
             data: {
                 qrId: qrCode.id,
                 imageUrl: qrCode.image_url,
-                paymentUrl: qrCode.payment_url // UPI deep link
+                paymentUrl: qrCode.payment_url, // UPI deep link
+                isPaid: false
             }
         });
     } catch (error) {
@@ -1334,29 +1360,38 @@ export const getRequestDetails = async (req, res) => {
         const { id } = req.params;
         const { type } = req.query;
 
+        console.log(`[getRequestDetails] ID: ${id}, Type: ${type}`);
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid Order ID format"
+            });
+        }
+
         let order;
         if (type === 'vendor') {
-            const VendorOrder = (await import('../../models/vendorOrderModal.js')).default;
-            order = await VendorOrder.findById(id);
+            order = await vendorOrderModal.findById(id);
         } else {
             order = await Order.findById(id)
                 .populate('servicePlan servicePlans')
                 .populate('userId', 'name mobile email');
         }
 
+        // Robust Fallback: if not found in specified type, check the other collection
         if (!order) {
-            // Try fallback to the other type if not specified or not found
-            if (type !== 'vendor') {
-                const VendorOrder = (await import('../../models/vendorOrderModal.js')).default;
-                order = await VendorOrder.findById(id);
-            } else {
+            console.log(`[getRequestDetails] Not found in ${type || 'regular'} collection, trying fallback...`);
+            if (type === 'vendor') {
                 order = await Order.findById(id)
                     .populate('servicePlan servicePlans')
                     .populate('userId', 'name mobile email');
+            } else {
+                order = await vendorOrderModal.findById(id);
             }
         }
 
         if (!order) {
+            console.log(`[getRequestDetails] Order not found for ID: ${id}`);
             return res.status(404).json({ success: false, message: "Order not found" });
         }
 
@@ -1366,7 +1401,11 @@ export const getRequestDetails = async (req, res) => {
         });
     } catch (error) {
         console.error("Get Request Details Error:", error);
-        return res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error while fetching details",
+            error: error.message
+        });
     }
 };
 

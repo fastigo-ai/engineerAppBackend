@@ -16,7 +16,7 @@ const VendorOrderSchema = new mongoose.Schema(
     branch_code: { type: String, index: true },
 
     /* -------- Address Info -------- */
-    complete_address: { type: String, default: "" },
+    complete_address: { type: String, default: "", required: false },
     pincode: { type: String, index: true },
 
     /* -------- Contact -------- */

@@ -12,6 +12,7 @@ import { notifyAdmins } from "../services/notification/webPushService.js";
 import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
 import { markCouponAsUsed, markCouponAsFailed } from '../modules/coupon/coupon.service.js';
 import { notifyBookingUpdate } from '../services/notification/notificationService.js';
+import { getIO } from '../config/socket.js';
 
 
 // Create Checkout Session
@@ -430,25 +431,19 @@ const handlePaymentCaptured = async (payload) => {
 
     // 2. Fallback: If not found or no order_id, check notes (common for QR code payments)
     if (!order && paymentEntity.notes?.orderId) {
-      console.log(`[FCM] Searching by notes.orderId in Capture: ${paymentEntity.notes.orderId}`);
-      order = await Order.findById(paymentEntity.notes.orderId)
-        .populate('servicePlan servicePlans')
-        .session(session);
+      console.log(`[Webhook] Searching Order by notes.orderId: ${paymentEntity.notes.orderId}`);
+      try {
+        order = await Order.findById(paymentEntity.notes.orderId)
+          .populate('servicePlan servicePlans')
+          .session(session);
+      } catch (e) {}
     }
 
-    if (!order) {
-      console.error('Order not found for payment capture. Payment ID:', paymentEntity.id);
-      await session.abortTransaction();
-      return;
-    }
-
-    // Determine new status
-    // If it was already completed (PAS flow), keep it completed but update paymentStatus
-    const isPAS = order.paymentMode === 'Payment After Service';
-    const newStatus = order.status === 'completed' ? 'completed' : 'paid';
+    // 3. Model selection (Users only)
+    const Model = Order;
 
     // Update order status
-    await Order.findByIdAndUpdate(order._id, {
+    await Model.findByIdAndUpdate(order._id, {
       status: newStatus,
       paymentStatus: 'PAID',
       razorpayPaymentId: paymentEntity.id,
@@ -499,11 +494,27 @@ const handlePaymentCaptured = async (payload) => {
     }).catch(err => console.error('User payment notification failed:', err));
 
     // Notify Assigned Engineer (Crucial for PAS)
-    if (order.assignedEngineer) {
-      notifyEngineerUpdate(order.assignedEngineer, order._id, 'ENGINEER_PAYMENT_RECEIVED', {
+    const assignedEngineerId = order.assignedEngineer;
+    
+    if (assignedEngineerId) {
+      notifyEngineerUpdate(assignedEngineerId, order._id, 'ENGINEER_PAYMENT_RECEIVED', {
         amount: (paymentEntity.amount / 100).toString(),
         orderId: order.orderId
       }).catch(err => console.error('Engineer payment notification failed:', err));
+
+      // 3. Emit socket event for real-time auto-detection in the app
+      try {
+        const io = getIO();
+        const engineerIdStr = assignedEngineerId.toString();
+        io.to(engineerIdStr).emit('PAYMENT_SUCCESS', {
+          orderId: order._id.toString(),
+          status: 'paid',
+          amount: paymentEntity.amount / 100
+        });
+        console.log(`📡 Socket: Emitted PAYMENT_SUCCESS to engineer ${engineerIdStr} for order ${order._id}`);
+      } catch (socketErr) {
+        console.error('Socket emission failed in payment capture:', socketErr.message);
+      }
     }
 
   } catch (error) {
