@@ -43,9 +43,9 @@ export const validateCoupon = async ({ userId, couponCode, amount, servicePlans 
     throw new Error('You have already reached the usage limit for this coupon');
   }
 
-  // First-time user check
+  // First-time user check: Treat any non-failed/non-cancelled order as a "previous order"
   const hasPreviousOrders = await Order.findOne({ 
-    userId, 
+    userId: new mongoose.Types.ObjectId(userId), 
     status: { $nin: ['failed', 'cancelled'] } 
   }).lean();
 
@@ -109,6 +109,10 @@ export const reserveCoupon = async ({ userId, couponId, orderId }, session = nul
 export const markCouponAsUsed = async (orderId, session = null) => {
   const usage = await usageRepository.updateStatus(orderId, 'RESERVED', 'USED', session);
   if (!usage) return null;
+
+  // Increment redemption count for analytics
+  await couponRepository.incrementRedeemed(usage.couponId, session);
+
   return usage;
 };
 
@@ -174,7 +178,10 @@ export const getAvailableCoupons = async (userId) => {
   
   // 1. Get user data (orders, profile, and coupon usage) once
   const [hasPreviousOrders, user, userUsages] = await Promise.all([
-    Order.findOne({ userId, status: { $nin: ['failed', 'cancelled'] } }).lean(),
+    Order.findOne({ 
+      userId: new mongoose.Types.ObjectId(userId), 
+      status: { $nin: ['failed', 'cancelled'] } 
+    }).lean(),
     User.findById(userId).select('city').lean(),
     usageRepository.findAllForUser(userId, ['USED', 'RESERVED'])
   ]);
@@ -210,10 +217,19 @@ export const getAvailableCoupons = async (userId) => {
     const usageCount = usageMap[coupon._id.toString()] || 0;
     if (usageCount >= coupon.perUserLimit) continue;
 
-    // Decorate with description
+    // Determine badge
+    let badge = null;
+    if (coupon.targeting?.firstTimeUserOnly) {
+      badge = "New User Offer";
+    } else if (coupon.perUserLimit === 1) {
+      badge = "One-time use";
+    }
+
+    // Decorate with description and badge
     filtered.push({
       ...coupon,
-      description: generateDescription(coupon)
+      description: generateDescription(coupon),
+      badge
     });
   }
 
@@ -239,7 +255,8 @@ export const getBestCoupon = async ({ userId, amount, servicePlans }) => {
         best = {
           ...coupon,
           calculatedDiscount: discount,
-          finalAmount: Math.max(0, amount - discount)
+          finalAmount: Math.max(0, amount - discount),
+          badge: coupon.badge
         };
       }
     } catch (e) {

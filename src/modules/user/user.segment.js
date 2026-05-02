@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { Order } from "../../models/orderSchema.js";
 
 /**
@@ -7,7 +8,10 @@ import { Order } from "../../models/orderSchema.js";
  */
 export const getUserSegment = async (userId) => {
   // Use .lean() for performance
-  const orders = await Order.find({ userId, status: 'paid' })
+  const orders = await Order.find({ 
+    userId: new mongoose.Types.ObjectId(userId), 
+    status: { $nin: ['failed', 'cancelled'] } 
+  })
     .sort({ createdAt: -1 })
     .select('createdAt')
     .lean();

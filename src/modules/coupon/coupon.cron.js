@@ -27,9 +27,12 @@ export const initCouponCron = () => {
           reservation.status = 'FAILED';
           await reservation.save();
 
-          // Decrement usedCount in Coupon model
+          // Decrement usedCount and increment failed count
           await Coupon.findByIdAndUpdate(reservation.couponId, {
-            $inc: { usedCount: -1 }
+            $inc: { 
+              usedCount: -1,
+              "stats.totalFailed": 1
+            }
           });
 
           console.log(`Released coupon ${reservation.couponId} from order ${reservation.orderId}`);

@@ -41,7 +41,12 @@ export class CouponRepository {
           { $expr: { $lt: ["$usedCount", "$usageLimit"] } }
         ]
       },
-      { $inc: { usedCount: 1 } },
+      { 
+        $inc: { 
+          usedCount: 1,
+          "stats.totalApplied": 1
+        } 
+      },
       { session, new: true }
     );
   }
@@ -52,7 +57,23 @@ export class CouponRepository {
   async atomicDecrementUsage(couponId, session = null) {
     return Coupon.findByIdAndUpdate(
       couponId,
-      { $inc: { usedCount: -1 } },
+      { 
+        $inc: { 
+          usedCount: -1,
+          "stats.totalFailed": 1
+        } 
+      },
+      { session, new: true }
+    );
+  }
+
+  /**
+   * Increment redemption count (successful conversion)
+   */
+  async incrementRedeemed(couponId, session = null) {
+    return Coupon.findByIdAndUpdate(
+      couponId,
+      { $inc: { "stats.totalRedeemed": 1 } },
       { session, new: true }
     );
   }

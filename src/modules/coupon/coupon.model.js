@@ -48,7 +48,8 @@ const couponSchema = new mongoose.Schema({
   perUserLimit: {
     type: Number,
     required: true,
-    default: 1
+    default: 1,
+    min: 1
   },
   usedCount: {
     type: Number,
@@ -89,9 +90,22 @@ const couponSchema = new mongoose.Schema({
     type: String,
     enum: ['ADMIN', 'VENDOR'],
     default: 'ADMIN'
+  },
+  stats: {
+    totalApplied: { type: Number, default: 0 },   // Incremented on Reservation
+    totalRedeemed: { type: Number, default: 0 },  // Incremented on Commit (USED)
+    totalFailed: { type: Number, default: 0 }     // Incremented on Rollback/Expiry
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
+
+// Virtual for conversion rate calculation
+couponSchema.virtual('conversionRate').get(function() {
+  if (!this.stats || !this.stats.totalApplied) return 0;
+  return parseFloat(((this.stats.totalRedeemed / this.stats.totalApplied) * 100).toFixed(2));
 });
 
 // Compound indexes for optimization

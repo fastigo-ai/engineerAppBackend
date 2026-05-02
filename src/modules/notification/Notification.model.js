@@ -40,6 +40,14 @@ const notificationSchema = new mongoose.Schema({
   failureReason: { type: String, default: null },
   sentAt: { type: Date, default: null },
   openedAt: { type: Date, default: null },
+  // Anti-Spam / Reliability
+  idempotencyKey: { 
+    type: String, 
+    unique: true, 
+    sparse: true, 
+    index: true 
+  },
+
   is_deleted: { type: Boolean, default: false, index: true },
 }, { timestamps: true });
 

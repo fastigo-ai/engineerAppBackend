@@ -8,11 +8,44 @@ export { syncDeviceToken } from './pushNotification.service.js';
 
 /**
  * Enqueues a notification into the MongoDB queue
+ * @param {Object} params
+ * @param {number} [params.delayMs=0]
+ * @param {string} [params.idempotencyKey] - Prevents duplicates (e.g., 'order_123_accepted')
+ * @param {number} [params.throttleSeconds] - Prevents spamming similar types (e.g., 60s)
  */
 export async function enqueueNotification({
   userId, userModel = 'User', type, title, body, data = {}, delayMs = 0,
+  idempotencyKey = null,
+  throttleSeconds = 0
 }) {
   const nextRunAt = new Date(Date.now() + delayMs);
+
+  // --- 1. Throttling (Spam Control) ---
+  if (throttleSeconds > 0) {
+    const recentNotification = await Notification.findOne({
+      userId,
+      userModel,
+      type,
+      createdAt: { $gt: new Date(Date.now() - throttleSeconds * 1000) }
+    }).lean();
+
+    if (recentNotification) {
+      logger.info(`[Notification] Throttling suppressed duplicate ${type} for user ${userId}`);
+      return null;
+    }
+  }
+
+  // --- 2. Idempotency (Reliability) ---
+  if (idempotencyKey) {
+    return Notification.findOneAndUpdate(
+      { idempotencyKey },
+      { 
+        $setOnInsert: { userId, userModel, type, title, body, data, nextRunAt } 
+      },
+      { upsert: true, new: true }
+    );
+  }
+
   return Notification.create({ userId, userModel, type, title, body, data, nextRunAt });
 }
 
