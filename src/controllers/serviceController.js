@@ -927,7 +927,7 @@ export const rescheduleBooking = async (req, res) => {
     updateData.orderStatus = 'Upcoming';
     updateData.work_status = 'Upcoming';
     updateData.noShowPhase = 0;
-    updateData.noShowPingedAt = null;
+    updateData.noShowPingedAt = null;  
 
     // Build tracking array
     const trackingEvents = [];
