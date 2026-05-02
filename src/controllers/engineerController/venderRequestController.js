@@ -348,9 +348,26 @@ export const updateVendorOrderWorkStatus = async (req, res) => {
     // Atomic update to avoid triggering validation errors on unrelated fields
     const updatedOrder = await VendorOrder.findByIdAndUpdate(
       orderId,
-      { $set: { work_status: workStatus } },
-      { new: true, runValidators: true }
+      { 
+        $set: { work_status: workStatus },
+        $push: {
+          tracking: {
+            status: workStatus === 'STARTED' ? 'STARTED' : workStatus,
+            title: workStatus === 'STARTED' ? 'Work Started' : 
+                   workStatus === 'COMPLETED' ? 'Work Completed' : `Status: ${workStatus}`,
+            timestamp: new Date()
+          }
+        }
+      },
+      { new: true } // Removed runValidators: true to prevent 500 errors on legacy/inconsistent data
     );
+
+    if (!updatedOrder) {
+      return res.status(404).json({
+        success: false,
+        message: "Failed to update work status"
+      });
+    }
 
     console.log('✅ Work status updated to:', updatedOrder.work_status);
 
