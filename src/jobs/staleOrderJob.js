@@ -1,7 +1,9 @@
 import cron from 'node-cron';
 import { Order } from '../models/orderSchema.js';
 import VendorOrder from '../models/vendorOrderModal.js';
+import { Engineer } from '../models/engineersModal.js';
 import { notifyBookingUpdate, sendPushToEngineer } from '../services/notification/notificationService.js';
+
 
 
 /**
@@ -192,6 +194,22 @@ export const initStaleOrderJob = () => {
         } catch (err) {
           console.error(`[StaleJob] Error cancelling stale vendor order ${vOrder._id}:`, err);
         }
+      }
+
+      // --- CASE 4: GHOST EXPERT CLEANUP (30 MINUTES) ---
+      const thirtyMinsAgo = new Date(now.getTime() - 30 * 60000);
+      const ghostResult = await Engineer.updateMany(
+        {
+          status: 'ONLINE',
+          lastHeartbeat: { $lte: thirtyMinsAgo }
+        },
+        {
+          $set: { status: 'OFFLINE' }
+        }
+      );
+
+      if (ghostResult.modifiedCount > 0) {
+        console.log(`[StaleJob] Cleaned up ${ghostResult.modifiedCount} ghost experts (No heartbeat > 30m)`);
       }
 
 
