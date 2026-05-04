@@ -1,6 +1,8 @@
 import cron from 'node-cron';
 import { Order } from '../models/orderSchema.js';
+import VendorOrder from '../models/vendorOrderModal.js';
 import { notifyBookingUpdate, sendPushToEngineer } from '../services/notification/notificationService.js';
+
 
 /**
  * STALE ORDER MONITOR
@@ -119,20 +121,24 @@ export const initStaleOrderJob = () => {
           const oldEngineer = order.assignedEngineer;
           
           // 1. Update Order Status to Cancelled
-          order.status = 'cancelled';
-          order.orderStatus = 'Cancelled';
-          order.work_status = 'Cancelled';
-          order.noShowPhase = 2; // Final state
-          order.failureReason = 'EXPERT_UNAVAILABLE';
-          
-          order.tracking.push({
-            status: 'UNAVAILABLE',
-            title: 'Expert Unavailable',
-            subTitle: 'Partner could not reach location within scheduled time.',
-            timestamp: new Date()
-          });
+          await Order.findByIdAndUpdate(order._id, {
+            $set: {
+              status: 'cancelled',
+              orderStatus: 'Cancelled',
+              work_status: 'Cancelled',
+              noShowPhase: 2,
+              failureReason: 'EXPERT_UNAVAILABLE'
+            },
+            $push: {
+              tracking: {
+                status: 'UNAVAILABLE',
+                title: 'Expert Unavailable',
+                subTitle: 'Partner could not reach location within scheduled time.',
+                timestamp: new Date()
+              }
+            }
+          }, { runValidators: false });
 
-          await order.save();
 
           // 2. Notify User (Reschedule/Cancel Option)
           await notifyBookingUpdate(order.userId, order._id, 'USER_NOSHOW_ALERT', {
@@ -150,6 +156,44 @@ export const initStaleOrderJob = () => {
           console.log(`[StaleJob] Auto-Cancelled No-Show order ${order._id}`);
         } catch (err) { console.error(`[StaleJob] Error cancelling no-show ${order._id}:`, err); }
       }
+
+      // --- CASE 3: VENDOR ORDER TIMEOUT (6 HOURS) ---
+      const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60000);
+      const staleVendorOrders = await VendorOrder.find({
+        status: { $in: ['PENDING', 'MATCHING'] },
+        created_at: { $lte: sixHoursAgo }
+      });
+
+      if (staleVendorOrders.length > 0) {
+        console.log(`[StaleJob] Found ${staleVendorOrders.length} stale vendor orders for cancellation`);
+      }
+
+      for (const vOrder of staleVendorOrders) {
+        try {
+          const cancellationTrack = {
+            status: 'CANCELLED',
+            title: 'Order Expired',
+            subTitle: 'Cancelled automatically as no expert accepted the order within 6 hours.',
+            timestamp: new Date()
+          };
+
+          await VendorOrder.findByIdAndUpdate(vOrder._id, {
+            $set: {
+              status: 'CANCELLED',
+              failure_reason: 'NO_ENGINEER_ACCEPTED_6H'
+            },
+            $push: {
+              tracking: cancellationTrack
+            }
+          }, { runValidators: false });
+
+          console.log(`[StaleJob] Auto-Cancelled stale Vendor Order: ${vOrder._id} (Call ID: ${vOrder.call_id})`);
+
+        } catch (err) {
+          console.error(`[StaleJob] Error cancelling stale vendor order ${vOrder._id}:`, err);
+        }
+      }
+
 
     } catch (error) {
       console.error('[StaleOrderJob] Execution error:', error);
