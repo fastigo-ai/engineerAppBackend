@@ -87,11 +87,15 @@ export const verifyOTP = async (req, res) => {
     const result = await engineerAuthService.verifyOtp(mobile, otp);
 
     if (result.success) {
+      engineer.tokenVersion = (engineer.tokenVersion || 0) + 1;
+      await engineer.save();
+
       const token = jwt.sign(
-        { userId: engineer._id, id: engineer._id, role: 'engineer', userType: 'engineer' },
+        { userId: engineer._id, id: engineer._id, role: 'engineer', userType: 'engineer', tokenVersion: engineer.tokenVersion },
         process.env.JWT_SECRET,
         { expiresIn: "7d" }
       );
+
 
       const engineerDetails = {
         id: engineer._id, name: engineer.name, mobile: engineer.mobile, email: engineer.email,
@@ -316,16 +320,21 @@ export const onboardEngineer = async (req, res) => {
       }
     }
 
+    engineer.tokenVersion = (engineer.tokenVersion || 0) + 1;
+    await engineer.save();
+
     const token = jwt.sign(
       {
         userId: engineer._id,
         id: engineer._id,
         role: 'engineer',
-        userType: 'engineer'
+        userType: 'engineer',
+        tokenVersion: engineer.tokenVersion
       },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
+
 
     const { fcmToken, deviceId, platform, appVersion } = req.body;
     if (fcmToken) {

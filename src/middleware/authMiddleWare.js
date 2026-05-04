@@ -37,6 +37,16 @@ export const authenticate = async (req, res, next) => {
       });
     }
 
+    // Single Session Verification
+    if (decoded.tokenVersion !== undefined && decoded.tokenVersion !== user.tokenVersion) {
+      return res.status(401).json({
+        success: false,
+        message: 'Logged out from another device. Please login again.',
+        isLoggedOutFromOtherDevice: true
+      });
+    }
+
+
     // Check if user is active
     if (user.status === 'inactive' || user.status === 'blocked') {
       return res.status(403).json({
@@ -114,6 +124,16 @@ export const authenticateEngineer = async (req, res, next) => {
         message: 'Engineer not found. Token is invalid.'
       });
     }
+
+    // Single Session Verification
+    if (decoded.tokenVersion !== undefined && decoded.tokenVersion !== engineer.tokenVersion) {
+      return res.status(401).json({
+        success: false,
+        message: 'Logged out from another device. Please login again.',
+        isLoggedOutFromOtherDevice: true
+      });
+    }
+
 
     // Check if engineer is blocked or suspended
     if (engineer.isBlocked) {

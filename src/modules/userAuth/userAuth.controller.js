@@ -94,7 +94,9 @@ export const verifyOTP = async (req, res) => {
     if (result.success) {
       user.isPhoneVerified = true;
       user.status = "active";
+      user.tokenVersion = (user.tokenVersion || 0) + 1;
       await user.save();
+
 
       const { fcmToken, deviceId, platform, appVersion } = req.body;
       if (fcmToken) {
@@ -109,10 +111,11 @@ export const verifyOTP = async (req, res) => {
       }
 
       const token = jwt.sign(
-        { userId: user._id, role: user.role, userType: user.userType },
+        { userId: user._id, role: user.role, userType: user.userType, tokenVersion: user.tokenVersion },
         process.env.JWT_SECRET,
         { expiresIn: "7d" }
       );
+
 
       return res.json({
         message: "OTP verified successfully",
@@ -178,14 +181,17 @@ export const loginWithFirebase = async (req, res) => {
       user.mobile = phoneNumber || user.mobile;
       user.email = email || user.email;
       if (user.status === "pending_verification") user.status = "active";
+      user.tokenVersion = (user.tokenVersion || 0) + 1;
       await user.save();
+
     }
 
     const backendToken = jwt.sign(
-      { userId: user._id, role: user.role, userType: user.userType },
+      { userId: user._id, role: user.role, userType: user.userType, tokenVersion: user.tokenVersion },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
+
 
     const { fcmToken, deviceId, platform, appVersion } = req.body;
     if (fcmToken) {

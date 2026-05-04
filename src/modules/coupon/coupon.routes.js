@@ -1,6 +1,8 @@
 import express from 'express';
 import * as couponController from './coupon.controller.js';
 import { authenticate, authorize } from '../../middleware/authMiddleWare.js';
+import { couponLimiter } from '../../middleware/rateLimiter.js';
+
 
 const router = express.Router();
 
@@ -11,10 +13,11 @@ router.use(authenticate);
 router.get('/available', couponController.listAvailableCoupons);
 
 // Validate and apply a coupon
-router.post('/apply', couponController.applyCoupon);
+router.post('/apply', couponLimiter, couponController.applyCoupon);
 
 // Get the best coupon for the user
-router.post('/best', couponController.getBestCoupon);
+router.post('/best', couponLimiter, couponController.getBestCoupon);
+
 
 // Reserve a coupon (usually handled internally, but available)
 router.post('/reserve', couponController.reserveCoupon);

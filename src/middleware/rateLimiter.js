@@ -25,3 +25,15 @@ export const nearbyApiLimiter = rateLimit({
     error: 'Too many requests for nearby locations, please slow down.'
   }
 });
+// Limiter for coupon application attempts
+// Max 10 requests per 15 minutes per IP
+export const couponLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many coupon application attempts. Please try again after 15 minutes.'
+  }
+});

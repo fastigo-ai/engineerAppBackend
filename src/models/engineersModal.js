@@ -115,6 +115,10 @@ const EngineerSchema = new mongoose.Schema({
 
   lastLocationUpdate: {
     type: Date
+  },
+  tokenVersion: {
+    type: Number,
+    default: 0
   }
 }, {
   timestamps: true,

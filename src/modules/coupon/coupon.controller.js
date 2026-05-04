@@ -1,4 +1,6 @@
 import * as couponService from './coupon.service.js';
+import { generateValidationKey } from './coupon.validator.js';
+
 
 /**
  * Validate and apply coupon (pre-checkout)
@@ -17,10 +19,20 @@ export const applyCoupon = async (req, res) => {
     });
 
 
+    const validationKey = generateValidationKey({
+      userId,
+      couponId: validationResult.coupon._id,
+      amount
+    });
+
     return res.status(200).json({
       success: true,
-      data: validationResult
+      data: {
+        ...validationResult,
+        validationKey
+      }
     });
+
   } catch (error) {
     console.error('Apply coupon error:', error);
     return res.status(400).json({
@@ -166,10 +178,19 @@ export const getBestCoupon = async (req, res) => {
       servicePlans
     });
 
+    if (bestCoupon) {
+      bestCoupon.validationKey = generateValidationKey({
+        userId,
+        couponId: bestCoupon._id,
+        amount
+      });
+    }
+
     return res.status(200).json({
       success: true,
       data: bestCoupon
     });
+
   } catch (error) {
     console.error('Get best coupon error:', error);
     return res.status(500).json({

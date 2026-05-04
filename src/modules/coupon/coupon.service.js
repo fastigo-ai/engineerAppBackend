@@ -3,6 +3,8 @@ import couponRepository from './coupon.repository.js';
 import usageRepository from './couponUsage.repository.js';
 import { Order } from '../../models/orderSchema.js';
 import User from '../../models/user.js';
+import { ServicePlan } from '../../models/serviceModal.js';
+
 
 /**
  * Logic for calculating discount (FLAT vs PERCENTAGE)
@@ -29,8 +31,14 @@ export const validateCoupon = async ({ userId, couponCode, amount, servicePlans 
   if (!coupon) throw new Error('Invalid coupon code');
 
   const now = new Date();
-  if (now < coupon.startDate || now > coupon.endDate) throw new Error('Coupon has expired');
-  if (amount < coupon.minOrderAmount) throw new Error(`Minimum order amount of ₹${(coupon.minOrderAmount / 100).toFixed(2)} required`);
+  if (now < coupon.startDate) throw new Error('This coupon is not yet active');
+  if (now > coupon.endDate) throw new Error('This coupon has expired');
+  
+  if (amount < coupon.minOrderAmount) {
+    const diff = (coupon.minOrderAmount - amount) / 100;
+    throw new Error(`Add ₹${diff.toFixed(0)} more to your cart to use this coupon`);
+  }
+
 
   // Check overall usage limit
   if (coupon.usageLimit > 0 && coupon.usedCount >= coupon.usageLimit) {
@@ -65,9 +73,35 @@ export const validateCoupon = async ({ userId, couponCode, amount, servicePlans 
   if (coupon.targeting?.cities?.length > 0) {
     const user = await User.findById(userId).select('city').lean();
     if (!user?.city || !coupon.targeting.cities.includes(user.city)) {
-      throw new Error('Coupon not valid in your location');
+      throw new Error(`This coupon is not available in ${user?.city || 'your location'}`);
     }
   }
+
+  // --- Plan & Category targeting ---
+  if (servicePlans.length > 0) {
+    const plansData = await ServicePlan.find({ _id: { $in: servicePlans } }).populate('category').lean();
+    
+    // 1. Check applicablePlans
+    if (coupon.applicablePlans?.length > 0) {
+      const planIdsStrings = coupon.applicablePlans.map(id => id.toString());
+      const hasApplicablePlan = servicePlans.some(pid => planIdsStrings.includes(pid.toString()));
+      if (!hasApplicablePlan) {
+        throw new Error('This coupon is not valid for the selected service(s)');
+      }
+    }
+
+    // 2. Check applicableCategories
+    if (coupon.targeting?.applicableCategories?.length > 0) {
+      const hasApplicableCategory = plansData.some(p => 
+        coupon.targeting.applicableCategories.includes(p.category?.name)
+      );
+      if (!hasApplicableCategory) {
+        const allowed = coupon.targeting.applicableCategories.join(', ');
+        throw new Error(`This coupon is only valid for ${allowed} services`);
+      }
+    }
+  }
+
 
   const discount = calculateDiscount(coupon, amount);
   
