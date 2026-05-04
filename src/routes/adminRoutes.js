@@ -3,12 +3,16 @@ import AdminSubscription from '../models/AdminSubscription.js';
 import * as notificationController from '../modules/notification/notification.controller.js';
 import * as adminController from '../controllers/adminController.js';
 import { authenticate, authorize } from '../middleware/authMiddleWare.js';
+import { adminLimiter } from '../middleware/rateLimiter.js';
+
 
 const router = express.Router();
 
 // Apply admin protection to all routes in this file
 router.use(authenticate);
 router.use(authorize('super_admin', 'admin'));
+router.use(adminLimiter);
+
 
 /**
  * Register a new browser push subscription

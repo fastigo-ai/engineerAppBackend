@@ -64,7 +64,9 @@ const VendorOrderSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Engineer",
       default: null,
+      index: true,
     },
+
     notified_engineers: [String],
     rejected_engineers: [
       {

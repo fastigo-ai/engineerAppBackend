@@ -56,6 +56,7 @@ export const requestWithdrawal = async (req, res) => {
 
         console.log(`Withdrawal Request - Gross: ${amount}, Commission: ${commission}, Net Payout: ${netPayout}`);
 
+
         // 4. INTERNAL TRANSACTIONAL ACCOUNTING
         // Move Gross amount from available to locked
         wallet.availableBalance -= amount;
@@ -106,9 +107,10 @@ export const requestWithdrawal = async (req, res) => {
 
             return res.status(STATUS_CODES.SUCCESS).json({
                 success: true,
-                message: "Withdrawal request initiated",
-                data: { requestId, payoutId: payout.id }
+                message: `Withdrawal request initiated. ₹${netPayout} will be transferred to your bank after 20% platform fee.`,
+                data: { requestId, payoutId: payout.id, netAmount: netPayout }
             });
+
 
         } catch (payoutError) {
             console.error("Async Payout Trigger Failed:", payoutError);

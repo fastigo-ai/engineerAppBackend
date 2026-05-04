@@ -115,7 +115,9 @@ const OrderSchema = new mongoose.Schema(
     scheduledAt: {
       type: Date,
       default: null,
+      index: true,
     },
+
     totalDuration: {
       type: Number,
       default: 0,
@@ -143,12 +145,15 @@ const OrderSchema = new mongoose.Schema(
       trim: true,
       enum: ["Upcoming", "Completed", "Cancelled", "Accepted", "Rejected"],
       default: "Upcoming",
+      index: true,
     },
     assignedEngineer: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Engineer", // Changed to User since engineerId is from User model
       default: null,
+      index: true,
     },
+
     acceptedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Engineer",
@@ -200,7 +205,9 @@ const OrderSchema = new mongoose.Schema(
         "Rejected",
       ],
       default: "Upcoming",
+      index: true,
     },
+
     receipt: {
       type: String,
       trim: true,
@@ -257,7 +264,9 @@ const OrderSchema = new mongoose.Schema(
     noShowPhase: {
       type: Number,
       default: 0, // 0: Normal, 1: Pinged Engineer at T+10m
+      index: true,
     },
+
     noShowPingedAt: {
       type: Date,
       default: null,

@@ -12,6 +12,15 @@ const WithdrawalRequestSchema = new mongoose.Schema({
         required: true,
         min: 100 // Min withdrawal limit
     },
+    commission: {
+        type: Number,
+        default: 0
+    },
+    netAmount: {
+        type: Number,
+        required: true
+    },
+
     status: {
         type: String,
         enum: ['pending', 'processing', 'success', 'failed'],

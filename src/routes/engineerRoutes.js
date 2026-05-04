@@ -60,7 +60,8 @@ import {
   authenticateEngineer,
 } from "../middleware/authMiddleWare.js";
 import upload from "../middleware/multer.js";
-import { nearbyApiLimiter } from "../middleware/rateLimiter.js";
+import { nearbyApiLimiter, walletLimiter } from "../middleware/rateLimiter.js";
+
 
 const router = express.Router();
 
@@ -137,7 +138,8 @@ router.put("/profile/update", authenticateEngineer, updateProfile);
 
 // Wallet & Withdrawal routes
 router.get("/wallet", authenticateEngineer, getWalletBalance);
-router.post("/withdraw", authenticateEngineer, requestWithdrawal);
+router.post("/withdraw", authenticateEngineer, walletLimiter, requestWithdrawal);
+
 router.get("/transactions", authenticateEngineer, getTransactionHistory);
 router.get("/bank-account", authenticateEngineer, getBankAccount);
 

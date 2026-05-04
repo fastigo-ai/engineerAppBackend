@@ -19,7 +19,8 @@ const EngineerSchema = new mongoose.Schema({
     type: String,
     trim: true,
     lowercase: true,
-    sparse: true // Allows multiple null values
+    sparse: true, // Allows multiple null values
+    index: true
   },
   mobile: {
     type: String,
