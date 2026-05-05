@@ -10,6 +10,7 @@ import razorpay from "../../config/razorpay.js";
 import { notifyEngineersForOrder } from "../../services/notificationEngineerService.js";
 import { notifyBookingUpdate } from "../../services/notification/notificationService.js";
 import { uploadToCloudinary } from "../../utils/uploadToCloudinary.js";
+import { creditEngineerWallet } from "../../services/walletService.js";
 
 
 // Controller functions follow
@@ -318,7 +319,10 @@ export const acceptRequest = async (req, res) => {
                 }
             },
             { new: true }
-        );
+        ).populate('userId', 'name mobile address')
+         .populate('servicePlan', 'name')
+         .populate('assignedEngineer', 'name mobile email')
+         .populate('acceptedBy', 'name mobile email');
 
         if (!order) {
             console.log('❌ Order already accepted or not found:', id);
@@ -339,11 +343,7 @@ export const acceptRequest = async (req, res) => {
             }).catch(notifyError => console.error('Failed to send assignment notification to user:', notifyError));
         }
 
-        const updatedOrder = await Order.findById(id)
-            .populate('userId', 'name mobile address')
-            .populate('servicePlan', 'name')
-            .populate('assignedEngineer', 'name mobile email')
-            .populate('acceptedBy', 'name mobile email');
+        const updatedOrder = order;
 
         // Normalize for frontend compatibility
         const orderData = updatedOrder.toObject ? updatedOrder.toObject() : updatedOrder;
@@ -1082,7 +1082,6 @@ export const updateWorkStatus = async (req, res) => {
                 }
 
                 try {
-                    const { creditEngineerWallet } = await import('../../services/walletService.js');
                     const payoutAmount = order.totalAmount || order.amount || 0;
                     if (payoutAmount > 0) {
                         await creditEngineerWallet({
