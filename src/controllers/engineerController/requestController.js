@@ -1086,12 +1086,18 @@ export const updateWorkStatus = async (req, res) => {
                 }).catch(err => console.error('[RequestController] Service start notification failed:', err));
             }
 
-            // Normalize for frontend compatibility
+            // Normalize and Force 'pending' for frontend compatibility
             const orderData = order.toObject ? order.toObject() : order;
-            if (orderData.paymentMode && 
-                (orderData.paymentMode.toString().toUpperCase().includes('PAS') || 
-                 orderData.paymentMode.toString().toUpperCase().includes('PAY AFTER SERVICE'))) {
+            const isPASResponse = orderData.paymentMode && 
+                                 (orderData.paymentMode.toString().toUpperCase().includes('PAS') || 
+                                  orderData.paymentMode.toString().toUpperCase().includes('PAY AFTER SERVICE'));
+            
+            if (isPASResponse) {
                 orderData.paymentMode = 'Payment After Service';
+                if (orderData.paymentStatus !== 'PAID') {
+                    orderData.status = 'pending';
+                    orderData.paymentStatus = 'PAS_PENDING';
+                }
             }
 
             return res.status(STATUS_CODES.SUCCESS).json({
@@ -1444,12 +1450,20 @@ export const getRequestDetails = async (req, res) => {
             return res.status(404).json({ success: false, message: "Order not found" });
         }
 
-        // Normalize for frontend compatibility (Engineer App expects "Payment After Service")
+        // Normalize and Force 'pending' for PAS frontend compatibility
         const orderData = order.toObject ? order.toObject() : order;
-        if (orderData.paymentMode && 
-            (orderData.paymentMode.toString().toUpperCase().includes('PAS') || 
-             orderData.paymentMode.toString().toUpperCase().includes('PAY AFTER SERVICE'))) {
+        const isPAS = orderData.paymentMode && 
+                     (orderData.paymentMode.toString().toUpperCase().includes('PAS') || 
+                      orderData.paymentMode.toString().toUpperCase().includes('PAY AFTER SERVICE'));
+
+        if (isPAS) {
             orderData.paymentMode = 'Payment After Service';
+            // If it's PAS and not explicitly PAID in paymentStatus, force status to 'pending'
+            // This prevents the app from auto-completing if it sees 'paid' in the high-level status
+            if (orderData.paymentStatus !== 'PAID') {
+                orderData.status = 'pending';
+                orderData.paymentStatus = 'PAS_PENDING';
+            }
         }
 
         return res.status(200).json({
