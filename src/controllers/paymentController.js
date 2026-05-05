@@ -439,8 +439,14 @@ const handlePaymentCaptured = async (payload) => {
       } catch (e) {}
     }
 
-    // 3. Model selection (Users only)
-    const Model = Order;
+    if (!order) {
+      console.error('Order not found for payment captured');
+      await session.abortTransaction();
+      return;
+    }
+
+    // Determine new status (usually 'paid' for successful payment)
+    const newStatus = 'paid';
 
     // Update order status
     await Model.findByIdAndUpdate(order._id, {
