@@ -47,7 +47,7 @@ export const NOTIFICATION_TEMPLATES = {
   // --- Job Phase ---
   JOB_STARTED: {
     title: 'Service Started',
-    body: 'Your service for {{serviceName}} has officially started.',
+    body: 'Your service for {{serviceName}} has officially started. Please share the OTP {{otp}} with the expert to complete the job.',
     type: 'SYSTEM',
   },
   JOB_COMPLETED: {
