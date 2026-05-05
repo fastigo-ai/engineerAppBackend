@@ -1099,19 +1099,22 @@ export const updateWorkStatus = async (req, res) => {
                 order.orderStatus = 'Cancelled';
             }
 
-            await order.save();
-
             if (work_status === 'In Progress' && order.userId) {
-                // Generate OTP and Notify User: Job Started
-                const otp = Math.floor(1000 + Math.random() * 9000).toString();
-                order.completionOtp = otp;
-                await order.save(); // Save OTP
+                // Generate OTP if not already present
+                if (!order.completionOtp) {
+                    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+                    order.completionOtp = otp;
+                }
 
+                // Notify User: Job Started (Fire and forget to keep UI fast)
                 notifyBookingUpdate(order.userId, order._id, 'JOB_STARTED', {
                     serviceName: order.servicePlan?.name || 'Service',
-                    otp: otp
+                    otp: order.completionOtp
                 }).catch(err => console.error('[RequestController] Service start notification failed:', err));
             }
+
+            // Single final save for all changes (status, tracking, OTP)
+            await order.save();
 
             // Normalize for frontend compatibility
             const orderData = order.toObject ? order.toObject() : order;
