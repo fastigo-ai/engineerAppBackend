@@ -282,7 +282,7 @@ export const handleRazorpayWebhook = async (req, res) => {
     if (Buffer.isBuffer(req.body)) {
       rawBody = req.body.toString('utf8');
     }
-    
+
     const expectedSignature = crypto
       .createHmac('sha256', webhookSecret)
       .update(rawBody)
@@ -297,8 +297,8 @@ export const handleRazorpayWebhook = async (req, res) => {
     }
 
     // Process webhook event
-    const body = (typeof req.body === 'string' || Buffer.isBuffer(req.body)) 
-      ? JSON.parse(req.body.toString()) 
+    const body = (typeof req.body === 'string' || Buffer.isBuffer(req.body))
+      ? JSON.parse(req.body.toString())
       : req.body;
     const event = body.event;
     const payload = body.payload;
@@ -329,12 +329,12 @@ export const handleRazorpayWebhook = async (req, res) => {
       case 'refund.processed':
         await handleRefundProcessed(payload);
         break;
-      
+
       // --- Razorpay X Payout Events ---
       case 'payout.processed':
         await handlePayoutProcessed(payload);
         break;
-      
+
       case 'payout.failed':
       case 'payout.reversed':
         await handlePayoutReversed(payload);
@@ -366,7 +366,7 @@ const handlePaymentAuthorized = async (payload) => {
     const paymentEntity = payload.payment.entity;
 
     let order = null;
-    
+
     // 1. First try searching by Razorpay Order ID (if present)
     if (paymentEntity.order_id) {
       order = await Order.findOne({
@@ -436,7 +436,7 @@ const handlePaymentCaptured = async (payload) => {
         order = await Order.findById(paymentEntity.notes.orderId)
           .populate('servicePlan servicePlans')
           .session(session);
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (!order) {
@@ -484,7 +484,7 @@ const handlePaymentCaptured = async (payload) => {
     console.log(`Payment captured and order updated: ${order.orderId}`);
 
     // --- SIDE EFFECTS (Post-Transaction) ---
-    
+
     // 1. Trigger Dispatch for NEW orders (status was paid, not completed)
     if (newStatus === 'paid') {
       dispatchOrder(order._id);
@@ -492,7 +492,7 @@ const handlePaymentCaptured = async (payload) => {
 
     // 2. NOTIFICATIONS
     const { notifyBookingUpdate, notifyEngineerUpdate } = await import('../services/notification/notificationService.js');
-    
+
     // Notify User
     notifyBookingUpdate(order.userId, order._id, 'PAYMENT_RECEIVED', {
       amount: (paymentEntity.amount / 100).toString(),
@@ -501,7 +501,7 @@ const handlePaymentCaptured = async (payload) => {
 
     // Notify Assigned Engineer (Crucial for PAS)
     const assignedEngineerId = order.assignedEngineer;
-    
+
     if (assignedEngineerId) {
       notifyEngineerUpdate(assignedEngineerId, order._id, 'ENGINEER_PAYMENT_RECEIVED', {
         amount: (paymentEntity.amount / 100).toString(),
@@ -899,7 +899,7 @@ export const initiateOrderPayment = async (req, res) => {
     }
 
     const order = await Order.findOne(query);
-    
+
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
@@ -914,7 +914,7 @@ export const initiateOrderPayment = async (req, res) => {
 
     // Use existing razorpayOrderId if available, otherwise create a new one
     let razorpayOrderId = order.razorpayOrderId;
-    
+
     if (!razorpayOrderId) {
       const razorpayOrder = await razorpay.orders.create({
         amount: order.finalAmount || (order.amount * 100),
@@ -926,9 +926,9 @@ export const initiateOrderPayment = async (req, res) => {
           isRetry: "true"
         },
       });
-      
+
       razorpayOrderId = razorpayOrder.id;
-      
+
       // Update order with new razorpayOrderId
       await Order.findByIdAndUpdate(order._id, { razorpayOrderId });
     }
@@ -1305,7 +1305,7 @@ export const verifyPayment = async (req, res) => {
 
     // 8️ Dispatch
     dispatchOrder(order._id); // 🔥 NON-BLOCKING
-    
+
     // 🔔 Notify User: Order Confirmed
     if (order.userId) {
       notifyBookingUpdate(order.userId, order._id, 'BOOKING_CONFIRMED', {
@@ -1385,7 +1385,7 @@ export const updateOrderStatus = async (req, res) => {
     order.status = status;
     order.failureReason = failureReason || 'Updated by user/system';
     order.tracking.push(...trackingEntries);
-    
+
     await order.save();
 
     return res.status(200).json({
@@ -1492,69 +1492,69 @@ export const getUserOrders = async (req, res) => {
  * Retain commission (Gross - Net)
  */
 const handlePayoutProcessed = async (payload) => {
-    try {
-        const payoutEntity = payload.payout.entity;
-        const payoutId = payoutEntity.id;
-        const requestId = payoutEntity.reference_id;
+  try {
+    const payoutEntity = payload.payout.entity;
+    const payoutId = payoutEntity.id;
+    const requestId = payoutEntity.reference_id;
 
-        console.log(`Processing Success Webhook for Payout: ${payoutId}`);
+    console.log(`Processing Success Webhook for Payout: ${payoutId}`);
 
-        const withdrawal = await WithdrawalRequest.findById(requestId);
-        if (!withdrawal) {
-            console.error(`Withdrawal request ${requestId} not found for success sync`);
-            return;
-        }
-
-        if (withdrawal.status === 'success') {
-            console.log(`Withdrawal ${requestId} already marked success`);
-            return;
-        }
-
-        const engineerId = withdrawal.engineerId;
-        const grossAmount = withdrawal.amount; // Gross (100%)
-        const netAmount = withdrawal.netAmount || (grossAmount * 0.75); // Net (75%)
-
-        const session = await Wallet.startSession();
-        session.startTransaction();
-
-        try {
-            // 1. Update Wallet: Remove Gross from Locked, Add Net to Withdrawn
-            await Wallet.findOneAndUpdate(
-                { engineerId },
-                { 
-                    $inc: { 
-                        lockedBalance: -grossAmount,
-                        withdrawnAmount: netAmount
-                    }
-                },
-                { session }
-            );
-
-            // 2. Update Withdrawal Request
-            await WithdrawalRequest.findByIdAndUpdate(requestId, {
-                status: 'success',
-                processedAt: new Date()
-            }, { session });
-
-            // 3. Update Ledger Status
-            await Ledger.findOneAndUpdate(
-                { referenceId: requestId.toString(), type: 'debit' },
-                { status: 'success' },
-                { session }
-            );
-
-            await session.commitTransaction();
-            console.log(`Finalized withdrawal ${requestId}: Gross ₹${grossAmount} deducted, Net ₹${netAmount} recorded.`);
-        } catch (error) {
-            await session.abortTransaction();
-            throw error;
-        } finally {
-            session.endSession();
-        }
-
-    } catch (error) {
-        console.error("Handle payout processed error:", error);
+    const withdrawal = await WithdrawalRequest.findById(requestId);
+    if (!withdrawal) {
+      console.error(`Withdrawal request ${requestId} not found for success sync`);
+      return;
     }
+
+    if (withdrawal.status === 'success') {
+      console.log(`Withdrawal ${requestId} already marked success`);
+      return;
+    }
+
+    const engineerId = withdrawal.engineerId;
+    const grossAmount = withdrawal.amount; // Gross (100%)
+    const netAmount = withdrawal.netAmount || (grossAmount * 0.75); // Net (75%)
+
+    const session = await Wallet.startSession();
+    session.startTransaction();
+
+    try {
+      // 1. Update Wallet: Remove Gross from Locked, Add Net to Withdrawn
+      await Wallet.findOneAndUpdate(
+        { engineerId },
+        {
+          $inc: {
+            lockedBalance: -grossAmount,
+            withdrawnAmount: netAmount
+          }
+        },
+        { session }
+      );
+
+      // 2. Update Withdrawal Request
+      await WithdrawalRequest.findByIdAndUpdate(requestId, {
+        status: 'success',
+        processedAt: new Date()
+      }, { session });
+
+      // 3. Update Ledger Status
+      await Ledger.findOneAndUpdate(
+        { referenceId: requestId.toString(), type: 'debit' },
+        { status: 'success' },
+        { session }
+      );
+
+      await session.commitTransaction();
+      console.log(`Finalized withdrawal ${requestId}: Gross ₹${grossAmount} deducted, Net ₹${netAmount} recorded.`);
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
+
+  } catch (error) {
+    console.error("Handle payout processed error:", error);
+  }
 };
 
 /**
@@ -1562,60 +1562,60 @@ const handlePayoutProcessed = async (payload) => {
  * Revert funds from lockedBalance -> availableBalance (Gross)
  */
 const handlePayoutReversed = async (payload) => {
+  try {
+    const payoutEntity = payload.payout.entity;
+    const payoutId = payoutEntity.id;
+    const requestId = payoutEntity.reference_id;
+    const failureReason = payoutEntity.status_details?.description || 'Payout failed';
+
+    console.log(`Processing Failure Webhook for Payout: ${payoutId}, Reason: ${failureReason}`);
+
+    const withdrawal = await WithdrawalRequest.findById(requestId);
+    if (!withdrawal) return;
+
+    if (withdrawal.status === 'failed') return;
+
+    const engineerId = withdrawal.engineerId;
+    const grossAmount = withdrawal.amount;
+
+    const session = await Wallet.startSession();
+    session.startTransaction();
+
     try {
-        const payoutEntity = payload.payout.entity;
-        const payoutId = payoutEntity.id;
-        const requestId = payoutEntity.reference_id;
-        const failureReason = payoutEntity.status_details?.description || 'Payout failed';
+      // 1. Revert Wallet: Move Gross from Locked back to Available
+      await Wallet.findOneAndUpdate(
+        { engineerId },
+        {
+          $inc: {
+            lockedBalance: -grossAmount,
+            availableBalance: grossAmount
+          }
+        },
+        { session }
+      );
 
-        console.log(`Processing Failure Webhook for Payout: ${payoutId}, Reason: ${failureReason}`);
+      // 2. Mark Request as Failed
+      await WithdrawalRequest.findByIdAndUpdate(requestId, {
+        status: 'failed',
+        failureReason
+      }, { session });
 
-        const withdrawal = await WithdrawalRequest.findById(requestId);
-        if (!withdrawal) return;
+      // 3. Update Ledger Status
+      await Ledger.findOneAndUpdate(
+        { referenceId: requestId.toString(), type: 'debit' },
+        { status: 'failed' },
+        { session }
+      );
 
-        if (withdrawal.status === 'failed') return;
-
-        const engineerId = withdrawal.engineerId;
-        const grossAmount = withdrawal.amount;
-
-        const session = await Wallet.startSession();
-        session.startTransaction();
-
-        try {
-            // 1. Revert Wallet: Move Gross from Locked back to Available
-            await Wallet.findOneAndUpdate(
-                { engineerId },
-                { 
-                    $inc: { 
-                        lockedBalance: -grossAmount,
-                        availableBalance: grossAmount
-                    }
-                },
-                { session }
-            );
-
-            // 2. Mark Request as Failed
-            await WithdrawalRequest.findByIdAndUpdate(requestId, {
-                status: 'failed',
-                failureReason
-            }, { session });
-
-            // 3. Update Ledger Status
-            await Ledger.findOneAndUpdate(
-                { referenceId: requestId.toString(), type: 'debit' },
-                { status: 'failed' },
-                { session }
-            );
-
-            await session.commitTransaction();
-            console.log(`Reverted withdrawal ${requestId}: Gross ₹${grossAmount} returned to available balance.`);
-        } catch (error) {
-            await session.abortTransaction();
-            throw error;
-        } finally {
-            session.endSession();
-        }
+      await session.commitTransaction();
+      console.log(`Reverted withdrawal ${requestId}: Gross ₹${grossAmount} returned to available balance.`);
     } catch (error) {
-        console.error("Handle payout reversed error:", error);
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
     }
+  } catch (error) {
+    console.error("Handle payout reversed error:", error);
+  }
 };

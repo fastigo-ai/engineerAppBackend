@@ -1001,30 +1001,6 @@ export const updateWorkStatus = async (req, res) => {
                 }
             }
 
-            if (work_status === 'Completed') {
-                // 1. Check OTP first
-                if (!order.isOtpVerified) {
-                    return res.status(STATUS_CODES.BAD_REQUEST).json({
-                        success: false,
-                        message: 'OTP must be verified before completing the request.'
-                    });
-                }
-
-                // 2. Check Payment for PAS
-                const paymentMode = order.paymentMode?.toString().toUpperCase() || '';
-                const isPAS = paymentMode.includes('PAYMENT AFTER SERVICE') || 
-                             paymentMode.includes('PAY AFTER SERVICE') || 
-                             paymentMode.trim() === 'PAS';
-
-                if (isPAS && order.paymentStatus !== 'PAID') {
-                    console.warn(`[CompleteCheck] Blocked: PAS order ${order._id} is not PAID (current: ${order.paymentStatus})`);
-                    return res.status(STATUS_CODES.BAD_REQUEST).json({
-                        success: false,
-                        message: 'Payment must be collected via QR code before completing this order.'
-                    });
-                }
-            }
-
             order.work_status = work_status;
 
             // Add tracking event
@@ -1057,11 +1033,29 @@ export const updateWorkStatus = async (req, res) => {
                 });
             }
 
-                // PAS check already handled at the top
+            if (work_status === 'Completed') {
+                if (!order.isOtpVerified) {
+                    return res.status(STATUS_CODES.BAD_REQUEST).json({
+                        success: false,
+                        message: 'OTP must be verified before completing the request.'
+                    });
+                }
+
                 const paymentMode = order.paymentMode?.toString().toUpperCase() || '';
                 const isPAS = paymentMode.includes('PAYMENT AFTER SERVICE') || 
                              paymentMode.includes('PAY AFTER SERVICE') || 
                              paymentMode.trim() === 'PAS';
+
+                console.log(`[CompleteCheck] ID: ${order._id}, Mode: ${order.paymentMode}, isPAS: ${isPAS}, PaymentStatus: ${order.paymentStatus}`);
+
+                // Enforce payment for PAS orders before completion
+                if (isPAS && order.paymentStatus !== 'PAID') {
+                    console.warn(`[CompleteCheck] Blocked: PAS order ${order._id} is not PAID (current: ${order.paymentStatus})`);
+                    return res.status(STATUS_CODES.BAD_REQUEST).json({
+                        success: false,
+                        message: 'Payment must be collected via QR code before completing this order.'
+                    });
+                }
 
                 if (!isPAS) {
                     order.status = 'paid';
@@ -1127,24 +1121,6 @@ export const updateWorkStatus = async (req, res) => {
         }
 
         // 2. Try updating Vendor Order
-        // Normalize status for check
-        if (work_status === 'Completed') {
-            const vendorOrder = await VendorRequest.findById(id);
-            if (vendorOrder) {
-                const paymentMode = vendorOrder.paymentMode?.toString().toUpperCase() || '';
-                const isPAS = paymentMode.includes('PAYMENT AFTER SERVICE') || 
-                             paymentMode.includes('PAY AFTER SERVICE') || 
-                             paymentMode.trim() === 'PAS';
-
-                if (isPAS && vendorOrder.paymentStatus !== 'PAID') {
-                    return res.status(STATUS_CODES.BAD_REQUEST).json({
-                        success: false,
-                        message: 'Payment must be collected via QR code before completing this order.'
-                    });
-                }
-            }
-        }
-
         const vendorWorkStatus = work_status === 'In Progress' ? 'STARTED' : (work_status === 'Completed' ? 'COMPLETED' : work_status.toUpperCase());
 
         let trackingTitle = '';
