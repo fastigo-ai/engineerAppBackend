@@ -84,47 +84,7 @@ export const updateEngineerLocation = async (req, res) => {
             }
         });
 
-        // --- GEO-FENCING: Automated Arrival Detection ---
-        // Find any active order for this engineer that is currently in 'Accepted' or 'Upcoming' status
-        (async () => {
-            try {
-                const activeOrder = await Order.findOne({
-                    assignedEngineer: engineerId,
-                    work_status: { $in: ['Accepted', 'Upcoming', 'Accepted'] } // Adjust based on your status flow
-                });
-
-                if (activeOrder && activeOrder.location?.coordinates) {
-                    const [destLng, destLat] = activeOrder.location.coordinates;
-                    const distance = getDistanceInMeters(lat, lng, destLat, destLng);
-
-                    // If engineer is within 100 meters of the destination
-                    if (distance <= 100 && activeOrder.work_status !== 'Arrived') {
-                        console.log(`[Geo-fence] Engineer ${engineerId} arrived at order ${activeOrder._id} (Distance: ${distance.toFixed(2)}m)`);
-                        
-                        await Order.findByIdAndUpdate(activeOrder._id, {
-                            $set: { work_status: 'Arrived' },
-                            $push: {
-                                tracking: {
-                                    status: 'ARRIVED',
-                                    title: 'Partner Arrived',
-                                    subTitle: 'Expert has reached your location',
-                                    timestamp: new Date()
-                                }
-                            }
-                        });
-
-                        // Notify User
-                        if (activeOrder.userId) {
-                            notifyBookingUpdate(activeOrder.userId, activeOrder._id, 'ENGINEER_ARRIVED', {
-                                engineerName: engineer.name || 'Partner'
-                            }).catch(err => console.error('[Geo-fence] Arrival notification failed:', err));
-                        }
-                    }
-                }
-            } catch (geoError) {
-                console.error('[Geo-fence] Error in automated arrival detection:', geoError);
-            }
-        })();
+        // Automated Geofencing removed per requirement - Arrival is now manual.
     } catch (error) {
         console.error('Update location error:', error);
         res.status(STATUS_CODES.INTERNAL_SERVER_ERROR || 500).json({
@@ -1031,6 +991,14 @@ export const updateWorkStatus = async (req, res) => {
             if (work_status === 'Arrived') {
                 trackingTitle = 'Partner Arrived';
                 trackingStatus = 'ARRIVED';
+                
+                // 🔔 Notify User: Engineer Arrived (Manual Click)
+                if (order.userId) {
+                    const engineerName = req.user?.name || 'Partner';
+                    notifyBookingUpdate(order.userId, order._id, 'ENGINEER_ARRIVED', {
+                        engineerName
+                    }).catch(err => console.error('[Manual-Arrival] Notification failed:', err));
+                }
             } else if (work_status === 'In Progress') {
                 trackingTitle = 'Job Started';
                 trackingStatus = 'STARTED';
