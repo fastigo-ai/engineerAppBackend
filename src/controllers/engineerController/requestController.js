@@ -303,7 +303,7 @@ export const acceptRequest = async (req, res) => {
                     work_status: 'Accepted',
                     isOtpVerified: false
                 },
-                $pull: { rejectedBy: engineerId },
+                $pull: { rejectedBy: engineerId }, // Remove from rejectedBy if they previously rejected
                 $push: {
                     tracking: {
                         status: 'ACCEPTED',
@@ -347,6 +347,9 @@ export const acceptRequest = async (req, res) => {
             (orderData.paymentMode.toString().toUpperCase().includes('PAS') || 
              orderData.paymentMode.toString().toUpperCase().includes('PAY AFTER SERVICE'))) {
             orderData.paymentMode = 'Payment After Service';
+            if (orderData.paymentStatus !== 'PAID') {
+                orderData.status = 'pending';
+            }
         }
 
         res.status(STATUS_CODES.SUCCESS).json({
@@ -1002,7 +1005,7 @@ export const updateWorkStatus = async (req, res) => {
             if (work_status === 'Arrived') {
                 trackingTitle = 'Partner Arrived';
                 trackingStatus = 'ARRIVED';
-                
+
                 // 🔔 Notify User: Engineer Arrived (Manual Click)
                 if (order.userId) {
                     const engineerName = req.user?.name || 'Partner';
@@ -1051,7 +1054,7 @@ export const updateWorkStatus = async (req, res) => {
                     order.status = 'paid';
                     order.paymentStatus = 'PAID';
                 }
-                
+
                 order.orderStatus = 'Completed';
 
                 if (order.userId) {
@@ -1081,22 +1084,25 @@ export const updateWorkStatus = async (req, res) => {
             await order.save();
 
             if (work_status === 'In Progress' && order.userId) {
+                // Generate OTP and Notify User: Job Started
+                const otp = Math.floor(1000 + Math.random() * 9000).toString();
+                order.completionOtp = otp;
+                await order.save(); // Save OTP
+
                 notifyBookingUpdate(order.userId, order._id, 'JOB_STARTED', {
-                    serviceName: order.servicePlan?.name || 'Service'
+                    serviceName: order.servicePlan?.name || 'Service',
+                    otp: otp
                 }).catch(err => console.error('[RequestController] Service start notification failed:', err));
             }
 
             // Normalize and Force 'pending' for frontend compatibility
             const orderData = order.toObject ? order.toObject() : order;
-            const isPASResponse = orderData.paymentMode && 
-                                 (orderData.paymentMode.toString().toUpperCase().includes('PAS') || 
-                                  orderData.paymentMode.toString().toUpperCase().includes('PAY AFTER SERVICE'));
-            
-            if (isPASResponse) {
+            if (orderData.paymentMode && 
+                (orderData.paymentMode.toString().toUpperCase().includes('PAS') || 
+                 orderData.paymentMode.toString().toUpperCase().includes('PAY AFTER SERVICE'))) {
                 orderData.paymentMode = 'Payment After Service';
                 if (orderData.paymentStatus !== 'PAID') {
                     orderData.status = 'pending';
-                    orderData.paymentStatus = 'PAS_PENDING';
                 }
             }
 
@@ -1452,21 +1458,16 @@ export const getRequestDetails = async (req, res) => {
 
         // Normalize and Force 'pending' for PAS frontend compatibility
         const orderData = order.toObject ? order.toObject() : order;
-        const isPAS = orderData.paymentMode && 
-                     (orderData.paymentMode.toString().toUpperCase().includes('PAS') || 
-                      orderData.paymentMode.toString().toUpperCase().includes('PAY AFTER SERVICE'));
-
-        if (isPAS) {
+        if (orderData.paymentMode && 
+            (orderData.paymentMode.toString().toUpperCase().includes('PAS') || 
+             orderData.paymentMode.toString().toUpperCase().includes('PAY AFTER SERVICE'))) {
             orderData.paymentMode = 'Payment After Service';
-            // If it's PAS and not explicitly PAID in paymentStatus, force status to 'pending'
-            // This prevents the app from auto-completing if it sees 'paid' in the high-level status
             if (orderData.paymentStatus !== 'PAID') {
                 orderData.status = 'pending';
-                orderData.paymentStatus = 'PAS_PENDING';
             }
         }
 
-        return res.status(200).json({
+        return res.status(STATUS_CODES.SUCCESS || 200).json({
             success: true,
             data: orderData
         });
