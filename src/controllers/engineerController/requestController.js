@@ -1041,13 +1041,16 @@ export const updateWorkStatus = async (req, res) => {
                     });
                 }
 
-                const isPAS = order.paymentMode && 
-                             (order.paymentMode.toString().toUpperCase().includes('PAYMENT AFTER SERVICE') || 
-                              order.paymentMode.toString().toUpperCase().includes('PAY AFTER SERVICE') ||
-                              order.paymentMode.toString().toUpperCase().trim() === 'PAS');
+                const paymentMode = order.paymentMode?.toString().toUpperCase() || '';
+                const isPAS = paymentMode.includes('PAYMENT AFTER SERVICE') || 
+                             paymentMode.includes('PAY AFTER SERVICE') || 
+                             paymentMode.trim() === 'PAS';
+
+                console.log(`[CompleteCheck] ID: ${order._id}, Mode: ${order.paymentMode}, isPAS: ${isPAS}, PaymentStatus: ${order.paymentStatus}`);
 
                 // Enforce payment for PAS orders before completion
                 if (isPAS && order.paymentStatus !== 'PAID') {
+                    console.warn(`[CompleteCheck] Blocked: PAS order ${order._id} is not PAID (current: ${order.paymentStatus})`);
                     return res.status(STATUS_CODES.BAD_REQUEST).json({
                         success: false,
                         message: 'Payment must be collected via QR code before completing this order.'
