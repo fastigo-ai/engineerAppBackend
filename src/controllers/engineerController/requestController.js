@@ -571,8 +571,19 @@ export const completeRequest = async (req, res) => {
             });
         }
 
-        // Update order to completed
-        order.status = 'paid'; // or 'completed' if that enum exists
+        // 2. Check Payment for PAS
+        const paymentMode = order.paymentMode?.toString().toUpperCase() || '';
+        const isPAS = paymentMode.includes('PAYMENT AFTER SERVICE') || 
+                     paymentMode.includes('PAY AFTER SERVICE') || 
+                     paymentMode.trim() === 'PAS';
+
+        if (isPAS && order.paymentStatus !== 'PAID') {
+            console.warn(`[CompleteRequest] Blocked: PAS order ${order._id} is not PAID (current: ${order.paymentStatus})`);
+            return res.status(STATUS_CODES.BAD_REQUEST).json({
+                success: false,
+                message: 'Payment must be collected via QR code before completing this order.'
+            });
+        }
         order.orderStatus = 'Completed';
         order.work_status = 'Completed';
         console.log(' Order fields updated for completion');
