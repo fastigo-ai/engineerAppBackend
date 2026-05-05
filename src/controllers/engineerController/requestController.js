@@ -264,11 +264,7 @@ export const acceptRequest = async (req, res) => {
         // --- ATOMIC UPDATE START ---
         // We use findOneAndUpdate with a filter that ensures the order is NOT already accepted.
         // This prevents race conditions where two engineers click 'Accept' simultaneously.
-        // Check if this is a PAS order to determine initial payment status
-        const prelimOrder = await Order.findById(id);
-        const isPASOrder = prelimOrder?.paymentMode && 
-                         (prelimOrder.paymentMode.toString().toUpperCase().includes('PAS') || 
-                          prelimOrder.paymentMode.toString().toUpperCase().includes('PAY AFTER SERVICE'));
+        const otp = Math.floor(1000 + Math.random() * 9000).toString();
 
         const order = await Order.findOneAndUpdate(
             {
@@ -296,11 +292,12 @@ export const acceptRequest = async (req, res) => {
             },
             {
                 $set: {
-                    status: isPASOrder ? 'pending' : 'paid',
+                    status: 'Accepted',
                     orderStatus: 'Accepted',
                     acceptedBy: engineerId,
                     assignedEngineer: engineerId,
                     work_status: 'Accepted',
+                    completionOtp: otp,
                     isOtpVerified: false
                 },
                 $pull: { rejectedBy: engineerId }, // Remove from rejectedBy if they previously rejected
@@ -341,21 +338,10 @@ export const acceptRequest = async (req, res) => {
             .populate('assignedEngineer', 'name mobile email')
             .populate('acceptedBy', 'name mobile email');
 
-        // Normalize for frontend compatibility
-        const orderData = updatedOrder.toObject ? updatedOrder.toObject() : updatedOrder;
-        if (orderData.paymentMode && 
-            (orderData.paymentMode.toString().toUpperCase().includes('PAS') || 
-             orderData.paymentMode.toString().toUpperCase().includes('PAY AFTER SERVICE'))) {
-            orderData.paymentMode = 'Payment After Service';
-            if (orderData.paymentStatus !== 'PAID') {
-                orderData.status = 'pending';
-            }
-        }
-
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
             message: 'Order accepted successfully',
-            data: orderData
+            data: updatedOrder
         });
         console.log(' Response sent successfully');
     } catch (error) {
@@ -1084,32 +1070,15 @@ export const updateWorkStatus = async (req, res) => {
             await order.save();
 
             if (work_status === 'In Progress' && order.userId) {
-                // Generate OTP and Notify User: Job Started
-                const otp = Math.floor(1000 + Math.random() * 9000).toString();
-                order.completionOtp = otp;
-                await order.save(); // Save OTP
-
                 notifyBookingUpdate(order.userId, order._id, 'JOB_STARTED', {
-                    serviceName: order.servicePlan?.name || 'Service',
-                    otp: otp
+                    serviceName: order.servicePlan?.name || 'Service'
                 }).catch(err => console.error('[RequestController] Service start notification failed:', err));
-            }
-
-            // Normalize and Force 'pending' for frontend compatibility
-            const orderData = order.toObject ? order.toObject() : order;
-            if (orderData.paymentMode && 
-                (orderData.paymentMode.toString().toUpperCase().includes('PAS') || 
-                 orderData.paymentMode.toString().toUpperCase().includes('PAY AFTER SERVICE'))) {
-                orderData.paymentMode = 'Payment After Service';
-                if (orderData.paymentStatus !== 'PAID') {
-                    orderData.status = 'pending';
-                }
             }
 
             return res.status(STATUS_CODES.SUCCESS).json({
                 success: true,
                 message: `Work status updated to ${work_status}`,
-                data: orderData
+                data: order
             });
         }
 
@@ -1458,9 +1427,11 @@ export const getRequestDetails = async (req, res) => {
 
         // Normalize and Force 'pending' for PAS frontend compatibility
         const orderData = order.toObject ? order.toObject() : order;
-        if (orderData.paymentMode && 
-            (orderData.paymentMode.toString().toUpperCase().includes('PAS') || 
-             orderData.paymentMode.toString().toUpperCase().includes('PAY AFTER SERVICE'))) {
+        const isPAS = orderData.paymentMode && 
+                     (orderData.paymentMode.toString().toUpperCase().includes('PAS') || 
+                      orderData.paymentMode.toString().toUpperCase().includes('PAY AFTER SERVICE'));
+
+        if (isPAS) {
             orderData.paymentMode = 'Payment After Service';
             if (orderData.paymentStatus !== 'PAID') {
                 orderData.status = 'pending';
