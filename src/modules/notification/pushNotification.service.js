@@ -15,7 +15,16 @@ export async function sendPushNotification(notification) {
     userId: userId,
     userModel: notification.userModel,
     isActive: true,
-  }).select('fcmToken platform isActive lastSeenAt isLegacy').lean();
+  }).sort({ lastSeenAt: -1 }) // Get most recent first
+    .select('fcmToken platform isActive lastSeenAt isLegacy')
+    .lean();
+
+  // STICKY SINGLE-DEVICE POLICY: 
+  // If multiple active tokens exist, only send to the most recent one to prevent duplicates
+  if (tokens.length > 1) {
+    logger.info(`[FCM] Sticky Policy: Selecting most recent token for ${userId} out of ${tokens.length} active tokens`);
+    tokens = [tokens[0]];
+  }
 
   logger.info(`[FCM] Found ${tokens.length} tokens in DeviceToken for ${userId}`);
   if (tokens.length > 0) {
@@ -183,6 +192,14 @@ export async function syncDeviceToken({ userId, userModel, fcmToken, platform, d
   const finalUserModel = userModel || 'User';
   const finalPlatform = platform || 'android';
   const finalDeviceId = deviceId || `gen_${fcmToken.substring(0, 10)}`;
+
+  // STICKY SINGLE-DEVICE POLICY: 
+  // Before registering new token, deactivate ALL existing tokens for this user 
+  // to ensure only one device receives notifications.
+  await DeviceToken.updateMany(
+    { userId, userModel: finalUserModel, isActive: true },
+    { isActive: false, invalidatedAt: new Date() }
+  );
 
   await DeviceToken.updateMany(
     { fcmToken, userModel: finalUserModel, userId: { $ne: userId } },
