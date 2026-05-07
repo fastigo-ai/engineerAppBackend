@@ -340,6 +340,14 @@ export const handleRazorpayWebhook = async (req, res) => {
         await handlePayoutReversed(payload);
         break;
 
+      case 'qr_code.credited':
+        await handlePaymentCaptured(payload);
+        break;
+
+      case 'qr_code.created':
+        console.log('QR Code created');
+        break;
+
       default:
         console.log(`Unhandled webhook event: ${event}`);
     }
@@ -449,7 +457,7 @@ const handlePaymentCaptured = async (payload) => {
     const newStatus = 'paid';
 
     // Update order status
-    await Model.findByIdAndUpdate(order._id, {
+    await Order.findByIdAndUpdate(order._id, {
       status: newStatus,
       paymentStatus: 'PAID',
       razorpayPaymentId: paymentEntity.id,
