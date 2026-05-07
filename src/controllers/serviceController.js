@@ -952,22 +952,29 @@ export const rescheduleBooking = async (req, res) => {
       });
     }
 
+    // Ensure order is set back to Searching and unassigned
     const order = await Order.findByIdAndUpdate(
       id,
       { 
-        $set: updateData,
+        $set: {
+          ...updateData,
+          status: 'Searching',
+          assignedEngineer: null,
+          acceptedBy: null
+        },
         $inc: { rescheduleCount: 1 },
         $push: { tracking: { $each: trackingEvents } }
       },
       { new: true }
     ).populate('servicePlan servicePlans');
-
+ 
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
-
-    // Trigger re-dispatch
-    await notifyEngineersForOrder(order, { forceDispatch: true });
+ 
+    // Trigger optimized re-dispatch
+    const { dispatchOrder } = await import("../services/dispatch/dispatchService.js");
+    dispatchOrder(order._id).catch(err => console.error('[Reschedule] Dispatch failed:', err));
 
     res.status(200).json({
       success: true,
