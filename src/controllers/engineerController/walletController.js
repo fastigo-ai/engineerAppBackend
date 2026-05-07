@@ -63,14 +63,14 @@ export const requestWithdrawal = async (req, res) => {
         wallet.lockedBalance += amount;
         await wallet.save({ session });
 
-        // Create Withdrawal Request (pending) with commission audit
+        // Create Withdrawal Request (requested) with commission audit
         const withdrawal = new WithdrawalRequest({
             _id: requestId,
             engineerId,
             amount,           // Total requested (Gross)
             commission,       // Platform Fee
             netAmount: netPayout, // What engineer gets
-            status: 'pending'
+            status: 'requested'
         });
         await withdrawal.save({ session });
 
@@ -86,40 +86,15 @@ export const requestWithdrawal = async (req, res) => {
         });
         await ledger.save({ session });
 
-        // COMMIT TRANSACTION BEFORE EXTERNAL API CALL
+        // COMMIT TRANSACTION
         await session.commitTransaction();
         session.endSession();
 
-        // 5. CALL RAZORPAY PAYOUT API (After Commit) - Send NET Payout (75%)
-        try {
-            const payout = await payoutService.createPayout({
-                fundAccountId: bankAccount.fundAccountId,
-                amount: netPayout,
-                referenceId: requestId.toString(),
-                idempotencyKey
-            });
-
-            // Update with payoutId
-            await WithdrawalRequest.findByIdAndUpdate(requestId, {
-                status: 'processing',
-                payoutId: payout.id
-            });
-
-            return res.status(STATUS_CODES.SUCCESS).json({
-                success: true,
-                message: `Withdrawal request initiated. ₹${netPayout} will be transferred to your bank after 20% platform fee.`,
-                data: { requestId, payoutId: payout.id, netAmount: netPayout }
-            });
-
-
-        } catch (payoutError) {
-            console.error("Async Payout Trigger Failed:", payoutError);
-            return res.status(STATUS_CODES.SUCCESS).json({
-                success: true,
-                message: "Withdrawal recorded. Processing may be delayed.",
-                data: { requestId }
-            });
-        }
+        return res.status(STATUS_CODES.SUCCESS).json({
+            success: true,
+            message: `Withdrawal request submitted for admin approval. ₹${netPayout} will be transferred to your bank after approval.`,
+            data: { requestId, netAmount: netPayout }
+        });
 
     } catch (error) {
         if (session.inTransaction()) {

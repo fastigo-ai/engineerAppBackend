@@ -50,6 +50,13 @@ router.post('/notification/campaign', notificationController.adminSendCampaign);
 router.get('/refunds/pending', adminController.getPendingRefunds);
 
 /**
+ * Payout Management
+ */
+router.get('/payouts/pending', adminController.getPendingPayouts);
+router.post('/payouts/approve/:id', adminController.approvePayout);
+router.post('/payouts/reject/:id', adminController.rejectPayout);
+
+/**
  * Unregister a subscription
  */
 router.delete('/unsubscribe', async (req, res) => {
