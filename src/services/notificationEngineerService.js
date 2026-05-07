@@ -5,13 +5,13 @@ import { Engineer } from "../models/engineersModal.js";
 import { getIO } from "../config/socket.js";
 import { getDistanceInMeters } from "../utils/distance.js";
 
-const H3_RESOLUTION  = 8;
-const MAX_RADIUS_M   = 25_000;
-const MAX_RESULTS    = 15;
+const H3_RESOLUTION = 8;
+const MAX_RADIUS_M = 25_000;
+const MAX_RESULTS = 15;
 const MIN_CANDIDATES = 15;
-const RING_START     = 0;
-const RING_MAX       = 20;
-const RING_STEP      = 2;
+const RING_START = 0;
+const RING_MAX = 20;
+const RING_STEP = 2;
 const MAX_EXCLUSIONS = 100;
 const HEARTBEAT_WINDOW = 30 * 60 * 1000; // 30 minutes
 
@@ -20,17 +20,17 @@ export const mapOrderToNotificationData = (order) => {
 
   if (isVendor) {
     return {
-      id:          order._id,
-      call_id:     order.call_id,
-      address:     order.complete_address,
+      id: order._id,
+      call_id: order.call_id,
+      address: order.complete_address,
       branch_name: order.branch_name,
-      state_name:  order.state_name,
-      type:        order.support_type,
+      state_name: order.state_name,
+      type: order.support_type,
       isVendorOrder: true,
-      price:       order.order_price ? `₹${order.order_price}` : 'To Be Decided',
-      location:    order.location,
+      price: order.order_price ? `₹${order.order_price}` : 'To Be Decided',
+      location: order.location,
       description: order.description,
-      sop:         order.sop,
+      sop: order.sop,
       l1_support_name: order.l1_support_name,
       l1_support_number: order.l1_support_number,
     };
@@ -50,34 +50,34 @@ export const mapOrderToNotificationData = (order) => {
       order.servicePlan?.name ?? order.servicePlans?.[0]?.name ?? 'New Job';
 
     return {
-      id:              order._id,
-      call_id:         order.orderId,
-      address:         order.bookingDetails?.address ?? 'nearby location',
-      type:            servicePlanNames,
-      isVendorOrder:   false,
-      price:           order.amount ? `₹${order.amount}` : 'To Be Decided',
-      location:        order.location,
-      scheduledAt:     order.scheduledAt,
-      addressText:     order.addressText,
-      paymentMode:     order.paymentMode,
-      notes:           { ...order.notes, servicePlanNames },
+      id: order._id,
+      call_id: order.orderId,
+      address: order.bookingDetails?.address ?? 'nearby location',
+      type: servicePlanNames,
+      isVendorOrder: false,
+      price: order.amount ? `₹${order.amount}` : 'To Be Decided',
+      location: order.location,
+      scheduledAt: order.scheduledAt,
+      addressText: order.addressText,
+      paymentMode: order.paymentMode,
+      notes: { ...order.notes, servicePlanNames },
       customerDetails: order.customerDetails,
-      totalDuration:   order.totalDuration,
-      bookingDetails:  {
+      totalDuration: order.totalDuration,
+      bookingDetails: {
         ...(order.bookingDetails || {}),
         services: services
       },
-      services:        services
+      services: services
     };
   }
 };
 
 export const notifyMatchedEngineers = async (engineers, order) => {
   const io = getIO();
-  
+
   // Ensure order is mapped to notification data
-  const orderData = (order instanceof mongoose.Document || order._id) 
-    ? mapOrderToNotificationData(order) 
+  const orderData = (order instanceof mongoose.Document || order._id)
+    ? mapOrderToNotificationData(order)
     : order;
 
   const orderId = orderData.id || orderData._id;
@@ -86,46 +86,44 @@ export const notifyMatchedEngineers = async (engineers, order) => {
   console.log(`[Notify] Target: ${engineers.length} engineers`);
 
   for (const eng of engineers) {
-    const engineerRoom = eng._id.toString(); 
+    const engineerRoom = eng._id.toString();
 
-    const socketPayload = orderData.isVendorOrder 
+    const socketPayload = orderData.isVendorOrder
       ? {
-          order_id:     orderId,
-          _id:          orderId,
-          call_id:      orderData.call_id    ?? null,
-          address:      orderData.address    ?? orderData.addressText,
-          branch_name:  orderData.branch_name ?? null,
-          state_name:   orderData.state_name  ?? null,
-          distance:     eng.distanceKm,
-          distanceKm:   eng.distanceKm,
-          support_type: orderData.type,
-          order_price:  orderData.price,
-          timer:        30,
-          location:     orderData.location,
-          description:  orderData.description,
-          sop:          orderData.sop,
-          l1_support_name: orderData.l1_support_name,
-          l1_support_number: orderData.l1_support_number,
-        }
+        order_id: orderId,
+        _id: orderId,
+        call_id: orderData.call_id ?? null,
+        address: orderData.address ?? orderData.addressText,
+        branch_name: orderData.branch_name ?? null,
+        state_name: orderData.state_name ?? null,
+        distance: eng.distanceKm,
+        support_type: orderData.type,
+        order_price: orderData.price,
+        timer: 30,
+        location: orderData.location,
+        description: orderData.description,
+        sop: orderData.sop,
+        l1_support_name: orderData.l1_support_name,
+        l1_support_number: orderData.l1_support_number,
+      }
       : {
-          order_id:      orderId,
-          _id:           orderId,
-          address:       orderData.addressText ?? orderData.address ?? 'nearby location',
-          addressText:   orderData.addressText,
-          paymentMode:   orderData.paymentMode,
-          servicePlan:   orderData.notes?.servicePlanNames ?? "New Job",
-          userDetail:    orderData.customerDetails,
-          scheduledAt:   orderData.scheduledAt,
-          totalDuration: orderData.totalDuration,
-          distance:      eng.distanceKm,
-          distanceKm:    eng.distanceKm,
-          support_type:  orderData.type,
-          order_price:   orderData.price,
-          timer:         30,
-          location:      orderData.location,
-          bookingDetails: orderData.bookingDetails,
-          services:       orderData.services
-        };
+        order_id: orderId,
+        _id: orderId,
+        address: orderData.addressText ?? orderData.address ?? 'nearby location',
+        addressText: orderData.addressText,
+        paymentMode: orderData.paymentMode,
+        servicePlan: orderData.notes?.servicePlanNames ?? "New Job",
+        userDetail: orderData.customerDetails,
+        scheduledAt: orderData.scheduledAt,
+        totalDuration: orderData.totalDuration,
+        distance: eng.distanceKm,
+        support_type: orderData.type,
+        order_price: orderData.price,
+        timer: 30,
+        location: orderData.location,
+        bookingDetails: orderData.bookingDetails,
+        services: orderData.services
+      };
 
     // 1. Emit specific event
     const eventName = orderData.isVendorOrder ? "NEW_VENDOR_ORDER_REQUEST" : "NEW_USER_ORDER_REQUEST";
@@ -133,7 +131,7 @@ export const notifyMatchedEngineers = async (engineers, order) => {
 
     // 2. Emit generic fallback event for app compatibility
     io.to(engineerRoom).emit("NEW_ORDER_REQUEST", socketPayload);
-    
+
     // Check if room has any connections
     const sockets = await io.in(engineerRoom).fetchSockets();
     console.log(`[Socket] Emitted to room ${engineerRoom}. Active connections in room: ${sockets.length}`);
@@ -144,16 +142,16 @@ export const notifyMatchedEngineers = async (engineers, order) => {
   const payload = {
     notification: {
       title: 'New Job Request!',
-      body:  `New ${orderData.type ?? 'job'} available at ${orderData.address ?? orderData.addressText ?? 'nearby location'}`,
+      body: `New ${orderData.type ?? 'job'} available at ${orderData.address ?? orderData.addressText ?? 'nearby location'}`,
     },
     data: {
-      order_id:         String(orderId),
-      support_type:     orderData.type                       ?? '',
-      complete_address: orderData.address                    ?? orderData.addressText ?? '',
-      customer_name:    orderData.customerDetails?.name      ?? '',
-      type:             'NEW_ORDER',
-      isVendorOrder:    orderData.isVendorOrder,
-      orderType:        orderData.isVendorOrder ? 'vendor' : 'regular',
+      order_id: String(orderId),
+      support_type: orderData.type ?? '',
+      complete_address: orderData.address ?? orderData.addressText ?? '',
+      customer_name: orderData.customerDetails?.name ?? '',
+      type: 'NEW_ORDER',
+      isVendorOrder: orderData.isVendorOrder,
+      orderType: orderData.isVendorOrder ? 'vendor' : 'regular',
     },
   };
 
@@ -177,8 +175,8 @@ export const notifyEngineersForOrder = async (order, options = {}) => {
     order.assignedEngineer,
     order.assigned_engineer_id,
     order.acceptedBy,
-    ...(order.rejectedBy          ?? []),
-    ...(order.rejected_engineers  ?? []),
+    ...(order.rejectedBy ?? []),
+    ...(order.rejected_engineers ?? []),
   ]
     .filter(Boolean)
     .map(String);
@@ -205,7 +203,7 @@ export const notifyEngineersForOrder = async (order, options = {}) => {
 
   await notifyMatchedEngineers(matchedEngineers, orderData);
   console.log(`[Dispatch] Order ${order._id} sent to ${matchedEngineers.length} engineers`);
-  return { success: true, count: matchedEngineers.length, engineers: matchedEngineers };
+  return { success: true, count: matchedEngineers.length };
 };
 
 export async function matchEngineersByLocation({ location, excludeEngineers = [] }) {
@@ -213,13 +211,13 @@ export async function matchEngineersByLocation({ location, excludeEngineers = []
     throw new Error("Invalid location: expected GeoJSON [lng, lat]");
   }
 
-  const [lng, lat]    = location.coordinates;
-  const originCell    = latLngToCell(lat, lng, H3_RESOLUTION);
-  const excludeSet    = new Set(excludeEngineers.map(String));
+  const [lng, lat] = location.coordinates;
+  const originCell = latLngToCell(lat, lng, H3_RESOLUTION);
+  const excludeSet = new Set(excludeEngineers.map(String));
   console.log(`[Matching] Starting match for location [${lat}, ${lng}]. Excluded: ${excludeSet.size}`);
-  
-  const seenIds       = new Set();
-  const matched       = [];
+
+  const seenIds = new Set();
+  const matched = [];
   const searchedCells = new Set();
 
   for (let k = RING_START; k <= RING_MAX; k += RING_STEP) {
@@ -230,11 +228,11 @@ export async function matchEngineersByLocation({ location, excludeEngineers = []
     if (newCells.length === 0) continue;
 
     const engineers = await Engineer.find({
-      h3Index:     { $in: newCells },
-      isActive:    true,
+      h3Index: { $in: newCells },
+      isActive: true,
       isAvailable: true,
-      isDeleted:   false,
-      isBlocked:   false,
+      isDeleted: false,
+      isBlocked: false,
       isSuspended: false,
       lastHeartbeat: { $gte: new Date(Date.now() - HEARTBEAT_WINDOW) },
       ...(excludeSet.size > 0 && { _id: { $nin: [...excludeSet] } }),
@@ -246,20 +244,20 @@ export async function matchEngineersByLocation({ location, excludeEngineers = []
       const id = e._id.toString();
       if (seenIds.has(id) || !e.location?.coordinates) continue;
 
-      const [eLng, eLat]     = e.location.coordinates;
+      const [eLng, eLat] = e.location.coordinates;
       const distanceInMeters = getDistanceInMeters(lat, lng, eLat, eLng);
 
       if (distanceInMeters <= MAX_RADIUS_M) {
         seenIds.add(id);
         matched.push({
-          _id:             e._id,
-          name:            e.name,
-          mobile:          e.mobile,
-          rating:          e.rating,
-          fcmTokens:       e.fcmTokens,
-          h3Index:         e.h3Index,
+          _id: e._id,
+          name: e.name,
+          mobile: e.mobile,
+          rating: e.rating,
+          fcmTokens: e.fcmTokens,
+          h3Index: e.h3Index,
           distanceInMeters,
-          distanceKm:      +(distanceInMeters / 1000).toFixed(2),
+          distanceKm: +(distanceInMeters / 1000).toFixed(2),
         });
       }
     }

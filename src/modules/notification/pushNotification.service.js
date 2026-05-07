@@ -38,10 +38,10 @@ export async function sendPushNotification(notification) {
     logger.info(`[FCM] No tokens in DeviceToken for ${notification.userId}, checking legacy...`);
     const legacyEntity = await Model.findById(userId).select('fcmTokens').lean();
     logger.info(`[FCM] Legacy entity found: ${!!legacyEntity} | Tokens: ${legacyEntity?.fcmTokens?.length || 0}`);
-    
+
     if (legacyEntity?.fcmTokens?.length > 0) {
       logger.info(`[FCM] Fallback: Found ${legacyEntity.fcmTokens.length} legacy tokens for ${notification.userModel} ${notification.userId}`);
-      
+
       tokens = legacyEntity.fcmTokens.map(t => ({
         fcmToken: t.token,
         platform: t.device || 'android',
@@ -60,7 +60,7 @@ export async function sendPushNotification(notification) {
             isActive: true,
             lastSeenAt: t.lastUsed || new Date()
           }));
-          await DeviceToken.insertMany(newTokens, { ordered: false }).catch(() => {});
+          await DeviceToken.insertMany(newTokens, { ordered: false }).catch(() => { });
         } catch (hErr) {
           logger.warn(`[FCM] Hydration failed for ${notification.userId}: ${hErr.message}`);
         }
@@ -116,12 +116,7 @@ export async function sendPushNotification(notification) {
           title: notification.title,
           body: notification.body,
         },
-        android: {
-          priority: 'high',
-          notification: {
-            tag: String(notification.data?.order_id || 'general_order')
-          }
-        },
+        android: { priority: 'high' },
         // apns: { payload: { aps: { sound: 'default', badge: 1 } } },
       };
 
@@ -135,7 +130,7 @@ export async function sendPushNotification(notification) {
     } else {
       response = await admin.messaging().sendEachForMulticast(message);
     }
-    
+
     logger.info(`[FCM] Successfully sent ${response.successCount} messages; failures: ${response.failureCount}`);
 
     const invalidations = [];
@@ -225,7 +220,7 @@ export async function syncDeviceToken({ userId, userModel, fcmToken, platform, d
   );
 
   const Model = finalUserModel === 'Engineer' ? Engineer : User;
-  
+
   await Model.findByIdAndUpdate(userId, {
     $pull: { fcmTokens: { token: fcmToken } }
   });

@@ -91,7 +91,7 @@ export const createAndMatchVendorOrder = async (payload) => {
   return {
     success: true,
     order,
-    matchedEngineers: notifyResult.engineers || []
+    matchedEngineers
   };
 };
 
@@ -162,7 +162,7 @@ export const rejectOrderService = async ({ orderId, engineerId }) => {
 
   // If the rejecting engineer is the one who was assigned, reset the assignment
   const currentOrder = await VendorOrder.findById(orderId);
-  
+
   // --- BLOCK DECLINE IF COMPLETED ---
   if (currentOrder && (currentOrder.status === 'COMPLETED' || currentOrder.work_status === 'COMPLETED' || currentOrder.work_status === 'DONE')) {
     throw { status: 400, message: "Cannot decline a completed job" };
@@ -225,92 +225,92 @@ export const rejectOrderService = async ({ orderId, engineerId }) => {
  * Optimized for high performance and minimal DB load.
  */
 export const checkServiceability = async ({ projectId, calls }) => {
-    const MAX_CALLS_PER_REQUEST = 100;
-    const H3_RESOLUTION = 8;
-    const RING_SIZE = 22; // approx 20km radius search area
-    const SERVICE_RADIUS_METERS = 20000;
+  const MAX_CALLS_PER_REQUEST = 100;
+  const H3_RESOLUTION = 8;
+  const RING_SIZE = 22; // approx 20km radius search area
+  const SERVICE_RADIUS_METERS = 20000;
 
-    const callMap = new Map();          // call_id → { lat, lng, lookupCells }
-    const allRequiredCells = new Set(); // union of all cell sets → single DB query
-    const serviceable = [];
-    const non_serviceable = [];
+  const callMap = new Map();          // call_id → { lat, lng, lookupCells }
+  const allRequiredCells = new Set(); // union of all cell sets → single DB query
+  const serviceable = [];
+  const non_serviceable = [];
 
-    // 1. Prepare H3 Search Areas
-    for (const call of calls) {
-        const { call_id, lat, lng } = call;
+  // 1. Prepare H3 Search Areas
+  for (const call of calls) {
+    const { call_id, lat, lng } = call;
 
-        if (call_id == null) {
-            non_serviceable.push({ call_id: null, reason: "Missing call_id" });
-            continue;
-        }
-
-        if (typeof lat !== "number" || typeof lng !== "number" ||
-            isNaN(lat) || isNaN(lng) ||
-            lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-            non_serviceable.push({ call_id, reason: "Invalid coordinates" });
-            continue;
-        }
-
-        try {
-            const centerCell = latLngToCell(lat, lng, H3_RESOLUTION);
-            const lookupCells = gridDisk(centerCell, RING_SIZE);
-            callMap.set(call_id, { lat, lng, lookupCells });
-
-            for (const cell of lookupCells) {
-                allRequiredCells.add(cell);
-            }
-        } catch (err) {
-            console.error(`H3 error for call_id=${call_id}:`, err.message);
-            non_serviceable.push({ call_id, reason: "H3 processing error" });
-        }
+    if (call_id == null) {
+      non_serviceable.push({ call_id: null, reason: "Missing call_id" });
+      continue;
     }
 
-    if (callMap.size === 0) {
-        return { serviceable, non_serviceable };
+    if (typeof lat !== "number" || typeof lng !== "number" ||
+      isNaN(lat) || isNaN(lng) ||
+      lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      non_serviceable.push({ call_id, reason: "Invalid coordinates" });
+      continue;
     }
 
-    // 2. Single DB Query for all potential engineers
-    const availableEngineers = await Engineer.find({
-        isActive: true,
-        isAvailable: true,
-        isDeleted: false,
-        isBlocked: false,
-        isSuspended: false,
-        h3Index: { $in: Array.from(allRequiredCells) },
-    }).select("h3Index location").lean();
+    try {
+      const centerCell = latLngToCell(lat, lng, H3_RESOLUTION);
+      const lookupCells = gridDisk(centerCell, RING_SIZE);
+      callMap.set(call_id, { lat, lng, lookupCells });
 
-    // 3. Index Engineers by H3 Cell
-    const cellToEngineers = new Map();
-    for (const eng of availableEngineers) {
-        if (!eng.h3Index || !eng.location?.coordinates?.length) continue;
-        if (!cellToEngineers.has(eng.h3Index)) {
-            cellToEngineers.set(eng.h3Index, []);
-        }
-        cellToEngineers.get(eng.h3Index).push(eng);
+      for (const cell of lookupCells) {
+        allRequiredCells.add(cell);
+      }
+    } catch (err) {
+      console.error(`H3 error for call_id=${call_id}:`, err.message);
+      non_serviceable.push({ call_id, reason: "H3 processing error" });
     }
+  }
 
-    // 4. Final Distance Check per Call
-    for (const [call_id, { lat, lng, lookupCells }] of callMap) {
-        let found = false;
-        outer: for (const cell of lookupCells) {
-            const engineersInCell = cellToEngineers.get(cell);
-            if (!engineersInCell) continue;
-
-            for (const eng of engineersInCell) {
-                const [engLng, engLat] = eng.location.coordinates;
-                if (getDistanceInMeters(lat, lng, engLat, engLng) <= SERVICE_RADIUS_METERS) {
-                    found = true;
-                    break outer;
-                }
-            }
-        }
-
-        if (found) {
-            serviceable.push({ call_id });
-        } else {
-            non_serviceable.push({ call_id });
-        }
-    }
-
+  if (callMap.size === 0) {
     return { serviceable, non_serviceable };
+  }
+
+  // 2. Single DB Query for all potential engineers
+  const availableEngineers = await Engineer.find({
+    isActive: true,
+    isAvailable: true,
+    isDeleted: false,
+    isBlocked: false,
+    isSuspended: false,
+    h3Index: { $in: Array.from(allRequiredCells) },
+  }).select("h3Index location").lean();
+
+  // 3. Index Engineers by H3 Cell
+  const cellToEngineers = new Map();
+  for (const eng of availableEngineers) {
+    if (!eng.h3Index || !eng.location?.coordinates?.length) continue;
+    if (!cellToEngineers.has(eng.h3Index)) {
+      cellToEngineers.set(eng.h3Index, []);
+    }
+    cellToEngineers.get(eng.h3Index).push(eng);
+  }
+
+  // 4. Final Distance Check per Call
+  for (const [call_id, { lat, lng, lookupCells }] of callMap) {
+    let found = false;
+    outer: for (const cell of lookupCells) {
+      const engineersInCell = cellToEngineers.get(cell);
+      if (!engineersInCell) continue;
+
+      for (const eng of engineersInCell) {
+        const [engLng, engLat] = eng.location.coordinates;
+        if (getDistanceInMeters(lat, lng, engLat, engLng) <= SERVICE_RADIUS_METERS) {
+          found = true;
+          break outer;
+        }
+      }
+    }
+
+    if (found) {
+      serviceable.push({ call_id });
+    } else {
+      non_serviceable.push({ call_id });
+    }
+  }
+
+  return { serviceable, non_serviceable };
 };
