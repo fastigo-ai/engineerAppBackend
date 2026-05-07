@@ -63,10 +63,6 @@ export const mapOrderToNotificationData = (order) => {
       notes: { ...order.notes, servicePlanNames },
       customerDetails: order.customerDetails,
       totalDuration: order.totalDuration,
-      bookingDetails: {
-        ...(order.bookingDetails || {}),
-        services: services
-      },
       services: services
     };
   }
@@ -121,7 +117,6 @@ export const notifyMatchedEngineers = async (engineers, order) => {
         order_price: orderData.price,
         timer: 30,
         location: orderData.location,
-        bookingDetails: orderData.bookingDetails,
         services: orderData.services
       };
 
