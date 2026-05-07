@@ -79,7 +79,10 @@ export const validateCoupon = async ({ userId, couponCode, amount, servicePlans 
 
   // --- Plan & Category targeting ---
   if (servicePlans.length > 0) {
-    const plansData = await ServicePlan.find({ _id: { $in: servicePlans } }).populate('category').lean();
+    // Normalize servicePlans to be an array of IDs (strings)
+    const normalizedPlanIds = servicePlans.map(p => (typeof p === 'object' && p.id) ? p.id : p);
+    
+    const plansData = await ServicePlan.find({ _id: { $in: normalizedPlanIds } }).populate('category').lean();
     
     // 1. Check applicablePlans
     if (coupon.applicablePlans?.length > 0) {
@@ -247,9 +250,9 @@ export const getAvailableCoupons = async (userId) => {
       if (!user?.city || !coupon.targeting.cities.includes(user.city)) continue;
     }
 
-    // 6. Per-user limit check (using the pre-fetched usage map)
+    // 6. Per-user limit check
     const usageCount = usageMap[coupon._id.toString()] || 0;
-    if (usageCount >= coupon.perUserLimit) continue;
+    const isLimitReached = usageCount >= coupon.perUserLimit;
 
     // Determine badge
     let badge = null;
@@ -259,11 +262,13 @@ export const getAvailableCoupons = async (userId) => {
       badge = "One-time use";
     }
 
-    // Decorate with description and badge
+    // Decorate with description, badge, and usability info
     filtered.push({
       ...coupon,
       description: generateDescription(coupon),
-      badge
+      badge,
+      isUsable: !isLimitReached,
+      limitReached: isLimitReached
     });
   }
 
