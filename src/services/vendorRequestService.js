@@ -91,7 +91,7 @@ export const createAndMatchVendorOrder = async (payload) => {
   return {
     success: true,
     order,
-    matchedEngineers
+    matchedEngineers: notifyResult.engineers || []
   };
 };
 

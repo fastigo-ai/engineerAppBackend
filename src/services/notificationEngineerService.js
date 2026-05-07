@@ -203,7 +203,7 @@ export const notifyEngineersForOrder = async (order, options = {}) => {
 
   await notifyMatchedEngineers(matchedEngineers, orderData);
   console.log(`[Dispatch] Order ${order._id} sent to ${matchedEngineers.length} engineers`);
-  return { success: true, count: matchedEngineers.length };
+  return { success: true, count: matchedEngineers.length, engineers: matchedEngineers };
 };
 
 export async function matchEngineersByLocation({ location, excludeEngineers = [] }) {
