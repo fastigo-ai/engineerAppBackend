@@ -240,25 +240,13 @@ export const dispatchOrder = async (orderId) => {
     lastHeartbeat: { $gte: new Date(Date.now() - 15000) } // alive
   });
 
-  //  Step 3: Filter by availability
-  const availableEngineers = [];
-
-  for (let eng of engineers) {
-    const isFree = await checkEngineerAvailability(eng._id, order);
-
-    if (isFree) {
-      availableEngineers.push(eng);
-    }
-  }
-
-  //  Step 4: Sort (simple)
-  availableEngineers.sort((a, b) => a.rating - b.rating);
-
-  //  Step 5: Send to top engineers (batch)
-  const topEngineers = availableEngineers.slice(0, 5);
+  //  Step 3: Sort and Slice
+  engineers.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+  const topEngineers = engineers.slice(0, 5);
   const { getDistanceInMeters } = await import("../utils/distance.js");
+  const { notifyMatchedEngineers } = await import("./notificationEngineerService.js");
 
-  for (let eng of topEngineers) {
+  topEngineers.forEach(eng => {
     if (eng.location?.coordinates && order.location?.coordinates) {
       const dist = getDistanceInMeters(
         order.location.coordinates[1],
@@ -270,6 +258,9 @@ export const dispatchOrder = async (orderId) => {
     } else {
       eng.distanceKm = 0;
     }
-    await sendOrderRequest(eng, order);
-  }
+  });
+
+  order.type = "User Order";
+  await notifyMatchedEngineers(topEngineers, order);
+  console.log(`[Dispatch] Order ${orderId} sent to ${topEngineers.length} engineers`);
 };

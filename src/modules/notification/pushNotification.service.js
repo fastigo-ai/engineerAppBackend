@@ -116,7 +116,12 @@ export async function sendPushNotification(notification) {
           title: notification.title,
           body: notification.body,
         },
-        android: { priority: 'high' },
+        android: {
+          priority: 'high',
+          notification: {
+            tag: String(notification.data?.order_id || 'general_order')
+          }
+        },
         // apns: { payload: { aps: { sound: 'default', badge: 1 } } },
       };
 
