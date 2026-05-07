@@ -173,7 +173,7 @@ export const findMatchingEngineers = async (order, startTime, endTime) => {
                 eng.location.coordinates[1],
                 eng.location.coordinates[0]
             );
-            eng.distanceKm = dist / 1000;
+            eng.distanceKm = +(dist / 1000).toFixed(2);
         });
 
         // 4️ Ranking (distance + rating)
