@@ -1,5 +1,5 @@
 import axios from "axios";
-import { latLngToCell, gridDisk } from "h3-js";
+import { latLngToCell, gridDisk, gridDiskDistances } from "h3-js";
 import VendorOrder from "../models/vendorOrderModal.js";
 import { Engineer } from "../models/engineersModal.js";
 import { notifyEngineersForOrder, matchEngineersByLocation } from "./notificationEngineerService.js";
@@ -225,13 +225,13 @@ export const rejectOrderService = async ({ orderId, engineerId }) => {
  * Optimized for high performance and minimal DB load.
  */
 export const checkServiceability = async ({ projectId, calls }) => {
-  const MAX_CALLS_PER_REQUEST = 100;
   const H3_RESOLUTION = 8;
-  const RING_SIZE = 22; // approx 20km radius search area
+  const RING_SIZE = 22; 
   const SERVICE_RADIUS_METERS = 20000;
+  const SAFE_RING_LIMIT = 18; // Rings <= 18 are guaranteed within 20km
 
-  const callMap = new Map();          // call_id → { lat, lng, lookupCells }
-  const allRequiredCells = new Set(); // union of all cell sets → single DB query
+  const callMap = new Map();          
+  const allRequiredCells = new Set(); 
   const serviceable = [];
   const non_serviceable = [];
 
@@ -253,12 +253,22 @@ export const checkServiceability = async ({ projectId, calls }) => {
 
     try {
       const centerCell = latLngToCell(lat, lng, H3_RESOLUTION);
-      const lookupCells = gridDisk(centerCell, RING_SIZE);
-      callMap.set(call_id, { lat, lng, lookupCells });
+      // Use gridDiskDistances to separate safe inner rings from edge rings
+      const cellsWithDistances = gridDiskDistances(centerCell, RING_SIZE);
+      
+      const safeCells = [];
+      const edgeCells = [];
 
-      for (const cell of lookupCells) {
+      for (const [cell, distance] of cellsWithDistances) {
+        if (distance <= SAFE_RING_LIMIT) {
+          safeCells.push(cell);
+        } else {
+          edgeCells.push(cell);
+        }
         allRequiredCells.add(cell);
       }
+
+      callMap.set(call_id, { lat, lng, safeCells, edgeCells });
     } catch (err) {
       console.error(`H3 error for call_id=${call_id}:`, err.message);
       non_serviceable.push({ call_id, reason: "H3 processing error" });
@@ -279,28 +289,45 @@ export const checkServiceability = async ({ projectId, calls }) => {
     h3Index: { $in: Array.from(allRequiredCells) },
   }).select("h3Index location").lean();
 
-  // 3. Index Engineers by H3 Cell
+  // 3. Index Engineers by H3 Cell and track occupied cells
   const cellToEngineers = new Map();
+  const occupiedCells = new Set();
+
   for (const eng of availableEngineers) {
     if (!eng.h3Index || !eng.location?.coordinates?.length) continue;
+    
+    occupiedCells.add(eng.h3Index);
+    
     if (!cellToEngineers.has(eng.h3Index)) {
       cellToEngineers.set(eng.h3Index, []);
     }
     cellToEngineers.get(eng.h3Index).push(eng);
   }
 
-  // 4. Final Distance Check per Call
-  for (const [call_id, { lat, lng, lookupCells }] of callMap) {
+  // 4. Optimized Final Check
+  for (const [call_id, { lat, lng, safeCells, edgeCells }] of callMap) {
     let found = false;
-    outer: for (const cell of lookupCells) {
-      const engineersInCell = cellToEngineers.get(cell);
-      if (!engineersInCell) continue;
 
-      for (const eng of engineersInCell) {
-        const [engLng, engLat] = eng.location.coordinates;
-        if (getDistanceInMeters(lat, lng, engLat, engLng) <= SERVICE_RADIUS_METERS) {
-          found = true;
-          break outer;
+    // STEP 4A: Check Safe Inner Rings (Instant O(1) lookup)
+    for (const cell of safeCells) {
+      if (occupiedCells.has(cell)) {
+        found = true;
+        break;
+      }
+    }
+
+    // STEP 4B: Only if not found in inner rings, check Edge Rings with Distance Math
+    if (!found) {
+      outer: for (const cell of edgeCells) {
+        const engineersInCell = cellToEngineers.get(cell);
+        if (!engineersInCell) continue;
+
+        for (const eng of engineersInCell) {
+          const [engLng, engLat] = eng.location.coordinates;
+          if (getDistanceInMeters(lat, lng, engLat, engLng) <= SERVICE_RADIUS_METERS) {
+            found = true;
+            break outer;
+          }
         }
       }
     }
