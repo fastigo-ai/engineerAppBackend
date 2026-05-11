@@ -412,7 +412,9 @@ export const getCustomersAdminController = async (req, res) => {
                                             0
                                         ]
                                     }
-                                }
+                                },
+                                onlineCount: { $sum: { $cond: [{ $eq: ["$status", "ONLINE"] }, 1, 0] } },
+                                offlineCount: { $sum: { $cond: [{ $eq: ["$status", "OFFLINE"] }, 1, 0] } }
                             }
                         }
                     ],
@@ -467,5 +469,19 @@ export const getCustomersAdminController = async (req, res) => {
             message: 'Failed to retrieve customers',
             error: error.message
         });
+    }
+};
+
+export const userHeartbeat = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        await User.findByIdAndUpdate(userId, {
+            status: 'ONLINE',
+            lastHeartbeat: new Date()
+        });
+        res.status(200).json({ success: true, message: 'Heartbeat received' });
+    } catch (error) {
+        console.error('User heartbeat error:', error);
+        res.status(500).json({ success: false, message: 'Heartbeat failed' });
     }
 };

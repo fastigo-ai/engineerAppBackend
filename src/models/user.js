@@ -47,8 +47,13 @@ const userSchema = new mongoose.Schema({
   status: {
     type: String,
     required: true,
-    enum: ['active', 'pending_verification', 'suspended'],
+    enum: ['active', 'pending_verification', 'suspended', 'ONLINE', 'OFFLINE'],
     default: 'pending_verification',
+  },
+
+  lastHeartbeat: {
+    type: Date,
+    index: true
   },
 
   // Location for Engineers

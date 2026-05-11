@@ -8,7 +8,8 @@ import {
   resendOTP, 
   uploadProfileImage, 
   removeProfileImage,
-  getCustomersAdminController
+  getCustomersAdminController,
+  userHeartbeat
 } from './userAuth.controller.js';
 import { authenticate, authorize } from '../../middleware/authMiddleWare.js';
 import { registerDevice, unregisterDevice } from '../notification/notification.controller.js';
@@ -33,6 +34,7 @@ router.post("/resend-otp", authLimiter, resendOTP);
 // Profile image routes
 router.post("/profile-image", authenticate, upload.single("profileImage"), uploadProfileImage);
 router.delete("/profile-image", authenticate, removeProfileImage);
+router.post("/heartbeat", authenticate, userHeartbeat);
 
 // Admin routes
 router.get("/admin/allCustomers", authenticate, authorize('admin', 'super_admin'), getCustomersAdminController);
