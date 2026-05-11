@@ -1159,7 +1159,12 @@ export const cancelBooking = async (req, res) => {
     const order = await Order.findByIdAndUpdate(
       id,
       {
-        $set: { orderStatus: 'Cancelled', work_status: 'Cancelled', status: 'cancelled' },
+        $set: { 
+          orderStatus: 'Cancelled', 
+          work_status: 'Cancelled', 
+          status: 'cancelled',
+          assignedEngineer: null // Unassign engineer
+        },
         $push: {
           tracking: {
             status: 'CANCELLED',
@@ -1582,6 +1587,7 @@ export const updateOrderStatusAdmin = async (req, res) => {
         updateData.orderStatus = 'Cancelled';
         updateData.work_status = 'Cancelled';
         updateData.status = 'cancelled';
+        updateData.assignedEngineer = null; // Unassign engineer on cancellation
         trackingEntry = { status: 'CANCELLED', title: 'Booking Cancelled', subTitle: 'Cancelled by Administrator', timestamp: new Date() };
         shouldCleanupTracking = true;
         break;

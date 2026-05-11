@@ -46,11 +46,27 @@ export const AssignEngineerToOrderController = async (req, res) => {
     try {
         const { id } = req.params;
         const { engineerId } = req.body;
-        const engineer = await Order.findByIdAndUpdate(id, { assignedEngineer: engineerId }, { new: true });
+
+        // 1. Fetch order and check status
+        const order = await Order.findById(id);
+        if (!order) {
+            return res.status(404).json({ success: false, message: "Order not found" });
+        }
+
+        if (order.orderStatus === 'Cancelled' || order.status === 'cancelled') {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Cannot assign engineer to a cancelled order" 
+            });
+        }
+
+        // 2. Perform assignment
+        const updatedOrder = await Order.findByIdAndUpdate(id, { assignedEngineer: engineerId }, { new: true });
         await Engineer.findByIdAndUpdate(engineerId, { isAvailable: false, assignedOrders: [id] }, { new: true });
-        res.status(200).json(engineer);
+        
+        res.status(200).json(updatedOrder);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
