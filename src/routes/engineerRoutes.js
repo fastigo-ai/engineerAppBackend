@@ -12,7 +12,8 @@ import {
   heartbeatController,
   updateLocationController,
   getEngineersAdminController,
-  toggleEngineerBlockController
+  toggleEngineerBlockController,
+  getEngineerDossierController
 } from "../controllers/engineerController.js";
 import {
   getProfile,
@@ -74,6 +75,7 @@ router.post("/addEngineer", addengineerController);
 router.get("/getEngineers", getEngineersController);
 router.get("/admin/getEngineers", authenticate, authorize('admin', 'super_admin'), getEngineersAdminController);
 router.put("/admin/toggleBlock/:id", authenticate, authorize('admin', 'super_admin'), toggleEngineerBlockController);
+router.get("/admin/dossier/:id", authenticate, authorize('admin', 'super_admin'), getEngineerDossierController);
 router.get("/getAvialbleEngineers", getAvialbleEngineersController);
 router.put("/updateEngineer/:id", updateEngineerController);
 router.put("/assignEngineerToOrder/:id", AssignEngineerToOrderController);

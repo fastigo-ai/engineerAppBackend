@@ -1,5 +1,8 @@
 import { Engineer } from '../models/engineersModal.js';
 import { Order } from '../models/orderSchema.js';
+import { Wallet } from '../models/Wallet.js';
+import VendorOrder from '../models/vendorOrderModal.js';
+import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
 import { getEngineerStatsService, goOnlineService, goOfflineService, heartbeatService, updateLocationService } from '../services/engineerService.js';
 
 
@@ -159,6 +162,99 @@ export const toggleEngineerBlockController = async (req, res) => {
         });
     } catch (error) {
         console.error('Toggle block error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+/**
+ * Admin: Get complete Engineer Dossier (Detailed Stats)
+ */
+export const getEngineerDossierController = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // 1. Fetch Engineer
+        const engineer = await Engineer.findById(id).lean();
+        if (!engineer) {
+            return res.status(404).json({ success: false, message: "Engineer not found" });
+        }
+
+        // 2. Aggregate Stats Parallelly
+        const [
+            orderStats,
+            vendorStats,
+            walletInfo,
+            withdrawalStats
+        ] = await Promise.all([
+            // Regular Order Stats
+            Order.aggregate([
+                { $match: { assignedEngineer: new mongoose.Types.ObjectId(id) } },
+                {
+                    $group: {
+                        _id: null,
+                        totalOrders: { $sum: 1 },
+                        completedCount: { $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] } },
+                        ongoingCount: { $sum: { $cond: [{ $in: ["$status", ["paid", "Searching"]] }, 1, 0] } },
+                        cancelledCount: { $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] } }
+                    }
+                }
+            ]),
+
+            // Vendor Order Stats
+            VendorOrder.aggregate([
+                { $match: { assigned_engineer_id: new mongoose.Types.ObjectId(id) } },
+                {
+                    $group: {
+                        _id: null,
+                        totalVendorOrders: { $sum: 1 },
+                        completedVendorCount: { $sum: { $cond: [{ $eq: ["$status", "COMPLETED"] }, 1, 0] } },
+                        ongoingVendorCount: { $sum: { $cond: [{ $in: ["$status", ["ACCEPTED"]] }, 1, 0] } }
+                    }
+                }
+            ]),
+
+            // Wallet Info
+            Wallet.findOne({ engineerId: id }).lean(),
+
+            // Withdrawal Requests
+            WithdrawalRequest.aggregate([
+                { $match: { engineerId: new mongoose.Types.ObjectId(id) } },
+                {
+                    $group: {
+                        _id: null,
+                        totalWithdrawals: { $sum: 1 },
+                        pendingWithdrawalAmount: { 
+                            $sum: { 
+                                $cond: [{ $in: ["$status", ["requested", "pending", "processing"]] }, "$amount", 0] 
+                            } 
+                        },
+                        successWithdrawalAmount: { 
+                            $sum: { 
+                                $cond: [{ $eq: ["$status", "success"] }, "$amount", 0] 
+                            } 
+                        }
+                    }
+                }
+            ])
+        ]);
+
+        const stats = {
+            regularOrders: orderStats[0] || { totalOrders: 0, completedCount: 0, ongoingCount: 0, cancelledCount: 0 },
+            vendorOrders: vendorStats[0] || { totalVendorOrders: 0, completedVendorCount: 0, ongoingVendorCount: 0 },
+            wallet: walletInfo || { availableBalance: 0, lockedBalance: 0, withdrawnAmount: 0 },
+            withdrawals: withdrawalStats[0] || { totalWithdrawals: 0, pendingWithdrawalAmount: 0, successWithdrawalAmount: 0 }
+        };
+
+        res.status(200).json({
+            success: true,
+            data: {
+                profile: engineer,
+                stats
+            }
+        });
+
+    } catch (error) {
+        console.error('Engineer dossier error:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
