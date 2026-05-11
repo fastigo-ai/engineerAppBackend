@@ -51,10 +51,10 @@ export const validateCoupon = async ({ userId, couponCode, amount, servicePlans 
     throw new Error('You have already reached the usage limit for this coupon');
   }
 
-  // First-time user check: Treat any non-failed/non-cancelled order as a "previous order"
+  // First-time user check: Treat only 'paid' or 'completed' orders as a "previous order"
   const hasPreviousOrders = await Order.findOne({ 
     userId: new mongoose.Types.ObjectId(userId), 
-    status: { $nin: ['failed', 'cancelled'] } 
+    status: { $in: ['paid', 'completed'] } 
   }).lean();
 
   if (coupon.targeting?.firstTimeUserOnly && hasPreviousOrders) {
@@ -217,7 +217,7 @@ export const getAvailableCoupons = async (userId) => {
   const [hasPreviousOrders, user, userUsages] = await Promise.all([
     Order.findOne({ 
       userId: new mongoose.Types.ObjectId(userId), 
-      status: { $nin: ['failed', 'cancelled'] } 
+      status: { $in: ['paid', 'completed'] } 
     }).lean(),
     User.findById(userId).select('city').lean(),
     usageRepository.findAllForUser(userId, ['USED', 'RESERVED'])
@@ -254,6 +254,9 @@ export const getAvailableCoupons = async (userId) => {
     const usageCount = usageMap[coupon._id.toString()] || 0;
     const isLimitReached = usageCount >= coupon.perUserLimit;
 
+    // IF LIMIT REACHED, DO NOT SHOW IN AVAILABLE LIST
+    if (isLimitReached) continue;
+
     // Determine badge
     let badge = null;
     if (coupon.targeting?.firstTimeUserOnly) {
@@ -267,8 +270,8 @@ export const getAvailableCoupons = async (userId) => {
       ...coupon,
       description: generateDescription(coupon),
       badge,
-      isUsable: !isLimitReached,
-      limitReached: isLimitReached
+      isUsable: true,
+      limitReached: false
     });
   }
 
