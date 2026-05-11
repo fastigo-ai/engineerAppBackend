@@ -59,6 +59,7 @@ import {
 import {
   authenticate,
   authenticateEngineer,
+  authorize,
 } from "../middleware/authMiddleWare.js";
 import upload from "../middleware/multer.js";
 import { nearbyApiLimiter, walletLimiter } from "../middleware/rateLimiter.js";
