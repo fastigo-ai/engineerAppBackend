@@ -218,9 +218,9 @@ export const getAllCategoryController = async (req, res) => {
     });
   } catch (error) {
     console.error('[ServiceController] Get all category error:', error);
-    res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({ 
-      success: false, 
-      message: error.message 
+    res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: error.message
     });
   }
 };
@@ -641,7 +641,7 @@ export const getAllServicePlans = async (req, res) => {
                 category: '$categoryDetails',
                 planType: '$planTypeDetails',
                 createdAt: 1,
-                duration:1
+                duration: 1
               }
             }
           ]
@@ -651,8 +651,8 @@ export const getAllServicePlans = async (req, res) => {
 
     const totalCount = results.metadata[0]?.total || 0;
 
-    res.status(200).json({ 
-      success: true, 
+    res.status(200).json({
+      success: true,
       data: results.data,
       pagination: {
         totalCount,
@@ -1289,126 +1289,41 @@ export const rescheduleBooking = async (req, res) => {
 
 export const getAllBookings = async (req, res) => {
   try {
-    const { 
-      page = 1, 
-      limit = 10, 
-      search = '', 
-      status = 'all' 
-    } = req.query;
-
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const limitNum = parseInt(limit);
-
-    // -----------------------------
-    // Build Match Conditions
-    // -----------------------------
-    const match = {};
-
-    // 1. Search (Customer Name, OrderId, Phone)
-    if (search) {
-      match.$or = [
-        { orderId: { $regex: search, $options: 'i' } },
-        { 'customerDetails.name': { $regex: search, $options: 'i' } },
-        { 'customerDetails.phone': { $regex: search, $options: 'i' } }
-      ];
-    }
-
-    // 2. Status Filter
-    if (status && status !== 'all') {
-      match.orderStatus = status;
-    }
-
-    // -----------------------------
-    // Execute Aggregation
-    // -----------------------------
-    const [results] = await Order.aggregate([
-      { $match: match },
-      {
-        $facet: {
-          metadata: [{ $count: "total" }],
-          stats: [
-            {
-              $group: {
-                _id: null,
-                totalRevenue: { $sum: "$amount" },
-                upcomingCount: {
-                  $sum: { $cond: [{ $eq: ["$orderStatus", "Upcoming"] }, 1, 0] }
-                },
-                acceptedCount: {
-                  $sum: { $cond: [{ $eq: ["$orderStatus", "Accepted"] }, 1, 0] }
-                },
-                completedCount: {
-                  $sum: { $cond: [{ $eq: ["$orderStatus", "Completed"] }, 1, 0] }
-                }
-              }
-            }
-          ],
-          data: [
-            { $sort: { createdAt: -1 } },
-            { $skip: skip },
-            { $limit: limitNum },
-            // Populate Service Plan
-            {
-              $lookup: {
-                from: 'serviceplans',
-                localField: 'servicePlan',
-                foreignField: '_id',
-                as: 'servicePlan'
-              }
-            },
-            { $unwind: { path: '$servicePlan', preserveNullAndEmptyArrays: true } },
-            // Populate Category inside Service Plan
-            {
-              $lookup: {
-                from: 'categories',
-                localField: 'servicePlan.category',
-                foreignField: '_id',
-                as: 'servicePlan.category'
-              }
-            },
-            { $unwind: { path: '$servicePlan.category', preserveNullAndEmptyArrays: true } },
-            // Populate Assigned Engineer
-            {
-              $lookup: {
-                from: 'engineers',
-                localField: 'assignedEngineer',
-                foreignField: '_id',
-                as: 'assignedEngineer'
-              }
-            },
-            { $unwind: { path: '$assignedEngineer', preserveNullAndEmptyArrays: true } }
-          ]
+    const orders = await Order.find()
+      .populate({
+        path: 'servicePlan',
+        select: 'name subtitle price image features category',
+        populate: {
+          path: 'category',
+          select: 'name description image'
         }
-      }
-    ]);
+      })
+      .sort({ createdAt: -1 }) // Newest first
+      .lean();
 
-    const totalCount = results.metadata[0]?.total || 0;
-    const globalStats = results.stats[0] || {
-      totalRevenue: 0,
-      upcomingCount: 0,
-      acceptedCount: 0,
-      completedCount: 0
-    };
+    // Check if any orders found
+    if (!orders || orders.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'No paid orders found',
+        data: [],
+        count: 0
+      });
+    }
 
+    // Return orders
     return res.status(200).json({
       success: true,
-      message: 'Bookings retrieved successfully',
-      data: results.data,
-      stats: globalStats,
-      pagination: {
-        totalCount,
-        totalPages: Math.ceil(totalCount / limitNum),
-        currentPage: parseInt(page),
-        limit: limitNum,
-        hasMore: skip + results.data.length < totalCount
-      }
+      message: 'Paid orders retrieved successfully',
+      data: orders,
+      count: orders.length
     });
 
   } catch (error) {
-    console.error('[ServiceController] Get all bookings error:', error);
+    console.error('Error fetching user orders:', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to retrieve bookings',
+      message: 'Failed to retrieve user orders',
       error: error.message
     });
   }
@@ -1510,3 +1425,213 @@ export const updateOrderStatus = async (req, res) => {
   }
 };
 
+
+// --- ADMIN SPECIFIC BOOKING MANAGEMENT ---
+
+/**
+ * Optimized GET all bookings for Admin Dashboard
+ * Supports: Server-side search, status filtering, and pagination via aggregation.
+ */
+export const getAllBookingsAdmin = async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 10, 
+      search = '', 
+      status = 'all' 
+    } = req.query;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const limitNum = parseInt(limit);
+
+    const match = {};
+
+    // 1. Search (Customer Name, OrderId, Phone)
+    if (search) {
+      match.$or = [
+        { orderId: { $regex: search, $options: 'i' } },
+        { 'customerDetails.name': { $regex: search, $options: 'i' } },
+        { 'customerDetails.phone': { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // 2. Status Filter
+    if (status && status !== 'all') {
+      match.orderStatus = status;
+    }
+
+    // Execute Aggregation
+    const [results] = await Order.aggregate([
+      { $match: match },
+      {
+        $facet: {
+          metadata: [{ $count: "total" }],
+          stats: [
+            {
+              $group: {
+                _id: null,
+                totalRevenue: { $sum: "$amount" },
+                upcomingCount: { $sum: { $cond: [{ $eq: ["$orderStatus", "Upcoming"] }, 1, 0] } },
+                acceptedCount: { $sum: { $cond: [{ $eq: ["$orderStatus", "Accepted"] }, 1, 0] } },
+                completedCount: { $sum: { $cond: [{ $eq: ["$orderStatus", "Completed"] }, 1, 0] } }
+              }
+            }
+          ],
+          data: [
+            { $sort: { createdAt: -1 } },
+            { $skip: skip },
+            { $limit: limitNum },
+            {
+              $lookup: {
+                from: 'serviceplans',
+                localField: 'servicePlan',
+                foreignField: '_id',
+                as: 'servicePlan'
+              }
+            },
+            { $unwind: { path: '$servicePlan', preserveNullAndEmptyArrays: true } },
+            {
+              $lookup: {
+                from: 'categories',
+                localField: 'servicePlan.category',
+                foreignField: '_id',
+                as: 'servicePlan.category'
+              }
+            },
+            { $unwind: { path: '$servicePlan.category', preserveNullAndEmptyArrays: true } },
+            {
+              $lookup: {
+                from: 'engineers',
+                localField: 'assignedEngineer',
+                foreignField: '_id',
+                as: 'assignedEngineer'
+              }
+            },
+            { $unwind: { path: '$assignedEngineer', preserveNullAndEmptyArrays: true } }
+          ]
+        }
+      }
+    ]);
+
+    const totalCount = results.metadata[0]?.total || 0;
+    const globalStats = results.stats[0] || {
+      totalRevenue: 0,
+      upcomingCount: 0,
+      acceptedCount: 0,
+      completedCount: 0
+    };
+
+    return res.status(200).json({
+      success: true,
+      message: 'Admin bookings retrieved successfully',
+      data: results.data,
+      stats: globalStats,
+      pagination: {
+        totalCount,
+        totalPages: Math.ceil(totalCount / limitNum),
+        currentPage: parseInt(page),
+        limit: limitNum,
+        hasMore: skip + results.data.length < totalCount
+      }
+    });
+
+  } catch (error) {
+    console.error('[ServiceController] Admin get bookings error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to retrieve bookings', error: error.message });
+  }
+};
+
+/**
+ * Admin-specific order status update with flow synchronization and tracking cleanup.
+ */
+export const updateOrderStatusAdmin = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    console.log(`[Admin] Manual status update for Order ${id} to ${status}`);
+
+    const existingOrder = await Order.findById(id);
+    if (!existingOrder) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    const updateData = {};
+    let trackingEntry = null;
+    let shouldCleanupTracking = false;
+
+    switch (status) {
+      case 'Arrived':
+        updateData.orderStatus = 'Accepted';
+        updateData.work_status = 'In Progress';
+        trackingEntry = { status: 'ARRIVED', title: 'Partner Arrived', subTitle: 'Expert has reached your location', timestamp: new Date() };
+        break;
+      case 'Started':
+        updateData.orderStatus = 'Accepted';
+        updateData.work_status = 'In Progress';
+        trackingEntry = { status: 'STARTED', title: 'Service Started', subTitle: 'Work is currently in progress', timestamp: new Date() };
+        break;
+      case 'Completed':
+        updateData.orderStatus = 'Completed';
+        updateData.work_status = 'Completed';
+        updateData.status = 'completed';
+        trackingEntry = { status: 'COMPLETED', title: 'Service Completed', subTitle: 'Job finished successfully', timestamp: new Date() };
+        shouldCleanupTracking = true;
+        break;
+      case 'Cancelled':
+        updateData.orderStatus = 'Cancelled';
+        updateData.work_status = 'Cancelled';
+        updateData.status = 'cancelled';
+        trackingEntry = { status: 'CANCELLED', title: 'Booking Cancelled', subTitle: 'Cancelled by Administrator', timestamp: new Date() };
+        shouldCleanupTracking = true;
+        break;
+      case 'Accepted':
+        updateData.orderStatus = 'Accepted';
+        updateData.work_status = 'Accepted';
+        updateData.status = 'paid';
+        break;
+      default:
+        updateData.orderStatus = status;
+        updateData.work_status = status;
+    }
+
+    let updatedTracking = [...(existingOrder.tracking || [])];
+    if (shouldCleanupTracking) {
+      updatedTracking = updatedTracking.filter(t => 
+        t.status !== 'SEARCHING_DELAYED' && 
+        !t.title?.includes('Expert Not Found') &&
+        !t.title?.includes('Searching')
+      );
+    }
+    
+    if (trackingEntry) {
+      updatedTracking.push(trackingEntry);
+    }
+
+    const updatedOrder = await Order.findByIdAndUpdate(
+      id,
+      { $set: { ...updateData, tracking: updatedTracking } },
+      { new: true }
+    ).populate('servicePlan userId');
+
+    res.status(200).json({ success: true, message: "Status synchronized successfully", data: updatedOrder });
+
+    if (updatedOrder.userId) {
+      let eventKey = null;
+      if (status === 'Arrived') eventKey = 'ENGINEER_ARRIVED';
+      else if (status === 'Started') eventKey = 'JOB_STARTED';
+      else if (status === 'Completed') eventKey = 'BOOKING_COMPLETED';
+      else if (status === 'Cancelled') eventKey = 'BOOKING_CANCELLED';
+
+      if (eventKey) {
+        notifyBookingUpdate(updatedOrder.userId, updatedOrder._id, eventKey, {
+          serviceName: updatedOrder.servicePlan?.name || 'Service',
+          engineerName: 'Your engineer'
+        }).catch(err => console.error('[ServiceController] Admin status notification failed:', err));
+      }
+    }
+  } catch (error) {
+    console.error("Admin order status update error:", error);
+    return res.status(500).json({ success: false, message: "Internal server error", error: error.message });
+  }
+};

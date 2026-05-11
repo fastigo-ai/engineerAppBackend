@@ -25,7 +25,9 @@ import {
   updateOrderStatus,
   cancelBooking,
   rescheduleBooking,
-  getAllServicePlansAdmin
+  getAllServicePlansAdmin,
+  getAllBookingsAdmin,
+  updateOrderStatusAdmin
 } from '../controllers/serviceController.js';
 import upload from '../middleware/multer.js';
 import { bulkImportServices } from '../repositories/serviceRepository.js';
@@ -89,5 +91,9 @@ router.put('/updateOrderStatus/:id', updateOrderStatus);
 router.put('/cancelBooking/:id', cancelBooking);
 
 router.put('/rescheduleBooking/:id', rescheduleBooking);
+
+// --- ADMIN BOOKING ROUTES ---
+router.get('/admin/allBookings', authenticate, authorize('admin', 'super_admin'), getAllBookingsAdmin);
+router.put('/admin/updateOrderStatus/:id', authenticate, authorize('admin', 'super_admin'), updateOrderStatusAdmin);
 
 export default router;
