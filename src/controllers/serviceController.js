@@ -1462,7 +1462,12 @@ export const getAllBookingsAdmin = async (req, res) => {
 
     // 2. Status Filter
     if (status && status !== 'all') {
-      match.orderStatus = status;
+      if (status === 'CancelledPaid') {
+        match.orderStatus = 'Cancelled';
+        match.paymentStatus = { $in: ['PAID', 'paid'] };
+      } else {
+        match.orderStatus = status;
+      }
     }
 
     // Execute Aggregation
