@@ -134,6 +134,35 @@ export const getEngineersAdminController = async (req, res) => {
     }
 };
 
+/**
+ * Admin: Toggle engineer block status (Block/Unblock)
+ */
+export const toggleEngineerBlockController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { isBlocked } = req.body;
+
+        const engineer = await Engineer.findByIdAndUpdate(
+            id, 
+            { isBlocked }, 
+            { new: true }
+        );
+
+        if (!engineer) {
+            return res.status(404).json({ success: false, message: "Engineer not found" });
+        }
+
+        res.status(200).json({ 
+            success: true, 
+            message: `Engineer ${isBlocked ? 'blocked' : 'unblocked'} successfully`,
+            data: engineer 
+        });
+    } catch (error) {
+        console.error('Toggle block error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 export const AssignEngineerToOrderController = async (req, res) => {
     try {
         const { id } = req.params;
