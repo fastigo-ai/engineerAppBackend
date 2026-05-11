@@ -226,12 +226,12 @@ export const rejectOrderService = async ({ orderId, engineerId }) => {
  */
 export const checkServiceability = async ({ projectId, calls }) => {
   const H3_RESOLUTION = 8;
-  const RING_SIZE = 22; 
+  const RING_SIZE = 22;
   const SERVICE_RADIUS_METERS = 20000;
   const SAFE_RING_LIMIT = 18; // Rings <= 18 are guaranteed within 20km
 
-  const callMap = new Map();          
-  const allRequiredCells = new Set(); 
+  const callMap = new Map();         
+  const allRequiredCells = new Set();
   const serviceable = [];
   const non_serviceable = [];
 

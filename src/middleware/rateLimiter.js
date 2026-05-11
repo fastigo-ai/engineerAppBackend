@@ -1,10 +1,10 @@
 import rateLimit from 'express-rate-limit';
 
 // Limiter for authentication routes (e.g., send-otp, verify-otp)
-// Max 5 requests per 15 minutes per IP
+// Max 30 requests per 15 minutes per IP
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 requests per windowMs
+  max: 30, // Limit each IP to 30 requests per windowMs
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   message: {

@@ -120,6 +120,13 @@ const EngineerSchema = new mongoose.Schema({
   tokenVersion: {
     type: Number,
     default: 0
+  },
+  otpMetadata: {
+    requestCount: { type: Number, default: 0 },
+    windowStart: { type: Date, default: Date.now },
+    lastSentAt: { type: Date },
+    verifyAttempts: { type: Number, default: 0 },
+    blockedUntil: { type: Date }
   }
 }, {
   timestamps: true,
