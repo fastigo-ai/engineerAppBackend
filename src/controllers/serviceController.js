@@ -1561,6 +1561,15 @@ export const updateOrderStatusAdmin = async (req, res) => {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
 
+    // --- IMMUTABILITY CHECK ---
+    // Prevent any updates to orders that are already Completed or Cancelled
+    if (existingOrder.orderStatus === 'Completed' || existingOrder.orderStatus === 'Cancelled') {
+      return res.status(400).json({ 
+        success: false, 
+        message: `This order is already ${existingOrder.orderStatus} and cannot be modified further.` 
+      });
+    }
+
     const updateData = {};
     let trackingEntry = null;
     let shouldCleanupTracking = false;
