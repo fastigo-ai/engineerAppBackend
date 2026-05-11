@@ -56,7 +56,9 @@ export const getEngineersAdminController = async (req, res) => {
             page = 1, 
             limit = 10, 
             search = '', 
-            status = 'all' 
+            status = 'all',
+            isBlocked = 'all',
+            isVerified = 'all'
         } = req.query;
 
         const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -76,6 +78,16 @@ export const getEngineersAdminController = async (req, res) => {
         // 2. Status Filter (ONLINE, OFFLINE, BUSY)
         if (status && status !== 'all') {
             match.status = status.toUpperCase();
+        }
+
+        // 3. Blocked Filter
+        if (isBlocked !== 'all') {
+            match.isBlocked = isBlocked === 'true';
+        }
+
+        // 4. Verified Filter
+        if (isVerified !== 'all') {
+            match.isVerified = isVerified === 'true';
         }
 
         // Execute Aggregation

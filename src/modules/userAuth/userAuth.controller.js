@@ -345,7 +345,9 @@ export const getCustomersAdminController = async (req, res) => {
             page = 1, 
             limit = 10, 
             search = '', 
-            city = 'all' 
+            city = 'all',
+            status = 'all',
+            isPhoneVerified = 'all'
         } = req.query;
 
         const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -365,6 +367,16 @@ export const getCustomersAdminController = async (req, res) => {
         // 2. City Filter
         if (city && city !== 'all') {
             match.city = city;
+        }
+
+        // 3. Status Filter
+        if (status && status !== 'all') {
+            match.status = status;
+        }
+
+        // 4. Phone Verified Filter
+        if (isPhoneVerified !== 'all') {
+            match.isPhoneVerified = isPhoneVerified === 'true';
         }
 
         // Execute Aggregation
