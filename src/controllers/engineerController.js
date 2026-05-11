@@ -42,6 +42,98 @@ export const updateEngineerController = async (req, res) => {
     }
 };
 
+/**
+ * Optimized GET all engineers for Admin Dashboard
+ * Supports: Search (name, phone, email), Status Filter, and Pagination
+ */
+export const getEngineersAdminController = async (req, res) => {
+    try {
+        const { 
+            page = 1, 
+            limit = 10, 
+            search = '', 
+            status = 'all' 
+        } = req.query;
+
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const limitNum = parseInt(limit);
+
+        const match = {};
+
+        // 1. Search (Name, Phone, Email)
+        if (search) {
+            match.$or = [
+                { name: { $regex: search, $options: 'i' } },
+                { mobile: { $regex: search, $options: 'i' } },
+                { email: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        // 2. Status Filter (ONLINE, OFFLINE, BUSY)
+        if (status && status !== 'all') {
+            match.status = status.toUpperCase();
+        }
+
+        // Execute Aggregation
+        const [results] = await Engineer.aggregate([
+            { $match: match },
+            {
+                $facet: {
+                    metadata: [{ $count: "total" }],
+                    stats: [
+                        {
+                            $group: {
+                                _id: null,
+                                totalEngineers: { $sum: 1 },
+                                onlineCount: { $sum: { $cond: [{ $eq: ["$status", "ONLINE"] }, 1, 0] } },
+                                busyCount: { $sum: { $cond: [{ $eq: ["$status", "BUSY"] }, 1, 0] } },
+                                offlineCount: { $sum: { $cond: [{ $eq: ["$status", "OFFLINE"] }, 1, 0] } },
+                                avgRating: { $avg: "$rating" }
+                            }
+                        }
+                    ],
+                    data: [
+                        { $sort: { createdAt: -1 } },
+                        { $skip: skip },
+                        { $limit: limitNum }
+                    ]
+                }
+            }
+        ]);
+
+        const totalCount = results.metadata[0]?.total || 0;
+        const globalStats = results.stats[0] || {
+            totalEngineers: 0,
+            onlineCount: 0,
+            busyCount: 0,
+            offlineCount: 0,
+            avgRating: 0
+        };
+
+        return res.status(200).json({
+            success: true,
+            message: 'Engineers retrieved successfully',
+            data: results.data,
+            stats: globalStats,
+            pagination: {
+                totalCount,
+                totalPages: Math.ceil(totalCount / limitNum),
+                currentPage: parseInt(page),
+                limit: limitNum,
+                hasMore: skip + results.data.length < totalCount
+            }
+        });
+
+    } catch (error) {
+        console.error('[EngineerController] Admin get engineers error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve engineers',
+            error: error.message
+        });
+    }
+};
+
 export const AssignEngineerToOrderController = async (req, res) => {
     try {
         const { id } = req.params;

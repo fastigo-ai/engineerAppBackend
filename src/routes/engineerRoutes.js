@@ -11,6 +11,7 @@ import {
   goOfflineController,
   heartbeatController,
   updateLocationController,
+  getEngineersAdminController
 } from "../controllers/engineerController.js";
 import {
   getProfile,
@@ -69,6 +70,7 @@ const router = express.Router();
 
 router.post("/addEngineer", addengineerController);
 router.get("/getEngineers", getEngineersController);
+router.get("/admin/getEngineers", authenticate, authorize('admin', 'super_admin'), getEngineersAdminController);
 router.get("/getAvialbleEngineers", getAvialbleEngineersController);
 router.put("/updateEngineer/:id", updateEngineerController);
 router.put("/assignEngineerToOrder/:id", AssignEngineerToOrderController);
