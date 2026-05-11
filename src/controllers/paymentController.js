@@ -1627,3 +1627,92 @@ const handlePayoutReversed = async (payload) => {
     console.error("Handle payout reversed error:", error);
   }
 };
+
+/**
+ * Get all payments (Admin only)
+ */
+export const getAllPayments = async (req, res) => {
+  try {
+    const { status, page = 1, limit = 10 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const limitNum = parseInt(limit);
+
+    const match = {};
+    if (status) match.status = status;
+
+    const [results] = await Payment.aggregate([
+      { $match: match },
+      { $sort: { createdAt: -1 } },
+      {
+        $facet: {
+          metadata: [{ $count: "total" }],
+          data: [
+            { $skip: skip },
+            { $limit: limitNum },
+            {
+              $lookup: {
+                from: "users",
+                localField: "userId",
+                foreignField: "_id",
+                as: "userDetails"
+              }
+            },
+            { $unwind: { path: "$userDetails", preserveNullAndEmptyArrays: true } },
+            {
+              $lookup: {
+                from: "orders",
+                localField: "orderId",
+                foreignField: "_id",
+                as: "orderDetails"
+              }
+            },
+            { $unwind: { path: "$orderDetails", preserveNullAndEmptyArrays: true } },
+            {
+              $project: {
+                _id: 1,
+                paymentId: 1,
+                amount: 1,
+                currency: 1,
+                status: 1,
+                method: 1,
+                createdAt: 1,
+                razorpayPaymentId: 1,
+                razorpayOrderId: 1,
+                userId: {
+                  _id: "$userDetails._id",
+                  name: "$userDetails.name",
+                  mobile: "$userDetails.mobile",
+                  email: "$userDetails.email"
+                },
+                orderId: {
+                  _id: "$orderDetails._id",
+                  orderId: "$orderDetails.orderId",
+                  status: "$orderDetails.status"
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]);
+
+    const total = results.metadata[0]?.total || 0;
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        payments: results.data,
+        totalPages: Math.ceil(total / limitNum),
+        currentPage: parseInt(page),
+        totalPayments: total
+      }
+    });
+  } catch (error) {
+    console.error('[PaymentController] Get all payments error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch payments',
+      error: error.message
+    });
+  }
+};

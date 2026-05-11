@@ -25,16 +25,17 @@ import {
   updateOrderStatus,
   cancelBooking,
   rescheduleBooking,
+  getAllServicePlansAdmin
 } from '../controllers/serviceController.js';
 import upload from '../middleware/multer.js';
 import { bulkImportServices } from '../repositories/serviceRepository.js';
-import { authenticate } from '../middleware/authMiddleWare.js';
+import { authenticate, authorize } from '../middleware/authMiddleWare.js';
 
 const router = express.Router();
 
-router.post('/plan/:planType/service', addServiceToPlanController);
+router.post('/plan/:planType/service', authenticate, authorize('admin', 'super_admin'), addServiceToPlanController);
 
-router.post('/bulk', bulkAddServicesAllTypesController);
+router.post('/bulk', authenticate, authorize('admin', 'super_admin'), bulkAddServicesAllTypesController);
 
 router.get('/all', getAllServicesController);
 
@@ -44,38 +45,40 @@ router.get('/service/:serviceId', getServiceByIdController);
 
 router.get('/category/:category', getServicesByCategoryController);
 
-router.post('/category', upload.single("image"), createCategoryController);
+router.post('/category', authenticate, authorize('admin', 'super_admin'), upload.single("image"), createCategoryController);
 
-router.post('/createService', upload.single("image"), createServicePlanController);
+router.post('/createService', authenticate, authorize('admin', 'super_admin'), upload.single("image"), createServicePlanController);
 
 router.get('/category', getAllCategoryController)
 
 router.get('/trendingServices', getAllServicesController)
 
-router.post('/bulkImport', bulkImportServices);
+router.post('/bulkImport', authenticate, authorize('admin', 'super_admin'), bulkImportServices);
 
-router.put("/categories/images", upload.array("images"), updateCategoryImages);
+router.put("/categories/images", authenticate, authorize('admin', 'super_admin'), upload.array("images"), updateCategoryImages);
 
 // Multiple service plans update
-router.put("/servicePlans/images", upload.array("images"), updateServicePlanImages);
+router.put("/servicePlans/images", authenticate, authorize('admin', 'super_admin'), upload.array("images"), updateServicePlanImages);
 
-router.post('/createServicePlanType', createServicePlanType);
+router.post('/createServicePlanType', authenticate, authorize('admin', 'super_admin'), createServicePlanType);
 
-router.post('/createServicePlan', upload.single("image"), createServicePlan);
+router.post('/createServicePlan', authenticate, authorize('admin', 'super_admin'), upload.single("image"), createServicePlan);
 
-router.post('/createCategory', upload.single("image"), createCategory);
+// Admin only route
+router.post('/createCategory', authenticate, authorize('admin', 'super_admin'), upload.single("image"), createCategory);
 
 router.get('/planTypes', getPlanTypes);
 
+router.get('/admin/allServicesDashboard', authenticate, authorize('admin', 'super_admin'), getAllServicePlansAdmin);
 router.get('/allServicesDashboard', getAllServicePlans);
 
-router.put('/editServicePlan/:id', upload.single("image"), editServicePlan);
+router.put('/editServicePlan/:id', authenticate, authorize('admin', 'super_admin'), upload.single("image"), editServicePlan);
 
-router.delete('/deleteService/:id', deleteService);
+router.delete('/deleteService/:id', authenticate, authorize('admin', 'super_admin'), deleteService);
 
-router.delete('/deleteCategory/:id', deleteCategory);
+router.delete('/deleteCategory/:id', authenticate, authorize('admin', 'super_admin'), deleteCategory);
 
-router.put('/editCategory/:id', upload.single("image"), editCategory);
+router.put('/editCategory/:id', authenticate, authorize('admin', 'super_admin'), upload.single("image"), editCategory);
 
 router.get('/userOrders', authenticate, getUserOrders);
 

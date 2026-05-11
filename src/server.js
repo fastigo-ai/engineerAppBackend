@@ -3,6 +3,7 @@ dotenv.config();
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import config from './config/config.js';
 import { initSocket } from './config/socket.js';
 import { createServer } from 'http';
@@ -21,6 +22,7 @@ import { initPayoutCron } from './utils/payoutCron.js';
 import couponRoutes from './modules/coupon/coupon.routes.js';
 import { initCouponCron } from './modules/coupon/coupon.cron.js';
 import adminRoutes from './routes/adminRoutes.js';
+import adminAuthRoutes from './modules/adminAuth/adminAuth.routes.js';
 import notificationRoutes from './modules/notification/notification.routes.js';
 import { startNotificationWorker } from './modules/notification/notification.worker.js';
 import { startAllNotificationCrons } from './modules/notification/notification.cron.js';
@@ -39,7 +41,12 @@ app.post('/api/webhook/razorpay/payment', express.text({ type: 'application/json
 
 // Middleware
 app.use(helmet());
-app.use(cors({ origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : '*', credentials: true }));
+// app.use(cors({ origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : '*', credentials: true }));
+app.use(cors({ 
+  origin: (origin, callback) => callback(null, true), // Dynamically allows any origin
+  credentials: true 
+}));
+app.use(cookieParser());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(logger);
@@ -76,6 +83,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/engineer', engineerRoutes);
 app.use('/api/coupon', couponRoutes);
 app.use('/api/map', mapRoutes);
+app.use('/api/admin/auth', adminAuthRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notification', notificationRoutes);
 

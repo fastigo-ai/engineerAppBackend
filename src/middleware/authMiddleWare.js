@@ -5,22 +5,20 @@ import { Engineer } from '../models/engineersModal.js';
 export const authenticate = async (req, res, next) => {
   try {
     // Get token from header
+    // Get token from header or cookies
     const authHeader = req.headers.authorization;
-    console.log(authHeader, 'authHeader');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        message: 'Access denied. No token provided.'
-      });
-    }
+    let token = null;
 
-    // Extract token
-    const token = authHeader.split(' ')[1];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    } else if (req.cookies && req.cookies.admin_access_token) {
+      token = req.cookies.admin_access_token;
+    }
 
     if (!token) {
       return res.status(401).json({
         success: false,
-        message: 'Access denied. Invalid token format.'
+        message: 'Access denied. No token provided.'
       });
     }
 

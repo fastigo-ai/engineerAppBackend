@@ -17,6 +17,7 @@ import { ServicePlans } from '../models/planModal.js';
 import { Order } from '../models/orderSchema.js';
 import { notifyEngineersForOrder } from '../services/notificationEngineerService.js';
 import { notifyBookingUpdate } from '../services/notification/notificationService.js';
+import mongoose from 'mongoose';
 
 
 // Helpers and other utilities can go here
@@ -176,17 +177,51 @@ export const createServicePlanController = async (req, res) => {
 
 export const getAllCategoryController = async (req, res) => {
   try {
-    const categories = await getAllCategoryService();
+    const { page = 1, limit = 10, search = '' } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const limitNum = parseInt(limit);
+
+    const match = {};
+    if (search) {
+      match.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const [results] = await Category.aggregate([
+      { $match: match },
+      { $sort: { name: 1 } },
+      {
+        $facet: {
+          metadata: [{ $count: "total" }],
+          data: [
+            { $skip: skip },
+            { $limit: limitNum }
+          ]
+        }
+      }
+    ]);
+
+    const total = results.metadata[0]?.total || 0;
+
     res.status(STATUS_CODES.SUCCESS).json({
       success: true,
-      data: categories,
-      message: 'All categories retrieved successfully'
+      data: results.data,
+      pagination: {
+        totalCategories: total,
+        totalPages: Math.ceil(total / limitNum),
+        currentPage: parseInt(page),
+        limit: limitNum
+      },
+      message: 'Categories retrieved successfully'
     });
   } catch (error) {
-    const code = error.message.includes('not found')
-      ? STATUS_CODES.NOT_FOUND
-      : STATUS_CODES.INTERNAL_SERVER_ERROR;
-    res.status(code).json({ success: false, message: error.message });
+    console.error('[ServiceController] Get all category error:', error);
+    res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({ 
+      success: false, 
+      message: error.message 
+    });
   }
 };
 
@@ -549,74 +584,331 @@ export const getPlanTypes = async (req, res) => {
 
 export const getAllServicePlans = async (req, res) => {
   try {
-    const { page = 1, limit = 10 } = req.query;
+    const { page = 1, limit = 10, search = '', category = '', planType = '' } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const limitNum = parseInt(limit);
 
-    // Get total count first for pagination info
-    const totalCount = await ServicePlan.countDocuments();
+    const match = {};
+    if (search) {
+      match.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { subtitle: { $regex: search, $options: 'i' } }
+      ];
+    }
+    if (category) {
+      match.category = category;
+    }
+    if (planType) {
+      match.planType = planType;
+    }
 
-    const servicePlans = await ServicePlan.aggregate([
-      // Lookup for category details
+    const [results] = await ServicePlan.aggregate([
+      { $match: match },
       {
         $lookup: {
-          from: 'categories', // collection name in MongoDB
+          from: 'categories',
           localField: 'category',
           foreignField: '_id',
           as: 'categoryDetails'
         }
       },
-      {
-        $unwind: '$categoryDetails' // assuming each plan has 1 category
-      },
-      // Lookup for planType details
+      { $unwind: { path: '$categoryDetails', preserveNullAndEmptyArrays: true } },
       {
         $lookup: {
-          from: 'plantype', // collection name for ServicePlanType (adjust if different)
+          from: 'plantype',
           localField: 'planType',
           foreignField: '_id',
           as: 'planTypeDetails'
         }
       },
+      { $unwind: { path: '$planTypeDetails', preserveNullAndEmptyArrays: true } },
       {
-        $unwind: {
-          path: '$planTypeDetails',
-          preserveNullAndEmptyArrays: true // some plans may not have planType
+        $facet: {
+          metadata: [{ $count: "total" }],
+          data: [
+            { $sort: { createdAt: -1 } },
+            { $skip: skip },
+            { $limit: limitNum },
+            {
+              $project: {
+                _id: 1,
+                name: 1,
+                subtitle: 1,
+                price: 1,
+                image: 1,
+                features: 1,
+                featuresFormatted: 1,
+                category: '$categoryDetails',
+                planType: '$planTypeDetails',
+                createdAt: 1,
+                duration:1
+              }
+            }
+          ]
         }
-      },
-      // Project desired fields
-      {
-        $project: {
-          _id: 1,
-          name: 1,
-          subtitle: 1,
-          price: 1,
-          image: 1,
-          features: 1,
-          featuresFormatted: 1,
-          category: '$categoryDetails',
-          planType: '$planTypeDetails',
-          createdAt: 1 // For stable sorting
-        }
-      },
-      { $sort: { createdAt: -1 } }, // Newest first
-      { $skip: skip },
-      { $limit: limitNum }
+      }
     ]);
+
+    const totalCount = results.metadata[0]?.total || 0;
 
     res.status(200).json({ 
       success: true, 
-      data: servicePlans,
+      data: results.data,
       pagination: {
         totalCount,
-        page: parseInt(page),
+        totalPages: Math.ceil(totalCount / limitNum),
+        currentPage: parseInt(page),
         limit: limitNum,
-        hasMore: skip + servicePlans.length < totalCount
+        hasMore: skip + results.data.length < totalCount
       }
     });
   } catch (error) {
-    console.error(error);
+    console.error('[ServiceController] Get all service plans error:', error);
     res.status(500).json({ success: false, message: 'Server Error' });
+  }
+};
+
+export const getAllServicePlansAdmin = async (req, res) => {
+  try {
+    let {
+      page = 1,
+      limit = 10,
+      search = "",
+      category = "",
+      planType = "",
+    } = req.query;
+
+    page = Math.max(1, parseInt(page));
+    limit = Math.max(1, parseInt(limit));
+
+    const skip = (page - 1) * limit;
+
+    // -----------------------------
+    // Build Match Query
+    // -----------------------------
+    const match = {};
+
+    // Search
+    if (search?.trim()) {
+      match.$or = [
+        { name: { $regex: search.trim(), $options: "i" } },
+        { subtitle: { $regex: search.trim(), $options: "i" } },
+      ];
+    }
+
+    // Category Filter
+    if (category && mongoose.Types.ObjectId.isValid(category)) {
+      match.category = new mongoose.Types.ObjectId(category);
+    }
+
+    // Plan Type Filter
+    if (planType && mongoose.Types.ObjectId.isValid(planType)) {
+      match.planType = new mongoose.Types.ObjectId(planType);
+    }
+
+    // -----------------------------
+    // Aggregation Pipeline
+    // -----------------------------
+    const aggregationPipeline = [
+      {
+        $match: match,
+      },
+
+      // -----------------------------
+      // Sort Early (better performance)
+      // -----------------------------
+      {
+        $sort: {
+          createdAt: -1,
+        },
+      },
+
+      // -----------------------------
+      // Facet
+      // -----------------------------
+      {
+        $facet: {
+          metadata: [
+            {
+              $count: "total",
+            },
+          ],
+
+          data: [
+            {
+              $skip: skip,
+            },
+
+            {
+              $limit: limit,
+            },
+
+            // -----------------------------
+            // Category Lookup (optimized)
+            // -----------------------------
+            {
+              $lookup: {
+                from: "categories",
+                let: {
+                  categoryId: "$category",
+                },
+
+                pipeline: [
+                  {
+                    $match: {
+                      $expr: {
+                        $eq: ["$_id", "$$categoryId"],
+                      },
+                    },
+                  },
+
+                  {
+                    $project: {
+                      _id: 1,
+                      name: 1,
+                      image: 1,
+                      slug: 1,
+                    },
+                  },
+                ],
+
+                as: "category",
+              },
+            },
+
+            {
+              $unwind: {
+                path: "$category",
+                preserveNullAndEmptyArrays: true,
+              },
+            },
+
+            // -----------------------------
+            // Plan Type Lookup (optimized)
+            // -----------------------------
+            {
+              $lookup: {
+                from: "plantype",
+                let: {
+                  planTypeId: "$planType",
+                },
+
+                pipeline: [
+                  {
+                    $match: {
+                      $expr: {
+                        $eq: ["$_id", "$$planTypeId"],
+                      },
+                    },
+                  },
+
+                  {
+                    $project: {
+                      _id: 1,
+                      name: 1,
+                      description: 1,
+                    },
+                  },
+                ],
+
+                as: "planType",
+              },
+            },
+
+            {
+              $unwind: {
+                path: "$planType",
+                preserveNullAndEmptyArrays: true,
+              },
+            },
+            // -----------------------------
+            // Booking Count Lookup (Last 30 days)
+            // -----------------------------
+            {
+              $lookup: {
+                from: "orders",
+                let: { serviceId: "$_id" },
+                pipeline: [
+                  {
+                    $match: {
+                      $expr: {
+                        $and: [
+                          { $eq: ["$servicePlan", "$$serviceId"] },
+                          { $gte: ["$createdAt", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)] }
+                        ]
+                      }
+                    }
+                  },
+                  { $count: "count" }
+                ],
+                as: "recentBookings"
+              }
+            },
+
+            // -----------------------------
+            // Final Projection
+            // -----------------------------
+            {
+              $project: {
+                _id: 1,
+                name: 1,
+                subtitle: 1,
+                price: 1,
+                image: 1,
+                duration: 1,
+                features: 1,
+                featuresFormatted: 1,
+                createdAt: 1,
+                category: 1,
+                planType: 1,
+                bookingCount30Days: { $ifNull: [{ $arrayElemAt: ["$recentBookings.count", 0] }, 0] }
+              },
+            },
+          ],
+        },
+      },
+    ];
+
+    // -----------------------------
+    // Execute Aggregation
+    // -----------------------------
+    const [results] = await ServicePlan.aggregate(
+      aggregationPipeline
+    ).allowDiskUse(true);
+
+    const totalCount = results?.metadata?.[0]?.total || 0;
+
+    // -----------------------------
+    // Response
+    // -----------------------------
+    return res.status(200).json({
+      success: true,
+
+      data: results?.data || [],
+
+      pagination: {
+        totalCount,
+
+        totalPages: Math.ceil(totalCount / limit),
+
+        currentPage: page,
+
+        limit,
+
+        hasMore:
+          skip + (results?.data?.length || 0) < totalCount,
+      },
+    });
+  } catch (error) {
+    console.error(
+      "[ServiceController] Get all service plans error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
   }
 };
 
@@ -782,7 +1074,7 @@ export const getUserOrders = async (req, res) => {
     const { page = 1, limit = 10, status, search } = req.query;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    
+
     // Build query
     const query = { userId: userId };
     const filterConditions = [];
@@ -815,7 +1107,7 @@ export const getUserOrders = async (req, res) => {
     }
 
     const totalCount = await Order.countDocuments(query);
-    
+
     const orders = await Order.find(query)
       .populate({
         path: 'servicePlan',
@@ -866,9 +1158,9 @@ export const cancelBooking = async (req, res) => {
     const { id } = req.params;
     const order = await Order.findByIdAndUpdate(
       id,
-      { 
+      {
         $set: { orderStatus: 'Cancelled', work_status: 'Cancelled', status: 'cancelled' },
-        $push: { 
+        $push: {
           tracking: {
             status: 'CANCELLED',
             title: 'Booking Cancelled',
@@ -927,11 +1219,11 @@ export const rescheduleBooking = async (req, res) => {
     updateData.orderStatus = 'Upcoming';
     updateData.work_status = 'Upcoming';
     updateData.noShowPhase = 0;
-    updateData.noShowPingedAt = null;  
+    updateData.noShowPingedAt = null;
 
     // Build tracking array
     const trackingEvents = [];
-    
+
     // 1. Reschedule Event
     const newTimeStr = scheduledAt ? new Date(scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
     const newDateStr = scheduledAt ? new Date(scheduledAt).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }) : '';
@@ -955,7 +1247,7 @@ export const rescheduleBooking = async (req, res) => {
     // Ensure order is set back to Searching and unassigned
     const order = await Order.findByIdAndUpdate(
       id,
-      { 
+      {
         $set: {
           ...updateData,
           status: 'Searching',
@@ -967,11 +1259,11 @@ export const rescheduleBooking = async (req, res) => {
       },
       { new: true }
     ).populate('servicePlan servicePlans');
- 
+
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
- 
+
     // Trigger optimized re-dispatch
     const { dispatchOrder } = await import("../services/dispatch/dispatchService.js");
     dispatchOrder(order._id).catch(err => console.error('[Reschedule] Dispatch failed:', err));
@@ -997,41 +1289,126 @@ export const rescheduleBooking = async (req, res) => {
 
 export const getAllBookings = async (req, res) => {
   try {
-    const orders = await Order.find()
-      .populate({
-        path: 'servicePlan',
-        select: 'name subtitle price image features category',
-        populate: {
-          path: 'category',
-          select: 'name description image'
-        }
-      })
-      .sort({ createdAt: -1 }) // Newest first
-      .lean();
+    const { 
+      page = 1, 
+      limit = 10, 
+      search = '', 
+      status = 'all' 
+    } = req.query;
 
-    // Check if any orders found
-    if (!orders || orders.length === 0) {
-      return res.status(200).json({
-        success: true,
-        message: 'No paid orders found',
-        data: [],
-        count: 0
-      });
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const limitNum = parseInt(limit);
+
+    // -----------------------------
+    // Build Match Conditions
+    // -----------------------------
+    const match = {};
+
+    // 1. Search (Customer Name, OrderId, Phone)
+    if (search) {
+      match.$or = [
+        { orderId: { $regex: search, $options: 'i' } },
+        { 'customerDetails.name': { $regex: search, $options: 'i' } },
+        { 'customerDetails.phone': { $regex: search, $options: 'i' } }
+      ];
     }
 
-    // Return orders
+    // 2. Status Filter
+    if (status && status !== 'all') {
+      match.orderStatus = status;
+    }
+
+    // -----------------------------
+    // Execute Aggregation
+    // -----------------------------
+    const [results] = await Order.aggregate([
+      { $match: match },
+      {
+        $facet: {
+          metadata: [{ $count: "total" }],
+          stats: [
+            {
+              $group: {
+                _id: null,
+                totalRevenue: { $sum: "$amount" },
+                upcomingCount: {
+                  $sum: { $cond: [{ $eq: ["$orderStatus", "Upcoming"] }, 1, 0] }
+                },
+                acceptedCount: {
+                  $sum: { $cond: [{ $eq: ["$orderStatus", "Accepted"] }, 1, 0] }
+                },
+                completedCount: {
+                  $sum: { $cond: [{ $eq: ["$orderStatus", "Completed"] }, 1, 0] }
+                }
+              }
+            }
+          ],
+          data: [
+            { $sort: { createdAt: -1 } },
+            { $skip: skip },
+            { $limit: limitNum },
+            // Populate Service Plan
+            {
+              $lookup: {
+                from: 'serviceplans',
+                localField: 'servicePlan',
+                foreignField: '_id',
+                as: 'servicePlan'
+              }
+            },
+            { $unwind: { path: '$servicePlan', preserveNullAndEmptyArrays: true } },
+            // Populate Category inside Service Plan
+            {
+              $lookup: {
+                from: 'categories',
+                localField: 'servicePlan.category',
+                foreignField: '_id',
+                as: 'servicePlan.category'
+              }
+            },
+            { $unwind: { path: '$servicePlan.category', preserveNullAndEmptyArrays: true } },
+            // Populate Assigned Engineer
+            {
+              $lookup: {
+                from: 'engineers',
+                localField: 'assignedEngineer',
+                foreignField: '_id',
+                as: 'assignedEngineer'
+              }
+            },
+            { $unwind: { path: '$assignedEngineer', preserveNullAndEmptyArrays: true } }
+          ]
+        }
+      }
+    ]);
+
+    const totalCount = results.metadata[0]?.total || 0;
+    const globalStats = results.stats[0] || {
+      totalRevenue: 0,
+      upcomingCount: 0,
+      acceptedCount: 0,
+      completedCount: 0
+    };
+
     return res.status(200).json({
       success: true,
-      message: 'Paid orders retrieved successfully',
-      data: orders,
-      count: orders.length
+      message: 'Bookings retrieved successfully',
+      data: results.data,
+      stats: globalStats,
+      pagination: {
+        totalCount,
+        totalPages: Math.ceil(totalCount / limitNum),
+        currentPage: parseInt(page),
+        limit: limitNum,
+        hasMore: skip + results.data.length < totalCount
+      }
     });
 
   } catch (error) {
-    console.error('Error fetching user orders:', error);
+    console.error('[ServiceController] Get all bookings error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to retrieve user orders',
+      message: 'Failed to retrieve bookings',
       error: error.message
     });
   }
@@ -1043,20 +1420,47 @@ export const updateOrderStatus = async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    console.log(id, "id");
-    console.log(status, "status");
+    console.log(`[Admin] Updating Order ${id} to Status: ${status}`);
 
-    // Map status to tracking info
+    const updateData = {};
     let trackingEntry = null;
-    if (status === 'Arrived') {
-      trackingEntry = { status: 'ARRIVED', title: 'Partner Arrived', subTitle: 'Expert has reached your location', timestamp: new Date() };
-    } else if (status === 'Started') {
-      trackingEntry = { status: 'STARTED', title: 'Service Started', subTitle: 'Work is currently in progress', timestamp: new Date() };
-    } else if (status === 'Completed') {
-      trackingEntry = { status: 'COMPLETED', title: 'Service Completed', subTitle: 'Job finished successfully', timestamp: new Date() };
+
+    // --- Flow-Aware Status Synchronization ---
+    // This ensures that updating one status field doesn't break the UI/logic in other apps (User/Engineer)
+    switch (status) {
+      case 'Arrived':
+        updateData.orderStatus = 'Accepted';
+        updateData.work_status = 'In Progress';
+        trackingEntry = { status: 'ARRIVED', title: 'Partner Arrived', subTitle: 'Expert has reached your location', timestamp: new Date() };
+        break;
+      case 'Started':
+        updateData.orderStatus = 'Accepted';
+        updateData.work_status = 'In Progress';
+        trackingEntry = { status: 'STARTED', title: 'Service Started', subTitle: 'Work is currently in progress', timestamp: new Date() };
+        break;
+      case 'Completed':
+        updateData.orderStatus = 'Completed';
+        updateData.work_status = 'Completed';
+        updateData.status = 'completed'; // Sync lifecycle status
+        trackingEntry = { status: 'COMPLETED', title: 'Service Completed', subTitle: 'Job finished successfully', timestamp: new Date() };
+        break;
+      case 'Cancelled':
+        updateData.orderStatus = 'Cancelled';
+        updateData.work_status = 'Cancelled';
+        updateData.status = 'cancelled'; // Sync lifecycle status
+        trackingEntry = { status: 'CANCELLED', title: 'Booking Cancelled', subTitle: 'Cancelled by Administrator', timestamp: new Date() };
+        break;
+      case 'Accepted':
+        updateData.orderStatus = 'Accepted';
+        updateData.work_status = 'Accepted';
+        updateData.status = 'paid'; // Usually paid if accepted
+        break;
+      default:
+        updateData.orderStatus = status;
+        updateData.work_status = status;
     }
 
-    const updateQuery = { orderStatus: status };
+    const updateQuery = { $set: updateData };
     if (trackingEntry) {
       updateQuery.$push = { tracking: trackingEntry };
     }
@@ -1066,9 +1470,7 @@ export const updateOrderStatus = async (req, res) => {
       id,
       updateQuery,
       { new: true }
-    ).populate('servicePlan', 'name subtitle price image features category')
-      .populate('servicePlan.category', 'name description image')
-      .populate('userId', 'name email mobile');
+    ).populate('servicePlan userId');
 
     if (!updatedOrder) {
       return res.status(404).json({
@@ -1077,39 +1479,19 @@ export const updateOrderStatus = async (req, res) => {
       });
     }
 
-    // Format the response to match frontend expectations
-    const formattedOrder = {
-      _id: updatedOrder._id,
-      orderId: updatedOrder.orderId,
-      userId: updatedOrder.userId,
-      servicePlan: updatedOrder.servicePlan,
-      amount: updatedOrder.amount,
-      currency: updatedOrder.currency,
-      status: updatedOrder.status,
-      razorpayOrderId: updatedOrder.razorpayOrderId,
-      orderStatus: updatedOrder.orderStatus,
-      customerDetails: updatedOrder.customerDetails,
-      notes: updatedOrder.notes,
-      receipt: updatedOrder.receipt,
-      createdAt: updatedOrder.createdAt,
-      updatedAt: updatedOrder.updatedAt,
-      __v: updatedOrder.__v,
-      bookingDetails: updatedOrder.bookingDetails,
-      razorpayPaymentId: updatedOrder.razorpayPaymentId,
-      razorpaySignature: updatedOrder.razorpaySignature
-    };
-
     res.status(200).json({
       success: true,
-      message: "Order status updated successfully",
-      data: formattedOrder
+      message: "Order status updated and synchronized successfully",
+      data: updatedOrder
     });
 
-    // 🔔 Notify User: Status Updates (Arrived, Started)
+    // 🔔 Notify User: Status Updates
     if (updatedOrder.userId) {
       let eventKey = null;
       if (status === 'Arrived') eventKey = 'ENGINEER_ARRIVED';
       else if (status === 'Started') eventKey = 'JOB_STARTED';
+      else if (status === 'Completed') eventKey = 'BOOKING_COMPLETED';
+      else if (status === 'Cancelled') eventKey = 'BOOKING_CANCELLED';
 
       if (eventKey) {
         notifyBookingUpdate(updatedOrder.userId, updatedOrder._id, eventKey, {
