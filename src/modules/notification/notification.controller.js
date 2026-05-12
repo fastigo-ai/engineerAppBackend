@@ -291,10 +291,16 @@ export const adminGetHistory = catchAsync(async (req, res) => {
     .lean();
 
   const total = await Notification.countDocuments(query);
+  const opened = await Notification.countDocuments({ ...query, openedAt: { $ne: null } });
 
   res.status(200).json({
     success: true,
     data: notifications,
+    stats: {
+      total,
+      opened,
+      openRate: total > 0 ? ((opened / total) * 100).toFixed(1) : 0
+    },
     pagination: {
       total,
       page: parseInt(page),
