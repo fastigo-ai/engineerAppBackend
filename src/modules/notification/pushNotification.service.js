@@ -87,18 +87,39 @@ export async function sendPushNotification(notification) {
 
   const message = {
     tokens: uniqueTokens,
-    notification: { title: notification.title, body: notification.body },
+    notification: { 
+      title: notification.title, 
+      body: notification.body,
+      image: notification.image,
+    },
     data: {
       ...stringData,
       title: notification.title,
       body: notification.body,
+      image: notification.image || '',
+      screen: notification.screen || '',
     },
     android: {
       priority: 'high',
+      notification: {
+        sound: 'default',
+        channelId: 'default',
+        imageUrl: notification.image,
+      }
     },
-    // apns: {
-    //   payload: { aps: { sound: 'default', badge: 1 } },
-    // },
+    apns: {
+      payload: {
+        aps: {
+          sound: 'default',
+          badge: 1,
+          contentAvailable: true,
+          mutableContent: !!notification.image,
+        },
+      },
+      fcmOptions: {
+        imageUrl: notification.image,
+      }
+    },
   };
 
   try {
@@ -110,14 +131,39 @@ export async function sendPushNotification(notification) {
     if (uniqueTokens.length === 1) {
       const singleMessage = {
         token: uniqueTokens[0],
-        notification: { title: notification.title, body: notification.body },
+        notification: { 
+          title: notification.title, 
+          body: notification.body,
+          image: notification.image,
+        },
         data: {
           ...stringData,
           title: notification.title,
           body: notification.body,
+          image: notification.image || '',
+          screen: notification.screen || '',
         },
-        android: { priority: 'high' },
-        // apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+        android: {
+          priority: 'high',
+          notification: {
+            sound: 'default',
+            channelId: 'default',
+            imageUrl: notification.image,
+          }
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: 'default',
+              badge: 1,
+              contentAvailable: true,
+              mutableContent: !!notification.image,
+            },
+          },
+          fcmOptions: {
+            imageUrl: notification.image,
+          }
+        },
       };
 
       try {

@@ -43,6 +43,7 @@ router.post('/subscribe', async (req, res) => {
  */
 router.post('/notification/send', notificationController.adminSendNotification);
 router.post('/notification/campaign', notificationController.adminSendCampaign);
+router.get('/notification/history', notificationController.adminGetHistory);
 
 /**
  * Refund Tracking

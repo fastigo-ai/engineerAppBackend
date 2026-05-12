@@ -13,11 +13,13 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['ORDER_UPDATE', 'PAYMENT', 'COUPON', 'PROMO', 'SYSTEM', 'MATCHING'],
+    enum: ['ORDER_UPDATE', 'PAYMENT', 'COUPON', 'PROMO', 'SYSTEM', 'MATCHING', 'UPDATE', 'OFFER'],
     required: true,
   },
   title: { type: String, required: true },
   body: { type: String, required: true },
+  image: { type: String, default: null }, // Rich media support
+  screen: { type: String, default: null }, // Deep linking support
   data: { type: mongoose.Schema.Types.Mixed, default: {} },
 
   // Queue mechanics

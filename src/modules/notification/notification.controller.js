@@ -124,15 +124,24 @@ export const adminSendNotification = catchAsync(async (req, res) => {
     type = 'SYSTEM',
     title,
     body,
+    image,
+    screen,
     data = {},
     scheduledAt,
-    batchSize, // Optional: Number of users per stagger wave
-    staggerMinutes = 0 // Optional: Minutes between waves
+    batchSize,
+    staggerMinutes = 0
   } = req.body;
 
   if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
     return res.status(400).json({ success: false, message: 'Array of userIds is required' });
   }
+
+  const Model = userModel === 'Engineer' ? Engineer : User;
+  const users = await Model.find({ _id: { $in: userIds } }).select('_id name').lean();
+  const userMap = users.reduce((acc, u) => {
+    acc[u._id.toString()] = u.name;
+    return acc;
+  }, {});
 
   const baseDelayMs = scheduledAt ? Math.max(0, new Date(scheduledAt).getTime() - Date.now()) : 0;
   const effectiveBatchSize = batchSize || userIds.length;
@@ -142,19 +151,24 @@ export const adminSendNotification = catchAsync(async (req, res) => {
     const batchIndex = Math.floor(index / effectiveBatchSize);
     const staggerDelayMs = batchIndex * (staggerMinutes * 60000);
 
+    const userName = userMap[userId.toString()] || 'User';
+    const personalizedTitle = title.replace(/{name}/g, userName);
+    const personalizedBody = body.replace(/{name}/g, userName);
+
     docs.push({
       userId,
       userModel,
       type,
-      title,
-      body,
+      title: personalizedTitle,
+      body: personalizedBody,
+      image,
+      screen,
       data,
       status: 'PENDING',
       nextRunAt: new Date(Date.now() + baseDelayMs + staggerDelayMs)
     });
   });
 
-  // Chunk insert into DB for efficiency
   const CHUNK_SIZE = 500;
   for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
     await Notification.insertMany(docs.slice(i, i + CHUNK_SIZE), { ordered: false });
@@ -162,8 +176,8 @@ export const adminSendNotification = catchAsync(async (req, res) => {
 
   res.status(200).json({
     success: true,
-    message: `Enqueued ${docs.length} notifications in ${Math.ceil(docs.length / effectiveBatchSize)} waves`,
-    data: { count: docs.length, waves: Math.ceil(docs.length / effectiveBatchSize) }
+    message: `Enqueued ${docs.length} notifications`,
+    data: { count: docs.length }
   });
 });
 
@@ -172,13 +186,15 @@ export const adminSendNotification = catchAsync(async (req, res) => {
  */
 export const adminSendCampaign = catchAsync(async (req, res) => {
   const {
-    target, // 'all' | 'segment' | 'city'
-    segment, // 'NEW' | 'ACTIVE' | 'INACTIVE' | 'VIP'
+    target,
+    segment,
     city,
     userModel = 'User',
     type = 'PROMO',
     title,
     body,
+    image,
+    screen,
     data = {},
     scheduledAt,
     batchSize,
@@ -194,47 +210,50 @@ export const adminSendCampaign = catchAsync(async (req, res) => {
     query.city = city;
   }
 
-  // Fetch candidate users
   const Model = userModel === 'Engineer' ? Engineer : User;
-  const users = await Model.find(query).select('_id').lean();
-  let targetUserIds = users.map(u => u._id);
+  const users = await Model.find(query).select('_id name').lean();
+  let targetUsers = users;
 
-  // Apply segment filtering if requested
   if (target === 'segment' && segment) {
     const { getUserSegment } = await import('../user/user.segment.js');
     const filteredResults = await Promise.all(
-      targetUserIds.map(async (id) => {
-        const s = await getUserSegment(id);
-        return s === segment ? id : null;
+      users.map(async (u) => {
+        const s = await getUserSegment(u._id);
+        return s === segment ? u : null;
       })
     );
-    targetUserIds = filteredResults.filter(id => id !== null);
+    targetUsers = filteredResults.filter(u => u !== null);
   }
 
-  if (targetUserIds.length === 0) {
-    return res.status(200).json({ success: true, message: 'No users matched the targeting criteria', data: { count: 0 } });
+  if (targetUsers.length === 0) {
+    return res.status(200).json({ success: true, message: 'No users matched', data: { count: 0 } });
   }
 
   const baseDelayMs = scheduledAt ? Math.max(0, new Date(scheduledAt).getTime() - Date.now()) : 0;
-  const effectiveBatchSize = batchSize || targetUserIds.length;
+  const effectiveBatchSize = batchSize || targetUsers.length;
 
-  const docs = targetUserIds.map((userId, index) => {
+  const docs = targetUsers.map((user, index) => {
     const batchIndex = Math.floor(index / effectiveBatchSize);
     const staggerDelayMs = batchIndex * (staggerMinutes * 60000);
 
+    // Personalization replacement
+    const personalizedTitle = title.replace(/{name}/g, user.name || 'User');
+    const personalizedBody = body.replace(/{name}/g, user.name || 'User');
+
     return {
-      userId,
+      userId: user._id,
       userModel,
       type,
-      title,
-      body,
+      title: personalizedTitle,
+      body: personalizedBody,
+      image,
+      screen,
       data,
       status: 'PENDING',
       nextRunAt: new Date(Date.now() + baseDelayMs + staggerDelayMs),
     };
   });
 
-  // Chunk insert for very large campaigns
   const CHUNK_SIZE = 500;
   for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
     await Notification.insertMany(docs.slice(i, i + CHUNK_SIZE), { ordered: false });
@@ -242,8 +261,46 @@ export const adminSendCampaign = catchAsync(async (req, res) => {
 
   res.status(200).json({
     success: true,
-    message: `Campaign started: Enqueued ${docs.length} notifications in ${Math.ceil(docs.length / effectiveBatchSize)} waves`,
-    data: { count: docs.length, waves: Math.ceil(docs.length / effectiveBatchSize) }
+    message: `Campaign started: ${docs.length} notifications enqueued`,
+    data: { count: docs.length }
+  });
+});
+
+/**
+ * Admin: Get paginated notification history
+ */
+export const adminGetHistory = catchAsync(async (req, res) => {
+  const { page = 1, limit = 20, search = '', type, status } = req.query;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+
+  const query = { is_deleted: { $ne: true } };
+  if (search) {
+    query.$or = [
+      { title: { $regex: search, $options: 'i' } },
+      { body: { $regex: search, $options: 'i' } }
+    ];
+  }
+  if (type) query.type = type;
+  if (status) query.status = status;
+
+  const notifications = await Notification.find(query)
+    .populate('userId', 'name mobile')
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(parseInt(limit))
+    .lean();
+
+  const total = await Notification.countDocuments(query);
+
+  res.status(200).json({
+    success: true,
+    data: notifications,
+    pagination: {
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      pages: Math.ceil(total / parseInt(limit))
+    }
   });
 });
 
@@ -251,11 +308,15 @@ export const adminSendCampaign = catchAsync(async (req, res) => {
  * Delete a specific notification (Soft delete)
  */
 export const deleteNotification = catchAsync(async (req, res) => {
-  const userId = req.user?._id || req.user?.id;
-  const userModel = (req.user?.role === 'engineer' || req.engineer) ? 'Engineer' : 'User';
+  // ... existing delete logic ...
+  const query = { _id: req.params.id };
+  // If admin, we don't need userId check
+  if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
+    query.userId = req.user.id;
+  }
 
   const notification = await Notification.findOneAndUpdate(
-    { _id: req.params.id, userId, userModel },
+    query,
     { is_deleted: true },
     { new: true }
   );
@@ -281,3 +342,4 @@ export const clearAllNotifications = catchAsync(async (req, res) => {
 
   res.status(200).json({ success: true, message: 'All notifications cleared successfully' });
 });
+

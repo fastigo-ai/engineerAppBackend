@@ -71,11 +71,7 @@ export const createAndMatchVendorOrder = async (payload) => {
   const notifyResult = await notifyEngineersForOrder(order);
 
   if (!notifyResult.success || notifyResult.count === 0) {
-    await VendorOrder.findByIdAndUpdate(order._id, {
-      status: "EXPIRED",
-      failure_reason: notifyResult.reason === 'no_engineers' ? "NO_ENGINEERS_AVAILABLE" : "MATCHING_FAILED"
-    });
-
+    console.log(`[VendorRequest] No engineers found immediately for ${order._id}. Order remains PENDING.`);
     return {
       success: false,
       order,
