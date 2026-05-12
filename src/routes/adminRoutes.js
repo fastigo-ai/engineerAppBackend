@@ -58,6 +58,11 @@ router.post('/payouts/approve/:id', adminController.approvePayout);
 router.post('/payouts/reject/:id', adminController.rejectPayout);
 
 /**
+ * Dashboard Analytics
+ */
+router.get('/dashboard/stats', adminController.getDashboardStats);
+
+/**
  * Unregister a subscription
  */
 router.delete('/unsubscribe', async (req, res) => {
