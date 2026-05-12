@@ -479,3 +479,34 @@ export const getDashboardStats = async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to fetch analytics', error: error.message });
   }
 };
+
+/**
+ * Search users by name or mobile for coupon targeting
+ */
+export const searchUsers = async (req, res) => {
+  try {
+    const { query } = req.query;
+    if (!query || query.length < 2) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    const users = await User.find({
+      $or: [
+        { name: { $regex: query, $options: 'i' } },
+        { mobile: { $regex: query, $options: 'i' } }
+      ],
+      role: 'customer'
+    })
+    .select('name mobile email _id')
+    .limit(10)
+    .lean();
+
+    return res.status(200).json({
+      success: true,
+      data: users
+    });
+  } catch (error) {
+    console.error('[AdminController] Search users error:', error);
+    return res.status(500).json({ success: false, message: 'Search failed' });
+  }
+};

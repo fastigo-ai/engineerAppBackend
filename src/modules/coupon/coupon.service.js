@@ -4,7 +4,7 @@ import usageRepository from './couponUsage.repository.js';
 import { Order } from '../../models/orderSchema.js';
 import User from '../../models/user.js';
 import { ServicePlan } from '../../models/serviceModal.js';
-
+import Coupon from './coupon.model.js';
 
 /**
  * Logic for calculating discount (FLAT vs PERCENTAGE)
@@ -39,7 +39,6 @@ export const validateCoupon = async ({ userId, couponCode, amount, servicePlans 
     throw new Error(`Add ₹${diff.toFixed(0)} more to your cart to use this coupon`);
   }
 
-
   // Check overall usage limit
   if (coupon.usageLimit > 0 && coupon.usedCount >= coupon.usageLimit) {
     throw new Error('Coupon usage limit reached');
@@ -51,7 +50,7 @@ export const validateCoupon = async ({ userId, couponCode, amount, servicePlans 
     throw new Error('You have already reached the usage limit for this coupon');
   }
 
-  // First-time user check: Treat only 'paid' or 'completed' orders as a "previous order"
+  // First-time user check
   const hasPreviousOrders = await Order.findOne({ 
     userId: new mongoose.Types.ObjectId(userId), 
     status: { $in: ['paid', 'completed'] } 
@@ -77,112 +76,91 @@ export const validateCoupon = async ({ userId, couponCode, amount, servicePlans 
     }
   }
 
+  // Specific Users check
+  if (coupon.targeting?.specificUsers?.length > 0) {
+    const isAllowed = coupon.targeting.specificUsers.some(id => id.toString() === userId.toString());
+    if (!isAllowed) {
+      throw new Error('This coupon is not valid for your account');
+    }
+  }
+
   // --- Plan & Category targeting ---
   if (servicePlans.length > 0) {
-    // Normalize servicePlans to be an array of IDs (strings)
     const normalizedPlanIds = servicePlans.map(p => (typeof p === 'object' && p.id) ? p.id : p);
-    
     const plansData = await ServicePlan.find({ _id: { $in: normalizedPlanIds } }).populate('category').lean();
     
-    // 1. Check applicablePlans
     if (coupon.applicablePlans?.length > 0) {
       const planIdsStrings = coupon.applicablePlans.map(id => id.toString());
-      const hasApplicablePlan = servicePlans.some(pid => planIdsStrings.includes(pid.toString()));
+      const hasApplicablePlan = normalizedPlanIds.some(pid => planIdsStrings.includes(pid.toString()));
       if (!hasApplicablePlan) {
         throw new Error('This coupon is not valid for the selected service(s)');
       }
     }
 
-    // 2. Check applicableCategories
-    if (coupon.targeting?.applicableCategories?.length > 0) {
-      const hasApplicableCategory = plansData.some(p => 
-        coupon.targeting.applicableCategories.includes(p.category?.name)
-      );
+    if (coupon.applicableCategories?.length > 0) {
+      const catIdsStrings = coupon.applicableCategories.map(id => id.toString());
+      const hasApplicableCategory = plansData.some(p => p.category && catIdsStrings.includes(p.category._id.toString()));
       if (!hasApplicableCategory) {
-        const allowed = coupon.targeting.applicableCategories.join(', ');
-        throw new Error(`This coupon is only valid for ${allowed} services`);
+        throw new Error('This coupon is not valid for this service category');
       }
     }
   }
 
-
   const discount = calculateDiscount(coupon, amount);
-  
+  const finalAmount = Math.max(0, amount - discount);
+
   return {
     coupon,
     discount,
-    finalAmount: Math.max(0, amount - discount)
+    finalAmount
   };
 };
 
 /**
- * Reservation Phase: Triggered when order is created
+ * Reserve a coupon for an order
  */
-export const reserveCoupon = async ({ userId, couponId, orderId }, session = null) => {
-  // 1. Check for existing active reservation
-  const existing = await usageRepository.findActiveReservation(userId, couponId, session);
-  if (existing) {
-    existing.orderId = orderId;
-    await existing.save({ session });
-    return existing;
+export const reserveCoupon = async ({ userId, couponId, orderId }) => {
+  const coupon = await couponRepository.findById(couponId);
+  if (!coupon) throw new Error('Coupon not found');
+
+  // Check limits again before reservation to prevent race conditions
+  if (coupon.usageLimit > 0 && coupon.usedCount >= coupon.usageLimit) {
+    throw new Error('Coupon usage limit reached');
   }
 
-  // 2. Atomic usage update
-  const coupon = await couponRepository.atomicIncrementUsage(couponId, session);
-  if (!coupon) throw new Error('Coupon usage limit reached or coupon deactivated');
-
-  // 3. Create usage record
-  return usageRepository.create({
-    couponId,
+  const usage = await usageRepository.create({
     userId,
+    couponId,
     orderId,
     status: 'RESERVED'
-  }, session);
-};
-
-/**
- * Commit Phase: Triggered when payment is successful
- */
-export const markCouponAsUsed = async (orderId, session = null) => {
-  const usage = await usageRepository.updateStatus(orderId, 'RESERVED', 'USED', session);
-  if (!usage) return null;
-
-  // Increment redemption count for analytics
-  await couponRepository.incrementRedeemed(usage.couponId, session);
+  });
 
   return usage;
 };
 
 /**
- * Rollback Phase: If payment fails or order is cancelled
+ * Mark coupon as used (Commit phase)
  */
-export const markCouponAsFailed = async (orderId, externalSession = null) => {
-  let session = externalSession;
-  let ownSession = false;
+export const markCouponAsUsed = async (usageId) => {
+  const usage = await usageRepository.findById(usageId);
+  if (!usage || usage.status !== 'RESERVED') return;
 
-  if (!session) {
-    session = await mongoose.startSession();
-    session.startTransaction();
-    ownSession = true;
-  }
-
-  try {
-    const usage = await usageRepository.updateStatus(orderId, 'RESERVED', 'FAILED', session);
-    if (usage) {
-      await couponRepository.atomicDecrementUsage(usage.couponId, session);
-    }
-
-    if (ownSession) await session.commitTransaction();
-    return usage;
-  } catch (error) {
-    if (ownSession) await session.abortTransaction();
-    throw error;
-  } finally {
-    if (ownSession) session.endSession();
-  }
+  await Promise.all([
+    usageRepository.updateStatus(usageId, 'USED'),
+    couponRepository.incrementUsedCount(usage.couponId)
+  ]);
 };
 
-// Also provide aliases for the commit/rollback phases if needed
+/**
+ * Rollback coupon reservation
+ */
+export const markCouponAsFailed = async (usageId) => {
+  const usage = await usageRepository.findById(usageId);
+  if (!usage || usage.status !== 'RESERVED') return;
+
+  await usageRepository.updateStatus(usageId, 'FAILED');
+};
+
 export const commitCouponUsage = markCouponAsUsed;
 export const rollbackCouponUsage = markCouponAsFailed;
 
@@ -213,7 +191,6 @@ const generateDescription = (coupon) => {
 export const getAvailableCoupons = async (userId) => {
   const coupons = await couponRepository.findAllActive();
   
-  // 1. Get user data (orders, profile, and coupon usage) once
   const [hasPreviousOrders, user, userUsages] = await Promise.all([
     Order.findOne({ 
       userId: new mongoose.Types.ObjectId(userId), 
@@ -223,7 +200,6 @@ export const getAvailableCoupons = async (userId) => {
     usageRepository.findAllForUser(userId, ['USED', 'RESERVED'])
   ]);
 
-  // Create a map of usage counts for efficiency
   const usageMap = userUsages.reduce((acc, usage) => {
     const cid = usage.couponId.toString();
     acc[cid] = (acc[cid] || 0) + 1;
@@ -234,30 +210,19 @@ export const getAvailableCoupons = async (userId) => {
 
   const filtered = [];
   for (const coupon of coupons) {
-    // 2. Overall usage limit
     if (coupon.usageLimit > 0 && coupon.usedCount >= coupon.usageLimit) continue;
-
-    // 3. First-time user filter
     if (coupon.targeting?.firstTimeUserOnly && hasPreviousOrders) continue;
-
-    // 4. User segment filter
-    if (coupon.targeting?.userSegments?.length > 0) {
-      if (!coupon.targeting.userSegments.includes(userSegment)) continue;
+    if (coupon.targeting?.userSegments?.length > 0 && !coupon.targeting.userSegments.includes(userSegment)) continue;
+    if (coupon.targeting?.cities?.length > 0 && (!user?.city || !coupon.targeting.cities.includes(user.city))) continue;
+    if (coupon.isHidden) continue;
+    if (coupon.targeting?.specificUsers?.length > 0) {
+      const isAllowed = coupon.targeting.specificUsers.some(id => id.toString() === userId.toString());
+      if (!isAllowed) continue;
     }
 
-    // 5. City filter
-    if (coupon.targeting?.cities?.length > 0) {
-      if (!user?.city || !coupon.targeting.cities.includes(user.city)) continue;
-    }
-
-    // 6. Per-user limit check
     const usageCount = usageMap[coupon._id.toString()] || 0;
-    const isLimitReached = usageCount >= coupon.perUserLimit;
+    if (usageCount >= coupon.perUserLimit) continue;
 
-    // IF LIMIT REACHED, DO NOT SHOW IN AVAILABLE LIST
-    if (isLimitReached) continue;
-
-    // Determine badge
     let badge = null;
     if (coupon.targeting?.firstTimeUserOnly) {
       badge = "New User Offer";
@@ -265,7 +230,6 @@ export const getAvailableCoupons = async (userId) => {
       badge = "One-time use";
     }
 
-    // Decorate with description, badge, and usability info
     filtered.push({
       ...coupon,
       description: generateDescription(coupon),
@@ -288,9 +252,7 @@ export const getBestCoupon = async ({ userId, amount, servicePlans }) => {
 
   for (const coupon of available) {
     try {
-      // Basic validation for this specific order
       if (amount < coupon.minOrderAmount) continue;
-
       const discount = calculateDiscount(coupon, amount);
       if (discount > maxDiscount) {
         maxDiscount = discount;
@@ -302,7 +264,7 @@ export const getBestCoupon = async ({ userId, amount, servicePlans }) => {
         };
       }
     } catch (e) {
-      continue; // Skip invalid coupons for this order
+      continue;
     }
   }
   
@@ -313,18 +275,14 @@ export const getBestCoupon = async ({ userId, amount, servicePlans }) => {
  * Admin: Create a new coupon
  */
 export const createCoupon = async (couponData) => {
-  // Normalize code
   if (couponData.code) {
     couponData.code = couponData.code.toUpperCase().trim();
-    
-    // Check for duplicate code
     const existing = await couponRepository.findByCode(couponData.code);
     if (existing) {
       throw new Error(`Coupon with code ${couponData.code} already exists`);
     }
   }
 
-  // Set default dates if not provided
   if (!couponData.startDate) couponData.startDate = new Date();
   if (!couponData.endDate) {
     const nextMonth = new Date();
@@ -356,3 +314,23 @@ export const deleteCoupon = async (couponId) => {
   return couponRepository.delete(couponId);
 };
 
+/**
+ * Admin: Update an existing coupon
+ */
+export const updateCoupon = async (couponId, updateData) => {
+  if (updateData.code) {
+    updateData.code = updateData.code.toUpperCase().trim();
+    const existing = await couponRepository.findByCode(updateData.code);
+    if (existing && existing._id.toString() !== couponId.toString()) {
+      throw new Error(`Coupon with code ${updateData.code} already exists`);
+    }
+  }
+
+  const updated = await Coupon.findByIdAndUpdate(
+    couponId,
+    { $set: updateData },
+    { new: true, runValidators: true }
+  ).lean();
+
+  return updated;
+};

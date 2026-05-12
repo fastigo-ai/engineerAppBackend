@@ -84,7 +84,17 @@ const couponSchema = new mongoose.Schema({
     firstTimeUserOnly: {
       type: Boolean,
       default: false
-    }
+    },
+    specificUsers: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      index: true
+    }]
+  },
+  isHidden: {
+    type: Boolean,
+    default: false,
+    index: true
   },
   createdBy: {
     type: String,

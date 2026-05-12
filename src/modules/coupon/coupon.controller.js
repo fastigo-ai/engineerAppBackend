@@ -199,3 +199,52 @@ export const getBestCoupon = async (req, res) => {
     });
   }
 };
+
+/**
+ * Admin: Delete a coupon
+ */
+export const adminDeleteCoupon = async (req, res) => {
+  try {
+    const { couponId } = req.params;
+    await couponService.deleteCoupon(couponId);
+    return res.status(200).json({
+      success: true,
+      message: 'Coupon deleted successfully'
+    });
+  } catch (error) {
+    console.error('Admin delete coupon error:', error);
+    return res.status(400).json({
+      success: false,
+      message: error.message || 'Failed to delete coupon'
+    });
+  }
+};
+
+/**
+ * Admin: Update an existing coupon
+ */
+export const adminUpdateCoupon = async (req, res) => {
+  try {
+    const { couponId } = req.params;
+    const coupon = await couponService.updateCoupon(couponId, req.body);
+    
+    if (!coupon) {
+      return res.status(404).json({
+        success: false,
+        message: 'Coupon not found'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Coupon updated successfully',
+      data: coupon
+    });
+  } catch (error) {
+    console.error('Admin update coupon error:', error);
+    return res.status(400).json({
+      success: false,
+      message: error.message || 'Failed to update coupon'
+    });
+  }
+};

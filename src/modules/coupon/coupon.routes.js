@@ -26,14 +26,7 @@ router.post('/reserve', couponController.reserveCoupon);
 router.post('/admin/create', authorize('admin', 'super_admin'), couponController.adminCreateCoupon);
 router.get('/admin/list', authorize('admin', 'super_admin'), couponController.adminListAllCoupons);
 router.patch('/admin/toggle/:couponId', authorize('admin', 'super_admin'), couponController.adminToggleStatus);
-router.delete('/admin/delete/:couponId', authorize('admin', 'super_admin'), async (req, res) => {
-  try {
-    const { couponId } = req.params;
-    await couponService.deleteCoupon(couponId);
-    return res.status(200).json({ success: true, message: 'Coupon deleted successfully' });
-  } catch (error) {
-    return res.status(400).json({ success: false, message: error.message || 'Failed to delete coupon' });
-  }
-});
+router.put('/admin/update/:couponId', authorize('admin', 'super_admin'), couponController.adminUpdateCoupon);
+router.delete('/admin/delete/:couponId', authorize('admin', 'super_admin'), couponController.adminDeleteCoupon);
 
 export default router;

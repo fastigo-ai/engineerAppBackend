@@ -61,6 +61,7 @@ router.post('/payouts/reject/:id', adminController.rejectPayout);
  * Dashboard Analytics
  */
 router.get('/dashboard/stats', adminController.getDashboardStats);
+router.get('/users/search', adminController.searchUsers);
 
 /**
  * Unregister a subscription
