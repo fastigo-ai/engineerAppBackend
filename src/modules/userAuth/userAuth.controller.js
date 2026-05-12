@@ -340,148 +340,134 @@ export const removeProfileImage = async (req, res) => {
  * Aggregates: Total Bookings, Total Spent, and Last Booking Date
  */
 export const getCustomersAdminController = async (req, res) => {
-    try {
-        const { 
-            page = 1, 
-            limit = 10, 
-            search = '', 
-            city = 'all',
-            status = 'all',
-            isPhoneVerified = 'all'
-        } = req.query;
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      search = '',
+      city = 'all',
+      status = 'all',
+      isPhoneVerified = 'all'
+    } = req.query;
 
-        const skip = (parseInt(page) - 1) * parseInt(limit);
-        const limitNum = parseInt(limit);
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const limitNum = parseInt(limit);
 
-        const match = { role: 'customer' };
+    const match = { role: 'customer' };
 
-        // 1. Search (Name, Phone, Email)
-        if (search) {
-            match.$or = [
-                { name: { $regex: search, $options: 'i' } },
-                { mobile: { $regex: search, $options: 'i' } },
-                { email: { $regex: search, $options: 'i' } }
-            ];
+    // 1. Search (Name, Phone, Email)
+    if (search) {
+      match.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { mobile: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // 2. City Filter
+    if (city && city !== 'all') {
+      match.city = city;
+    }
+
+    // 3. Status Filter
+    if (status && status !== 'all') {
+      match.status = status;
+    }
+
+    // 4. Phone Verified Filter
+    if (isPhoneVerified !== 'all') {
+      match.isPhoneVerified = isPhoneVerified === 'true';
+    }
+
+    // Execute Aggregation
+    const [results] = await User.aggregate([
+      { $match: match },
+      {
+        $lookup: {
+          from: 'orders', // MongoDB collection name for OrderSchema
+          localField: '_id',
+          foreignField: 'userId',
+          as: 'orderHistory'
         }
-
-        // 2. City Filter
-        if (city && city !== 'all') {
-            match.city = city;
-        }
-
-        // 3. Status Filter
-        if (status && status !== 'all') {
-            match.status = status;
-        }
-
-        // 4. Phone Verified Filter
-        if (isPhoneVerified !== 'all') {
-            match.isPhoneVerified = isPhoneVerified === 'true';
-        }
-
-        // Execute Aggregation
-        const [results] = await User.aggregate([
-            { $match: match },
+      },
+      {
+        $facet: {
+          metadata: [{ $count: "total" }],
+          stats: [
             {
-                $lookup: {
-                    from: 'orders', // MongoDB collection name for OrderSchema
-                    localField: '_id',
-                    foreignField: 'userId',
-                    as: 'orderHistory'
-                }
-            },
-            {
-                $facet: {
-                    metadata: [{ $count: "total" }],
-                    stats: [
-                        {
-                            $group: {
-                                _id: null,
-                                totalCustomers: { $sum: 1 },
-                                totalRevenue: { $sum: { $sum: "$orderHistory.amount" } },
-                                activeCustomers: {
-                                    $sum: {
-                                        $cond: [
-                                            { 
-                                                $gt: [
-                                                    { $max: "$orderHistory.createdAt" }, 
-                                                    new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Active in last 30 days
-                                                ] 
-                                            },
-                                            1,
-                                            0
-                                        ]
-                                    }
-                                },
-                                onlineCount: { $sum: { $cond: [{ $eq: ["$status", "ONLINE"] }, 1, 0] } },
-                                offlineCount: { $sum: { $cond: [{ $eq: ["$status", "OFFLINE"] }, 1, 0] } }
-                            }
-                        }
-                    ],
-                    data: [
-                        {
-                            $project: {
-                                name: 1,
-                                mobile: 1,
-                                email: 1,
-                                profileImage: 1,
-                                status: 1,
-                                city: 1,
-                                createdAt: 1,
-                                totalBookings: { $size: "$orderHistory" },
-                                totalSpent: { $sum: "$orderHistory.amount" },
-                                lastBookingDate: { $max: "$orderHistory.createdAt" }
-                            }
-                        },
-                        { $sort: { createdAt: -1 } },
-                        { $skip: skip },
-                        { $limit: limitNum }
+              $group: {
+                _id: null,
+                totalCustomers: { $sum: 1 },
+                totalRevenue: { $sum: { $sum: "$orderHistory.amount" } },
+                activeCustomers: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $gt: [
+                          { $max: "$orderHistory.createdAt" },
+                          new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Active in last 30 days
+                        ]
+                      },
+                      1,
+                      0
                     ]
-                }
+                  }
+                },
+                onlineCount: { $sum: { $cond: [{ $eq: ["$status", "ONLINE"] }, 1, 0] } },
+                offlineCount: { $sum: { $cond: [{ $eq: ["$status", "OFFLINE"] }, 1, 0] } }
+              }
             }
-        ]);
+          ],
+          data: [
+            {
+              $project: {
+                name: 1,
+                mobile: 1,
+                email: 1,
+                profileImage: 1,
+                status: 1,
+                city: 1,
+                createdAt: 1,
+                totalBookings: { $size: "$orderHistory" },
+                totalSpent: { $sum: "$orderHistory.amount" },
+                lastBookingDate: { $max: "$orderHistory.createdAt" }
+              }
+            },
+            { $sort: { createdAt: -1 } },
+            { $skip: skip },
+            { $limit: limitNum }
+          ]
+        }
+      }
+    ]);
 
-        const totalCount = results.metadata[0]?.total || 0;
-        const globalStats = results.stats[0] || {
-            totalCustomers: 0,
-            totalRevenue: 0,
-            activeCustomers: 0
-        };
+    const totalCount = results.metadata[0]?.total || 0;
+    const globalStats = results.stats[0] || {
+      totalCustomers: 0,
+      totalRevenue: 0,
+      activeCustomers: 0
+    };
 
-        return res.status(200).json({
-            success: true,
-            message: 'Customers retrieved successfully',
-            data: results.data,
-            stats: globalStats,
-            pagination: {
-                totalCount,
-                totalPages: Math.ceil(totalCount / limitNum),
-                currentPage: parseInt(page),
-                limit: limitNum,
-                hasMore: skip + results.data.length < totalCount
-            }
-        });
+    return res.status(200).json({
+      success: true,
+      message: 'Customers retrieved successfully',
+      data: results.data,
+      stats: globalStats,
+      pagination: {
+        totalCount,
+        totalPages: Math.ceil(totalCount / limitNum),
+        currentPage: parseInt(page),
+        limit: limitNum,
+        hasMore: skip + results.data.length < totalCount
+      }
+    });
 
-    } catch (error) {
-        console.error('[UserAuth] Admin get customers error:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to retrieve customers',
-            error: error.message
-        });
-    }
-};
-
-export const userHeartbeat = async (req, res) => {
-    try {
-        const userId = req.user._id;
-        await User.findByIdAndUpdate(userId, {
-            status: 'ONLINE',
-            lastHeartbeat: new Date()
-        });
-        res.status(200).json({ success: true, message: 'Heartbeat received' });
-    } catch (error) {
-        console.error('User heartbeat error:', error);
-        res.status(500).json({ success: false, message: 'Heartbeat failed' });
-    }
+  } catch (error) {
+    console.error('[UserAuth] Admin get customers error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve customers',
+      error: error.message
+    });
+  }
 };

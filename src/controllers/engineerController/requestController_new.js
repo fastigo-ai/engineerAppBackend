@@ -1,8 +1,19 @@
 import { Order } from "../../models/orderSchema.js";
 import User from "../../models/user.js";
 import { Engineer } from "../../models/engineersModal.js";
-import STATUS_CODES from "../../constants/statusCodes.js"; 
-import { latLngToCell, gridDisk } from "h3-js";
+import STATUS_CODES from "../../constants/statusCodes.js";
+import vendorOrderModal from "../../models/vendorOrderModal.js";
+import { Wallet } from "../../models/Wallet.js";
+import mongoose from "mongoose";
+import { getDistanceInMeters } from "../../utils/distance.js";
+import razorpay from "../../config/razorpay.js";
+import { notifyEngineersForOrder } from "../../services/notificationEngineerService.js";
+import { notifyBookingUpdate } from "../../services/notification/notificationService.js";
+import { uploadToCloudinary } from "../../utils/uploadToCloudinary.js";
+import { creditEngineerWallet } from "../../services/walletService.js";
+
+
+// Controller functions follow
 
 // Update Engineer Location
 export const updateEngineerLocation = async (req, res) => {
@@ -73,6 +84,8 @@ export const updateEngineerLocation = async (req, res) => {
                 updatedAt: engineer.updatedAt
             }
         });
+
+        // Automated Geofencing removed per requirement - Arrival is now manual.
     } catch (error) {
         console.error('Update location error:', error);
         res.status(STATUS_CODES.INTERNAL_SERVER_ERROR || 500).json({
@@ -87,15 +100,15 @@ export const updateEngineerLocation = async (req, res) => {
 export const getNearbyRequests = async (req, res) => {
     try {
         const engineerId = req.user.id;
-        const { latitude, longitude, maxDistance = 50000 } = req.query; // maxDistance in meters (default 50km)
+        const { latitude, longitude, maxDistance = 50000, type = "all" } = req.query; // maxDistance in meters (default 50km)
         let coordinates = [];
 
         // If coordinates provided in query, use them
         if (latitude && longitude) {
             coordinates = [parseFloat(longitude), parseFloat(latitude)];
         } else if (engineerId) {
-            // Fetch engineer's last known location
-            const engineer = await User.findById(engineerId);
+            // Fetch engineer's last known location (BUG FIX: Use Engineer model, not User)
+            const engineer = await Engineer.findById(engineerId);
             if (!engineer || !engineer.location || !engineer.location.coordinates) {
                 return res.status(STATUS_CODES.BAD_REQUEST || 400).json({
                     success: false,
@@ -110,29 +123,125 @@ export const getNearbyRequests = async (req, res) => {
             });
         }
 
-        const requests = await Order.find({
-            status: { $in: ['created', 'paid'] },
-            assignedEngineer: null,
-            work_status: { $nin: ['Completed', 'Cancelled'] },
-            rejectedBy: { $ne: engineerId },
-            location: {
-                $near: {
-                    $geometry: {
-                        type: 'Point',
-                        coordinates: coordinates
-                    },
-                    $maxDistance: parseInt(maxDistance)
+        let requests = [];
+        let vendorRequests = [];
+
+        // 2. Fetch Regular Orders (Only if type is 'all' or 'user')
+        if (type === "all" || type === "user") {
+            requests = await Order.find({
+                status: { $in: ['created', 'paid', 'Searching', 'pending'] },
+                assignedEngineer: null,
+                work_status: { $nin: ['Completed', 'Cancelled'] },
+                rejectedBy: { $ne: engineerId },
+                location: {
+                    $near: {
+                        $geometry: {
+                            type: 'Point',
+                            coordinates: coordinates
+                        },
+                        $maxDistance: parseInt(maxDistance)
+                    }
                 }
+            })
+                .populate('userId', 'name mobile address')
+                .populate('servicePlan', 'name')
+                .populate('servicePlans', 'name')
+                .lean();
+        }
+
+        // 3. Fetch Vendor Orders (Only if type is 'all' or 'vendor')
+        if (type === "all" || type === "vendor") {
+            vendorRequests = await vendorOrderModal.aggregate([
+                {
+                    $geoNear: {
+                        near: { type: 'Point', coordinates: coordinates },
+                        distanceField: 'distance',
+                        maxDistance: parseInt(maxDistance),
+                        query: {
+                            status: 'PENDING',
+                            assigned_engineer_id: null,
+                            rejected_engineers: { $ne: new mongoose.Types.ObjectId(engineerId) }
+                        },
+                        spherical: true
+                    }
+                },
+                {
+                    $project: {
+                        _id: 1,
+                        customerDetails: {
+                            name: "Customer",
+                            phone: "Hidden",
+                            email: "Hidden"
+                        },
+                        servicePlan: { name: "$support_type" },
+                        amount: "$order_price",
+                        orderStatus: "Upcoming",
+                        work_status: "$work_status",
+                        location: { type: "Point", coordinates: [0, 0] }, // Mask coordinates
+                        createdAt: "$created_at",
+                        updatedAt: "$updated_at",
+                        address: "Hidden until acceptance",
+                        pincode: "Hidden",
+                        notes: {
+                            orderId: "$call_id",
+                            serviceCount: "$assets_count"
+                        },
+                        isVendorOrder: { $literal: true },
+                        l1_support_name: "$l1_support_name",
+                        l1_support_number: "$l1_support_number"
+                    }
+                }
+            ]);
+        }
+
+        const mappedRequests = requests.map(order => {
+            const orderCoords = order.location?.coordinates;
+            let distance = "TBD";
+            if (orderCoords && coordinates.length === 2) {
+                const d = getDistanceInMeters(coordinates[1], coordinates[0], orderCoords[1], orderCoords[0]);
+                distance = (d / 1000).toFixed(2);
             }
-        })
-            .populate('userId', 'name phone address')
-            .populate('servicePlan', 'name')
-            .populate('servicePlans', 'name');
-        console.log(requests, "    requests");
+
+            // Strictly redact for unaccepted nearby requests
+            return {
+                ...order,
+                distance,
+                address: "Hidden until acceptance",
+                addressText: "Hidden until acceptance",
+                customerDetails: {
+                    name: "Customer",
+                    phone: "Hidden",
+                    email: "Hidden"
+                },
+                location: { type: "Point", coordinates: [0, 0] },
+                bookingDetails: {
+                    ...order.bookingDetails,
+                    address: "Hidden until acceptance"
+                }
+            };
+        });
+
+        const mappedVendorRequests = vendorRequests.map(order => {
+            const orderCoords = order.location?.coordinates;
+            let distance = "TBD";
+            if (orderCoords && coordinates.length === 2) {
+                const d = getDistanceInMeters(coordinates[1], coordinates[0], orderCoords[1], orderCoords[0]);
+                distance = (d / 1000).toFixed(2);
+            }
+            return { ...order, distance };
+        });
+
         res.status(STATUS_CODES.SUCCESS || 200).json({
-            success: true,
-            count: requests.length,
-            data: requests
+            requests: {
+                success: true,
+                count: mappedRequests.length,
+                data: mappedRequests
+            },
+            vendorOrders: {
+                success: true,
+                count: mappedVendorRequests.length,
+                orders: mappedVendorRequests
+            }
         });
     } catch (error) {
         console.error('Get nearby requests error:', error);
@@ -146,84 +255,115 @@ export const getNearbyRequests = async (req, res) => {
 // Accept Request
 export const acceptRequest = async (req, res) => {
     try {
-        const { id } = req.params; // Order ID
+        const { id } = req.params;
         const engineerId = req.user.id;
 
         console.log('=== ACCEPT REQUEST ===');
-        console.log('Order ID:', id);
+        console.log('Order ID from params:', id);
         console.log('Engineer ID:', engineerId);
 
-        // Find the order
-        const order = await Order.findById(id);
+        // --- ATOMIC UPDATE START ---
+        // We use findOneAndUpdate with a filter that ensures the order is NOT already accepted.
+        // This prevents race conditions where two engineers click 'Accept' simultaneously.
+        // Check current payment state to determine initial status
+        const prelimOrder = await Order.findById(id);
+        const isPrePaid = prelimOrder?.status === 'paid' || 
+                         prelimOrder?.paymentStatus === 'PAID' ||
+                         ['ONLINE', 'RAZORPAY'].includes(prelimOrder?.paymentMode?.toString().toUpperCase());
+        
+        const isPASOrder = prelimOrder?.paymentMode && 
+                         (prelimOrder.paymentMode.toString().toUpperCase().includes('PAS') || 
+                          prelimOrder.paymentMode.toString().toUpperCase().includes('PAY AFTER SERVICE'));
+
+        const order = await Order.findOneAndUpdate(
+            {
+                _id: id,
+                $and: [
+                    {
+                        $or: [
+                            { acceptedBy: null },
+                            { acceptedBy: { $exists: false } }
+                        ]
+                    },
+                    {
+                        $or: [
+                            { assignedEngineer: null },
+                            { assignedEngineer: { $exists: false } }
+                        ]
+                    },
+                    {
+                        status: { $ne: 'completed' }
+                    },
+                    {
+                        orderStatus: { $ne: 'Completed' }
+                    }
+                ]
+            },
+            {
+                $set: {
+                    status: isPrePaid ? 'paid' : 'created',
+                    orderStatus: 'Accepted',
+                    acceptedBy: engineerId,
+                    assignedEngineer: engineerId,
+                    work_status: 'Accepted',
+                    isOtpVerified: false
+                },
+                $pull: { rejectedBy: engineerId }, // Remove from rejectedBy if they previously rejected
+                $push: {
+                    tracking: {
+                        status: 'ACCEPTED',
+                        title: 'Expert Assigned',
+                        subTitle: `Partner ${req.user.name || 'Partner'} identified`,
+                        timestamp: new Date()
+                    }
+                }
+            },
+            { new: true }
+        ).populate('userId', 'name mobile address')
+         .populate('servicePlan', 'name')
+         .populate('assignedEngineer', 'name mobile email')
+         .populate('acceptedBy', 'name mobile email');
 
         if (!order) {
-            console.log('❌ Order not found:', id);
-            return res.status(STATUS_CODES.NOT_FOUND).json({
-                success: false,
-                message: 'Order not found'
-            });
-        }
-        console.log('✅ Order found:', order._id);
-        console.log('Order acceptedBy:', order.acceptedBy);
-        console.log('Order assignedEngineer:', order.assignedEngineer);
-        console.log('Order rejectedBy:', order.rejectedBy);
-
-        // Check if already assigned (accepted by someone)
-        if (order.acceptedBy || order.assignedEngineer) {
-            console.log('❌ Order already assigned');
-            console.log('acceptedBy:', order.acceptedBy);
-            console.log('assignedEngineer:', order.assignedEngineer);
-            return res.status(STATUS_CODES.BAD_REQUEST).json({
+            console.log('❌ Order already accepted or not found:', id);
+            return res.status(STATUS_CODES.CONFLICT || 409).json({
                 success: false,
                 message: 'Order already accepted by another engineer.',
-                details: {
-                    acceptedBy: order.acceptedBy,
-                    assignedEngineer: order.assignedEngineer
-                }
+                isAlreadyTaken: true
             });
         }
-        console.log('✅ Order is available for assignment');
+        // --- ATOMIC UPDATE END ---
 
-        console.log('📝 Processing ACCEPTANCE...');
+        console.log('✅ Order accepted successfully by:', engineerId);
 
-        // Remove engineer from rejectedBy array if they previously rejected this order
-        const rejectedByStrings = order.rejectedBy.map(id => id.toString());
-        const engineerIdString = engineerId.toString();
-
-        if (rejectedByStrings.includes(engineerIdString)) {
-            order.rejectedBy = order.rejectedBy.filter(id => id.toString() !== engineerIdString);
-            console.log('✅ Engineer removed from rejectedBy array');
+        // 🔔 Notify User: Engineer Assigned
+        if (order.userId) {
+            notifyBookingUpdate(order.userId, order._id, 'ENGINEER_ASSIGNED', {
+                engineerName: req.user.name || 'Partner'
+            }).catch(notifyError => console.error('Failed to send assignment notification to user:', notifyError));
         }
 
-        // Update order status to accepted
-        order.status = 'paid';
-        order.orderStatus = 'Accepted';
-        order.acceptedBy = engineerId;
-        order.assignedEngineer = engineerId;
-        order.work_status = 'Accepted';
-        console.log('✅ Order fields updated for acceptance');
-        console.log('✅ Engineer saved in acceptedBy:', engineerId);
+        const updatedOrder = order;
 
-        console.log('💾 Saving order...');
-        await order.save();
-        console.log('✅ Order saved successfully');
-
-        console.log('🔍 Fetching updated order with populated fields...');
-        const updatedOrder = await Order.findById(id)
-            .populate('userId', 'name phone address')
-            .populate('servicePlan', 'name')
-            .populate('assignedEngineer', 'name mobile email')
-            .populate('acceptedBy', 'name mobile email');
-        console.log('✅ Updated order fetched');
+        // Normalize for frontend compatibility
+        const orderData = updatedOrder.toObject ? updatedOrder.toObject() : updatedOrder;
+        if (orderData.paymentMode && 
+            (orderData.paymentMode.toString().toUpperCase().includes('PAS') || 
+             orderData.paymentMode.toString().toUpperCase().includes('PAY AFTER SERVICE'))) {
+            orderData.paymentMode = 'Payment After Service';
+            if (orderData.paymentStatus !== 'PAID') {
+                orderData.status = 'created';
+            }
+        }
 
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
             message: 'Order accepted successfully',
-            data: updatedOrder
+            data: orderData
         });
-        console.log('✅ Response sent successfully');
+        console.log(' Response sent successfully');
     } catch (error) {
-        console.error('❌ ERROR in acceptRequest:', error);
+        console.error(' ERROR in acceptRequest:', error);
         console.error('Error name:', error.name);
         console.error('Error message:', error.message);
         console.error('Error stack:', error.stack);
@@ -247,7 +387,7 @@ export const rejectRequest = async (req, res) => {
         console.log('Engineer ID:', engineerId);
 
         // Find the order
-        const order = await Order.findById(id);
+        const order = await Order.findById(id).populate('servicePlan servicePlans');
 
         if (!order) {
             console.log('❌ Order not found:', id);
@@ -257,6 +397,18 @@ export const rejectRequest = async (req, res) => {
             });
         }
         console.log('✅ Order found:', order._id);
+
+        // --- BLOCK DECLINE IF COMPLETED ---
+        const orderStatusLower = (order.status || '').toLowerCase();
+        const workStatusLower = (order.work_status || '').toLowerCase();
+        if (orderStatusLower === 'completed' || orderStatusLower === 'done' || workStatusLower === 'completed' || workStatusLower === 'done') {
+            console.log('❌ Attempted to decline a completed order:', id);
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot decline a completed job'
+            });
+        }
+
         console.log('Order acceptedBy:', order.acceptedBy);
         console.log('Order assignedEngineer:', order.assignedEngineer);
         console.log('Order rejectedBy:', order.rejectedBy);
@@ -278,24 +430,29 @@ export const rejectRequest = async (req, res) => {
             order.orderStatus = 'Upcoming';
             order.work_status = 'Upcoming';
 
+            // Always reset to Searching and re-dispatch when an accepted order is declined
+            order.status = 'Searching';
+            let shouldReDispatch = true;
+            console.log('✅ Order being reset to Searching for re-dispatch due to engineer decline after acceptance');
+
             // Add to rejectedBy array if not already present
             const rejectedByStrings = order.rejectedBy.map(id => id.toString());
             if (!rejectedByStrings.includes(engineerIdString)) {
                 order.rejectedBy.push(engineerId);
-                console.log('✅ Engineer removed from acceptedBy/assignedEngineer and added to rejectedBy');
+                console.log('Engineer removed from acceptedBy/assignedEngineer and added to rejectedBy');
             } else {
-                console.log('✅ Engineer removed from acceptedBy/assignedEngineer (already in rejectedBy)');
+                console.log('Engineer removed from acceptedBy/assignedEngineer (already in rejectedBy)');
             }
         } else if (order.acceptedBy || order.assignedEngineer) {
             // Order is assigned to a different engineer
-            console.log('❌ Order already assigned to another engineer');
+            console.log(' Order already assigned to another engineer');
             return res.status(STATUS_CODES.BAD_REQUEST).json({
                 success: false,
                 message: 'Order already accepted by another engineer. Cannot reject.'
             });
         } else {
             // Order is not assigned to anyone, normal rejection
-            console.log('📝 Processing normal REJECTION...');
+            console.log(' Processing normal REJECTION...');
 
             // Convert ObjectIds to strings for comparison
             const rejectedByStrings = order.rejectedBy.map(id => id.toString());
@@ -306,9 +463,9 @@ export const rejectRequest = async (req, res) => {
             // Add to rejectedBy array if not already present
             if (!rejectedByStrings.includes(engineerIdString)) {
                 order.rejectedBy.push(engineerId);
-                console.log('✅ Engineer added to rejectedBy array');
+                console.log('Engineer added to rejectedBy array');
             } else {
-                console.log('ℹ️ Engineer already in rejectedBy array');
+                console.log(' Engineer already in rejectedBy array');
                 return res.status(STATUS_CODES.SUCCESS).json({
                     success: true,
                     message: 'Order already rejected by you',
@@ -318,26 +475,37 @@ export const rejectRequest = async (req, res) => {
         }
 
         // Keep orderStatus as 'Upcoming' so other engineers can still accept it
-        console.log(`✅ Engineer ${engineerId} rejected order ${id}`);
+        console.log(` Engineer ${engineerId} rejected order ${id}`);
 
-        console.log('💾 Saving order...');
+        console.log(' Saving order...');
         await order.save();
-        console.log('✅ Order saved successfully');
+        if (typeof shouldReDispatch !== 'undefined' && shouldReDispatch) {
+            await notifyEngineersForOrder(order, { forceDispatch: true });
 
-        console.log('🔍 Fetching updated order with populated fields...');
+            //  Notify User: Partner is being reassigned
+            if (order.userId) {
+                notifyBookingUpdate(order.userId, order._id, 'ENGINEER_DECLINED_REASSIGNING', {
+                    serviceName: order.servicePlan?.name || 'Service'
+                }).catch(err => console.error('[RequestController] Redispatch notification failed:', err));
+            }
+        }
+
+        console.log(' Order saved successfully');
+
+        console.log(' Fetching updated order with populated fields...');
         const updatedOrder = await Order.findById(id)
-            .populate('userId', 'name phone address')
+            .populate('userId', 'name mobile address')
             .populate('servicePlan', 'name');
-        console.log('✅ Updated order fetched');
+        console.log(' Updated order fetched');
 
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
             message: 'Order rejected successfully',
             data: updatedOrder
         });
-        console.log('✅ Response sent successfully');
+        console.log(' Response sent successfully');
     } catch (error) {
-        console.error('❌ ERROR in rejectRequest:', error);
+        console.error(' ERROR in rejectRequest:', error);
         console.error('Error name:', error.name);
         console.error('Error message:', error.message);
         console.error('Error stack:', error.stack);
@@ -364,21 +532,21 @@ export const completeRequest = async (req, res) => {
         const order = await Order.findById(id);
 
         if (!order) {
-            console.log('❌ Order not found:', id);
+            console.log(' Order not found:', id);
             return res.status(STATUS_CODES.NOT_FOUND).json({
                 success: false,
                 message: 'Order not found'
             });
         }
-        console.log('✅ Order found:', order._id);
+        console.log(' Order found:', order._id);
         console.log('Order assignedEngineer:', order.assignedEngineer);
         console.log('Order work_status:', order.work_status);
 
-        console.log('📝 Processing COMPLETION...');
+        console.log(' Processing COMPLETION...');
 
         // Verify that the logged-in engineer is assigned to this order
         if (!order.assignedEngineer || order.assignedEngineer.toString() !== engineerId.toString()) {
-            console.log('❌ Engineer not assigned to this order');
+            console.log(' Engineer not assigned to this order');
             return res.status(STATUS_CODES.FORBIDDEN).json({
                 success: false,
                 message: 'You are not assigned to this order.'
@@ -395,30 +563,57 @@ export const completeRequest = async (req, res) => {
             });
         }
 
-        // Update order to completed
-        order.status = 'paid'; // or 'completed' if that enum exists
+        // For user orders, ensure OTP is verified before completion
+        if (!order.isOtpVerified) {
+            return res.status(STATUS_CODES.BAD_REQUEST).json({
+                success: false,
+                message: 'OTP must be verified before completing the request.'
+            });
+        }
+
+        // 2. Check Payment for PAS
+        const paymentMode = order.paymentMode?.toString().toUpperCase() || '';
+        const isPAS = paymentMode.includes('PAYMENT AFTER SERVICE') || 
+                     paymentMode.includes('PAY AFTER SERVICE') || 
+                     paymentMode.trim() === 'PAS';
+
+        if (isPAS && order.paymentStatus !== 'PAID') {
+            console.warn(`[CompleteRequest] Blocked: PAS order ${order._id} is not PAID (current: ${order.paymentStatus})`);
+            return res.status(STATUS_CODES.BAD_REQUEST).json({
+                success: false,
+                message: 'Payment must be collected via QR code before completing this order.'
+            });
+        }
         order.orderStatus = 'Completed';
         order.work_status = 'Completed';
-        console.log('✅ Order fields updated for completion');
+        console.log(' Order fields updated for completion');
 
-        console.log('💾 Saving order...');
+        console.log(' Saving order...');
         await order.save();
-        console.log('✅ Order saved successfully');
+        console.log(' Order saved successfully');
 
-        console.log('🔍 Fetching updated order with populated fields...');
+        console.log(' Fetching updated order with populated fields...');
         const updatedOrder = await Order.findById(id)
-            .populate('userId', 'name phone address')
+            .populate('userId', 'name mobile address')
             .populate('servicePlan', 'name')
             .populate('assignedEngineer', 'name mobile email')
             .populate('acceptedBy', 'name mobile email');
-        console.log('✅ Updated order fetched');
+        console.log(' Updated order fetched');
 
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
             message: 'Order completed successfully',
             data: updatedOrder
         });
-        console.log('✅ Response sent successfully');
+
+        //  Notify User: Job Completed
+        if (updatedOrder.userId) {
+            notifyBookingUpdate(updatedOrder.userId, updatedOrder._id, 'JOB_COMPLETED', {
+                serviceName: updatedOrder.servicePlan?.name || 'Service'
+            }).catch(err => console.error('[RequestController] Completion notification failed:', err));
+        }
+
+        console.log(' Response sent successfully');
     } catch (error) {
         console.error('❌ ERROR in completeRequest:', error);
         console.error('Error name:', error.name);
@@ -457,7 +652,7 @@ export const updateRequestStatus = async (req, res) => {
         console.log('✅ Status validation passed');
 
         // Find the order
-        const order = await Order.findById(id);
+        const order = await Order.findById(id).populate('servicePlan servicePlans');
 
         if (!order) {
             console.log('❌ Order not found:', id);
@@ -508,6 +703,11 @@ export const updateRequestStatus = async (req, res) => {
                 order.orderStatus = 'Upcoming';
                 order.work_status = 'Upcoming';
 
+                // Always reset to Searching and re-dispatch when an accepted order is declined
+                order.status = 'Searching';
+                var shouldReDispatchLegacy = true;
+                console.log('✅ Order being reset to Searching for re-dispatch due to engineer decline in legacy updateRequestStatus');
+
                 // Add to rejectedBy array if not already present
                 const rejectedByStrings = order.rejectedBy.map(id => id.toString());
                 if (!rejectedByStrings.includes(engineerIdString)) {
@@ -534,25 +734,42 @@ export const updateRequestStatus = async (req, res) => {
             }
 
             if (status === 'Accepted') {
-                console.log('📝 Processing ACCEPTANCE...');
+                console.log('📝 Processing ATOMIC ACCEPTANCE...');
+                const otp = Math.floor(1000 + Math.random() * 9000).toString();
 
-                // Remove engineer from rejectedBy array if they previously rejected this order
-                const rejectedByStrings = order.rejectedBy.map(id => id.toString());
-                const engineerIdString = engineerId.toString();
+                const atomicOrder = await Order.findOneAndUpdate(
+                    {
+                        _id: id,
+                        acceptedBy: { $exists: false },
+                        assignedEngineer: { $exists: false }
+                    },
+                    {
+                        $set: {
+                            status: 'pending',
+                            orderStatus: 'Accepted',
+                            acceptedBy: engineerId,
+                            assignedEngineer: engineerId,
+                            work_status: 'Accepted',
+                            completionOtp: otp,
+                            isOtpVerified: false
+                        },
+                        $pull: { rejectedBy: engineerId }
+                    },
+                    { new: true }
+                );
 
-                if (rejectedByStrings.includes(engineerIdString)) {
-                    order.rejectedBy = order.rejectedBy.filter(id => id.toString() !== engineerIdString);
-                    console.log('✅ Engineer removed from rejectedBy array');
+                if (!atomicOrder) {
+                    console.log('❌ Order already accepted by someone else in atomic check');
+                    return res.status(STATUS_CODES.CONFLICT).json({
+                        success: false,
+                        message: 'Order already accepted by another engineer.',
+                        isAlreadyTaken: true
+                    });
                 }
 
-                // Update order status to accepted
-                order.status = 'paid';
-                order.orderStatus = 'Accepted';
-                order.acceptedBy = engineerId;
-                order.assignedEngineer = engineerId;
-                order.work_status = 'Accepted'; // Update work_status as well
-                console.log('✅ Order fields updated for acceptance');
-                console.log('✅ Engineer saved in acceptedBy:', engineerId);
+                order.acceptedBy = atomicOrder.acceptedBy;
+                order.assignedEngineer = atomicOrder.assignedEngineer;
+                console.log('✅ Atomic acceptance successful');
             } else if (status === 'Rejected' && !isAcceptedByThisEngineer && !isAssignedToThisEngineer) {
                 // Normal rejection (not un-accepting own order)
                 console.log('📝 Processing normal REJECTION...');
@@ -578,11 +795,15 @@ export const updateRequestStatus = async (req, res) => {
 
         console.log('💾 Saving order...');
         await order.save();
+        if (typeof shouldReDispatchLegacy !== 'undefined' && shouldReDispatchLegacy) {
+            await notifyEngineersForOrder(order, { forceDispatch: true });
+        }
+
         console.log('✅ Order saved successfully');
 
         console.log('🔍 Fetching updated order with populated fields...');
         const updatedOrder = await Order.findById(id)
-            .populate('userId', 'name phone address')
+            .populate('userId', 'name mobile address')
             .populate('servicePlan', 'name')
             .populate('assignedEngineer', 'name mobile email')
             .populate('acceptedBy', 'name mobile email');
@@ -612,15 +833,56 @@ export const updateRequestStatus = async (req, res) => {
 export const getAcceptedRequests = async (req, res) => {
     try {
         const engineerId = req.user.id;
+        const { latitude, longitude } = req.query;
 
-        const requests = await Order.find({
+        // 1. STACK TRACE & VALIDATION
+        // If the app doesn't send coordinates, we stop early.
+        if (!latitude || !longitude) {
+            return res.status(STATUS_CODES.BAD_REQUEST).json({
+                success: false,
+                message: "Current location (latitude and longitude) is required to calculate distances."
+            });
+        }
+
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        // 2. Fetch Direct Orders
+        const rawRequests = await Order.find({
             assignedEngineer: engineerId,
             orderStatus: 'Accepted'
-        }).populate('userId', 'name phone address').populate('servicePlan', 'name');
+        })
+            .populate('userId', 'name mobile address')
+            .populate('servicePlan', 'name')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .lean();
+
+        // Map and Redact sensitive info based on work_status
+        const requests = rawRequests.map(order => {
+            const showPhone = order.orderStatus === 'Accepted' || order.work_status === 'Started' || order.work_status === 'In Progress' || order.work_status === 'Completed';
+            return {
+                ...order,
+                customerDetails: {
+                    name: order.userId?.name || "Customer",
+                    phone: order.userId?.mobile || "N/A",
+                    email: order.userId?.email || "N/A"
+                },
+                // Optionally mask userId to prevent direct access
+                userId: undefined
+            };
+        });
+
+        // 5. Final Sort
+        requests.sort((a, b) => (a.distance || 0) - (b.distance || 0));
 
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
             count: requests.length,
+            page,
+            limit,
             data: requests
         });
     } catch (error) {
@@ -635,15 +897,37 @@ export const getAcceptedRequests = async (req, res) => {
 export const getRejectedRequests = async (req, res) => {
     try {
         const engineerId = req.user.id;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
 
         const requests = await Order.find({
-            rejectedBy: engineerId // Check if engineerId is in rejectedBy array
-        }).populate('userId', 'name phone address').populate('servicePlan', 'name');
+            rejectedBy: engineerId
+        })
+            .populate('userId', 'name mobile address')
+            .populate('servicePlan', 'name')
+            .sort({ updatedAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .lean();
+
+        // Security: Mask sensitive user data for rejected requests
+        const redactedRequests = requests.map(req => {
+            if (req.userId) {
+                req.userId.phone = "Hidden";
+            }
+            if (req.customerDetails) {
+                req.customerDetails.phone = "Hidden";
+            }
+            return req;
+        });
 
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
-            count: requests.length,
-            data: requests
+            count: redactedRequests.length,
+            page,
+            limit,
+            data: redactedRequests
         });
     } catch (error) {
         console.error('Get rejected requests error:', error);
@@ -658,53 +942,267 @@ export const getRejectedRequests = async (req, res) => {
 export const updateWorkStatus = async (req, res) => {
     try {
         const { id } = req.params; // Order ID
-        const { work_status } = req.body; // 'In Progress', 'Completed', 'Cancelled'
+        const { work_status } = req.body; // 'In Progress', 'Completed', 'Cancelled', 'Arrived'
         const engineerId = req.user.id;
-        console.log(id, work_status, engineerId, "    id, work_status, engineerId");
 
-        const validStatuses = ['In Progress', 'Completed', 'Cancelled'];
-        if (!validStatuses.includes(work_status)) {
+        if (!work_status) {
             return res.status(STATUS_CODES.BAD_REQUEST).json({
                 success: false,
-                message: `Invalid work status. Must be one of: ${validStatuses.join(', ')}`
+                message: 'Work status is required'
             });
         }
 
-        const order = await Order.findById(id);
+        // 1. Try updating regular Order first
+        let order = await Order.findById(id);
+        if (order) {
+            const validStatuses = ['In Progress', 'Completed', 'Cancelled', 'Arrived'];
+            if (!validStatuses.includes(work_status)) {
+                return res.status(STATUS_CODES.BAD_REQUEST).json({
+                    success: false,
+                    message: `Invalid work status. Must be one of: ${validStatuses.join(', ')}`
+                });
+            }
 
-        if (!order) {
-            return res.status(STATUS_CODES.NOT_FOUND).json({
-                success: false,
-                message: 'Order not found'
+            if (!order.assignedEngineer || order.assignedEngineer.toString() !== engineerId.toString()) {
+                return res.status(STATUS_CODES.FORBIDDEN).json({
+                    success: false,
+                    message: 'You are not assigned to this order.'
+                });
+            }
+
+            const now = new Date();
+            const scheduledTime = order.scheduledTime;
+
+            if (work_status === 'In Progress') {
+                const EARLY_START_BUFFER_MS = 15 * 60 * 1000; // 15 minutes
+
+                if (scheduledTime && now < (scheduledTime.getTime() - EARLY_START_BUFFER_MS)) {
+                    const diffMs = scheduledTime.getTime() - now.getTime();
+                    const diffMins = Math.ceil(diffMs / (1000 * 60));
+
+                    return res.status(STATUS_CODES.BAD_REQUEST).json({
+                        success: false,
+                        message: `Cannot start work yet. Scheduled time is in ${diffMins} minutes. (You can start up to 60 mins early).`
+                    });
+                }
+
+                // Geo-fencing verification
+                const { latitude, longitude } = req.body;
+                if (!latitude || !longitude) {
+                    return res.status(STATUS_CODES.BAD_REQUEST).json({
+                        success: false,
+                        message: 'Location verification is required to start work.'
+                    });
+                }
+
+                let orderLat, orderLng;
+                if (order.location && order.location.coordinates) {
+                    orderLat = order.location.coordinates[1];
+                    orderLng = order.location.coordinates[0];
+                }
+
+                if (orderLat && orderLng) {
+                    const distance = getDistanceInMeters(latitude, longitude, orderLat, orderLng);
+                    if (distance > 200) {
+                        return res.status(STATUS_CODES.BAD_REQUEST).json({
+                            success: false,
+                            message: `Location verification failed. You are ${distance.toFixed(0)}m away. Please be within 200m.`
+                        });
+                    }
+                }
+            }
+
+            order.work_status = work_status;
+
+            // Add tracking event
+            let trackingTitle = '';
+            let trackingStatus = '';
+            if (work_status === 'Arrived') {
+                trackingTitle = 'Partner Arrived';
+                trackingStatus = 'ARRIVED';
+
+                // 🔔 Notify User: Engineer Arrived (Manual Click)
+                if (order.userId) {
+                    const engineerName = req.user?.name || 'Partner';
+                    notifyBookingUpdate(order.userId, order._id, 'ENGINEER_ARRIVED', {
+                        engineerName
+                    }).catch(err => console.error('[Manual-Arrival] Notification failed:', err));
+                }
+            } else if (work_status === 'In Progress') {
+                trackingTitle = 'Job Started';
+                trackingStatus = 'STARTED';
+            } else if (work_status === 'Completed') {
+                trackingTitle = 'Service Completed';
+                trackingStatus = 'COMPLETED';
+            }
+
+            if (trackingTitle) {
+                order.tracking.push({
+                    status: trackingStatus,
+                    title: trackingTitle,
+                    timestamp: new Date()
+                });
+            }
+
+            if (work_status === 'Completed') {
+                if (!order.isOtpVerified) {
+                    return res.status(STATUS_CODES.BAD_REQUEST).json({
+                        success: false,
+                        message: 'OTP must be verified before completing the request.'
+                    });
+                }
+
+                const paymentMode = order.paymentMode?.toString().toUpperCase() || '';
+                const isPAS = paymentMode.includes('PAYMENT AFTER SERVICE') || 
+                             paymentMode.includes('PAY AFTER SERVICE') || 
+                             paymentMode.trim() === 'PAS';
+
+                console.log(`[CompleteCheck] ID: ${order._id}, Mode: ${order.paymentMode}, isPAS: ${isPAS}, PaymentStatus: ${order.paymentStatus}`);
+
+                // Enforce payment for PAS orders before completion
+                if (isPAS && order.paymentStatus !== 'PAID') {
+                    console.warn(`[CompleteCheck] Blocked: PAS order ${order._id} is not PAID (current: ${order.paymentStatus})`);
+                    return res.status(STATUS_CODES.BAD_REQUEST).json({
+                        success: false,
+                        message: 'Payment must be collected via QR code before completing this order.'
+                    });
+                }
+
+                if (!isPAS) {
+                    order.status = 'paid';
+                    order.paymentStatus = 'PAID';
+                }
+
+                order.orderStatus = 'Completed';
+
+                if (order.userId) {
+                    notifyBookingUpdate(order.userId, order._id, 'JOB_COMPLETED', {
+                        serviceName: order.servicePlan?.name || 'Service'
+                    }).catch(err => console.error('[RequestController] Completion notification failed:', err));
+                }
+
+                try {
+                    const payoutAmount = order.totalAmount || order.amount || 0;
+                    if (payoutAmount > 0) {
+                        await creditEngineerWallet({
+                            engineerId,
+                            amount: payoutAmount,
+                            orderId: order._id.toString(),
+                            category: 'earning'
+                        });
+                    }
+                } catch (creditError) {
+                    console.error("Failed to credit wallet:", creditError);
+                }
+            } else if (work_status === 'Cancelled') {
+                order.orderStatus = 'Cancelled';
+            }
+
+            if (work_status === 'In Progress' && order.userId) {
+                // Generate OTP if not already present
+                if (!order.completionOtp) {
+                    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+                    order.completionOtp = otp;
+                }
+
+                // Notify User: Job Started (Fire and forget to keep UI fast)
+                notifyBookingUpdate(order.userId, order._id, 'JOB_STARTED', {
+                    serviceName: order.servicePlan?.name || 'Service',
+                    otp: order.completionOtp
+                }).catch(err => console.error('[RequestController] Service start notification failed:', err));
+            }
+
+            // Single final save for all changes (status, tracking, OTP)
+            await order.save();
+
+            // Normalize for frontend compatibility
+            const orderData = order.toObject ? order.toObject() : order;
+            if (orderData.paymentMode && 
+                (orderData.paymentMode.toString().toUpperCase().includes('PAS') || 
+                 orderData.paymentMode.toString().toUpperCase().includes('PAY AFTER SERVICE'))) {
+                orderData.paymentMode = 'Payment After Service';
+                if (orderData.paymentStatus !== 'PAID') {
+                    orderData.status = 'created';
+                }
+            }
+
+            return res.status(STATUS_CODES.SUCCESS).json({
+                success: true,
+                message: `Work status updated to ${work_status}`,
+                data: orderData
             });
         }
 
-        // Verify that the logged-in engineer acts on this order
-        console.log(`Order Engineer: ${order.assignedEngineer}, Auth User: ${engineerId}`);
-        if (!order.assignedEngineer || order.assignedEngineer.toString() !== engineerId.toString()) {
-            return res.status(STATUS_CODES.FORBIDDEN).json({
-                success: false,
-                message: 'You are not assigned to this order.'
+        // 2. Try updating Vendor Order
+        const vendorWorkStatus = work_status === 'In Progress' ? 'STARTED' : (work_status === 'Completed' ? 'COMPLETED' : work_status.toUpperCase());
+
+        let trackingTitle = '';
+        let trackingStatus = '';
+        let trackingSub = '';
+
+        if (work_status === 'Arrived') {
+            trackingTitle = 'Partner Arrived';
+            trackingStatus = 'ARRIVED';
+            trackingSub = 'Expert has reached your location';
+        } else if (work_status === 'In Progress') {
+            trackingTitle = 'Job Started';
+            trackingStatus = 'STARTED';
+            trackingSub = 'Work is currently in progress';
+        } else if (work_status === 'Completed') {
+            trackingTitle = 'Service Completed';
+            trackingStatus = 'COMPLETED';
+            trackingSub = 'Job finished successfully';
+        }
+
+        const vendorUpdate = { work_status: vendorWorkStatus };
+        if (trackingTitle) {
+            vendorUpdate.$push = {
+                tracking: {
+                    status: trackingStatus,
+                    title: trackingStatus,
+                    subTitle: trackingSub,
+                    timestamp: new Date()
+                }
+            };
+        }
+
+        const vendorOrder = await vendorOrderModal.findOneAndUpdate(
+            { _id: id, assigned_engineer_id: engineerId },
+            vendorUpdate,
+            { new: true }
+        );
+
+        if (vendorOrder) {
+            if (work_status === 'Completed') {
+                await vendorOrderModal.findByIdAndUpdate(id, { status: 'COMPLETED' });
+                try {
+                    const { creditEngineerWallet } = await import('../../services/walletService.js');
+                    const payoutAmount = vendorOrder.totalAmount || vendorOrder.order_price || 0;
+                    if (payoutAmount > 0) {
+                        await creditEngineerWallet({
+                            engineerId,
+                            amount: payoutAmount,
+                            orderId: vendorOrder._id.toString(),
+                            category: 'earning'
+                        });
+                    }
+                } catch (creditError) {
+                    console.error("Failed to credit wallet for vendor:", creditError);
+                }
+            }
+
+            return res.status(STATUS_CODES.SUCCESS).json({
+                success: true,
+                message: `Vendor order work status updated to ${work_status}`,
+                data: vendorOrder
             });
         }
 
-        order.work_status = work_status;
-
-        // Optionally sync with main status if needed
-        if (work_status === 'Completed') {
-            order.status = 'paid'; // or 'completed' if that enum exists
-            order.orderStatus = 'Completed';
-        } else if (work_status === 'Cancelled') {
-            order.orderStatus = 'Cancelled';
-        }
-
-        await order.save();
-
-        res.status(STATUS_CODES.SUCCESS).json({
-            success: true,
-            message: `Work status updated to ${work_status}`,
-            data: order
+        return res.status(STATUS_CODES.NOT_FOUND).json({
+            success: false,
+            message: 'Order not found'
         });
+
     } catch (error) {
         console.error('Update work status error:', error);
         res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({
@@ -718,15 +1216,36 @@ export const updateWorkStatus = async (req, res) => {
 export const getCompletedRequests = async (req, res) => {
     try {
         const engineerId = req.user.id;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
 
-        const requests = await Order.find({
+        const rawRequests = await Order.find({
             assignedEngineer: engineerId,
             orderStatus: 'Completed'
-        }).populate('userId', 'name phone address').populate('servicePlan', 'name');
+        })
+            .populate('userId', 'name mobile address')
+            .populate('servicePlan', 'name')
+            .sort({ updatedAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .lean();
+
+        const requests = rawRequests.map(order => ({
+            ...order,
+            customerDetails: {
+                name: order.userId?.name || "Customer",
+                phone: order.userId?.mobile || "N/A",
+                email: order.userId?.email || "N/A"
+            },
+            userId: undefined
+        }));
 
         res.status(STATUS_CODES.SUCCESS).json({
             success: true,
             count: requests.length,
+            page,
+            limit,
             data: requests
         });
     } catch (error) {
@@ -738,435 +1257,404 @@ export const getCompletedRequests = async (req, res) => {
     }
 };
 
-const toRad = (value) => (value * Math.PI) / 180;
+// Send Completion OTP
+export const sendCompletionOTP = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const order = await Order.findById(id).populate('userId', 'mobile');
 
-const getDistanceInMeters = (lat1, lon1, lat2, lon2) => {
-  const R = 6371000;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) *
-      Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) ** 2;
-
-  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-};
-
-export const servicableLocation = async (req, res) => {
-  try {
-    const { projectId, calls } = req.body;
-
-    if (!Array.isArray(calls) || calls.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Calls array is required and cannot be empty",
-      });
-    }
-
-    const SERVICE_RADIUS = 20000; // 20 km
-    const H3_RESOLUTION = 8;
-    const RING_SIZE = 22;
-
-    const callMap = new Map();
-    const allRequiredCells = new Set();
-
-    /* ----------------------------------------------------
-       STEP 1: PREPARE H3 SEARCH AREAS
-    ---------------------------------------------------- */
-    for (const call of calls) {
-      const { call_id, lat, lng } = call;
-
-      if (typeof lat !== "number" || typeof lng !== "number") continue;
-
-      try {
-        const centerCell = latLngToCell(lat, lng, H3_RESOLUTION);
-        const lookupCells = gridDisk(centerCell, RING_SIZE);
-
-        callMap.set(call_id, { lat, lng, lookupCells });
-
-        for (const cell of lookupCells) {
-          allRequiredCells.add(cell);
-        }
-      } catch (err) {
-        console.error(`H3 error for call ${call_id}`, err);
-      }
-    }
-
-    /* ----------------------------------------------------
-       STEP 2: SINGLE FAST DB QUERY
-    ---------------------------------------------------- */
-    const availableEngineers = await Engineer.find({
-      isActive: true,
-      isAvailable: true,
-      isDeleted: false,
-      isBlocked: false,
-      isSuspended: false,
-      h3Index: { $in: Array.from(allRequiredCells) }
-    }).select("h3Index location").lean();
-
-    /* ----------------------------------------------------
-       STEP 3: GROUP ENGINEERS BY H3 CELL
-    ---------------------------------------------------- */
-    const cellToEngineers = new Map();
-
-    for (const eng of availableEngineers) {
-      if (!cellToEngineers.has(eng.h3Index)) {
-        cellToEngineers.set(eng.h3Index, []);
-      }
-      cellToEngineers.get(eng.h3Index).push(eng);
-    }
-
-    /* ----------------------------------------------------
-       STEP 4: FINAL SERVICEABILITY CHECK (EXACT DISTANCE)
-    ---------------------------------------------------- */
-    const serviceable = [];
-    const non_serviceable = [];
-
-    for (const call of calls) {
-      const data = callMap.get(call.call_id);
-
-      if (!data) {
-        non_serviceable.push({ call_id: call.call_id, reason: "Invalid coordinates" });
-        continue;
-      }
-
-      const { lat, lng, lookupCells } = data;
-      let found = false;
-
-      // Only check engineers inside candidate cells
-      for (const cell of lookupCells) {
-        const engineersInCell = cellToEngineers.get(cell);
-        if (!engineersInCell) continue;
-
-        for (const eng of engineersInCell) {
-          const [engLng, engLat] = eng.location.coordinates;
-
-          const distance = getDistanceInMeters(lat, lng, engLat, engLng);
-
-          if (distance <= SERVICE_RADIUS) {
-            found = true;
-            break;
-          }
+        if (!order) {
+            return res.status(STATUS_CODES.NOT_FOUND).json({
+                success: false, message: 'Order not found'
+            });
         }
 
-        if (found) break;
-      }
+        // Generate 4-digit OTP
+        const otp = Math.floor(1000 + Math.random() * 9000).toString();
+        order.completionOtp = otp;
+        await order.save();
 
-      if (found) {
-        serviceable.push({ call_id: call.call_id });
-      } else {
-        non_serviceable.push({ call_id: call.call_id });
-      }
+        // Simulated SMS sending
+        console.log(`[SIMULATED SMS] OTP for Order ${order.orderId} sent to ${order.userId?.phone}: ${otp}`);
+
+        res.status(STATUS_CODES.SUCCESS).json({
+            success: true,
+            message: 'OTP sent to user successfully'
+        });
+    } catch (error) {
+        res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({
+            success: false, message: error.message
+        });
     }
-
-    /* ----------------------------------------------------
-       STEP 5: RESPONSE
-    ---------------------------------------------------- */
-    return res.status(200).json({
-      success: true,
-      projectId,
-      meta: {
-        total_calls: calls.length,
-        serviceable_count: serviceable.length,
-        non_serviceable_count: non_serviceable.length,
-      },
-      serviceable,
-      non_serviceable,
-    });
-
-  } catch (err) {
-    console.error("Bulk Serviceability Error:", err);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-    });
-  }
 };
 
-export const getVendorRequests = async (req, res) => {
-  try {
-    const { location, orderId } = req.body;
+// Verify Completion OTP
+export const verifyCompletionOTP = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { otp } = req.body;
+        const order = await Order.findById(id);
 
-    // 1. Extract coordinates from the location object
-    // Expecting: { type: "Point", coordinates: [lng, lat] }
-    if (!location?.coordinates || location.coordinates.length !== 2) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid location format. Expected { type: 'Point', coordinates: [lng, lat] }"
-      });
+        if (!order) {
+            return res.status(STATUS_CODES.NOT_FOUND).json({
+                success: false, message: 'Order not found'
+            });
+        }
+
+        if (order.completionOtp === otp) {
+            order.isOtpVerified = true;
+            order.completionOtp = null; // Clear OTP after verification
+            await order.save();
+            return res.status(STATUS_CODES.SUCCESS).json({
+                success: true,
+                message: 'OTP verified successfully'
+            });
+        } else {
+            return res.status(STATUS_CODES.BAD_REQUEST).json({
+                success: false,
+                message: 'Invalid OTP'
+            });
+        }
+    } catch (error) {
+        console.error('Verify completion OTP error:', error);
+        res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({
+            success: false, message: error.message
+        });
     }
+};
 
-    const [lng, lat] = location.coordinates;
-    const H3_RESOLUTION = 8;
-    const MAX_RADIUS_KM = 25;
-    
-    // 25km radius at Res 8 is approx 28-30 rings
-    const RING_SIZE = 28; 
+// Generate Payment QR Code (Razorpay)
+export const generatePaymentQRCode = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const order = await Order.findById(id);
 
-    /* ----------------------------------------------------
-       STEP 2: GENERATE H3 SEARCH AREA
-    ---------------------------------------------------- */
-    // h3-js uses [lat, lng], but your input is [lng, lat]
-    const orderCell = latLngToCell(lat, lng, H3_RESOLUTION);
-    const searchCells = gridDisk(orderCell, RING_SIZE);
+        if (!order) {
+            return res.status(STATUS_CODES.NOT_FOUND).json({
+                success: false, message: 'Order not found'
+            });
+        }
 
-    /* ----------------------------------------------------
-       STEP 3: DB QUERY (INDEXED H3 LOOKUP)
-    ---------------------------------------------------- */
-    const nearbyEngineers = await Engineer.find({
-      isActive: true,
-      isAvailable: true,
-      isDeleted: false,
-      isBlocked: false,
-      isSuspended: false,
-      h3Index: { $in: searchCells } // Fast string index match
-    })
-    .select("_id name mobile h3Index location")
-    .lean();
+        // Only generate Razorpay QR if it's "Payment After Service" (Case-insensitive)
+        const isPAS = order.paymentMode &&
+            order.paymentMode.toString().toLowerCase().trim() === 'payment after service';
 
-    /* ----------------------------------------------------
-       STEP 4: PRECISION FILTERING & SORTING
-    ---------------------------------------------------- */
-    const matchedEngineers = nearbyEngineers
-      .map(eng => {
-        const [eLng, eLat] = eng.location.coordinates;
-        const dist = getDistanceInMeters(lat, lng, eLat, eLng);
-        return { ...eng, distanceInMeters: dist };
-      })
-      .filter(eng => eng.distanceInMeters <= MAX_RADIUS_KM * 1000)
-      .sort((a, b) => a.distanceInMeters - b.distanceInMeters);
+        if (!isPAS) {
+            return res.status(STATUS_CODES.BAD_REQUEST).json({
+                success: false,
+                message: 'Razorpay QR is only available for Payment After Service orders.'
+            });
+        }
 
-    /* ----------------------------------------------------
-       STEP 5: RESPONSE
-    ---------------------------------------------------- */
-    return res.status(200).json({
-      success: true,
-      matchType: "H3_GEO_MATCH",
-      results: {
-        totalFound: matchedEngineers.length,
-        engineers: matchedEngineers
-      },
-      orderId
-    });
+        // If already paid, return early so the app can auto-verify
+        if (order.paymentStatus === 'PAID' || order.status === 'paid' || order.status === 'completed') {
+            return res.status(STATUS_CODES.SUCCESS).json({
+                success: true,
+                data: { isPaid: true }
+            });
+        }
 
-  } catch (error) {
-    console.error("Match Error:", error);
-    return res.status(500).json({ success: false, message: "Internal server error" });
-  }
+        // finalAmount is already in paise, amount is in rupees.
+        const amountInPaise = order.finalAmount ? Math.round(order.finalAmount) : Math.round(order.amount * 100);
+
+        // Generate Razorpay QR Code
+        const qrCode = await razorpay.qrCode.create({
+            type: 'upi_qr',
+            name: `Fastigo Payment`,
+            usage: 'single_use',
+            fixed_amount: true,
+            payment_amount: amountInPaise,
+            description: `Payment for Order #${order.orderId}`,
+            notes: {
+                orderId: order._id.toString(),
+                orderNumber: order.orderId
+            }
+        });
+
+        res.status(STATUS_CODES.SUCCESS).json({
+            success: true,
+            data: {
+                qrId: qrCode.id,
+                imageUrl: qrCode.image_url,
+                paymentUrl: qrCode.payment_url, // UPI deep link
+                isPaid: false
+            }
+        });
+    } catch (error) {
+        console.error('Generate Razorpay QR error:', error);
+        res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({
+            success: false,
+            message: error.message || 'Failed to generate Razorpay QR code'
+        });
+    }
 };
 
 
+// Upload Order Photos (Regular Order)
+export const uploadOrderPhotos = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const engineerId = req.user.id;
+        const files = req.files;
 
-// export const getVendorRequests = async (req, res) => {
-//   try {
-//     const payload = req.body;
+        console.log('>>> [BACKEND] Received uploadOrderPhotos request for ID:', id);
+        console.log('>>> [BACKEND] Files received count:', files?.length || 0);
 
-//     const {
-//       vendor_id,
-//       call_id,
-//       location
-//     } = payload;
+        if (!id) return res.status(STATUS_CODES.BAD_REQUEST).json({ success: false, message: "Order ID is required." });
+        if (!files || files.length === 0) {
+            return res.status(STATUS_CODES.BAD_REQUEST).json({ success: false, message: "Please upload at least one completion image." });
+        }
 
-//     if (!vendor_id || !call_id) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "vendor_id and call_id are required"
-//       });
-//     }
+        const order = await Order.findById(id);
+        if (!order) {
+            return res.status(STATUS_CODES.NOT_FOUND).json({ success: false, message: "Order not found." });
+        }
 
-//     // 🔒 Location validation
-//     if (
-//       !location ||
-//       !Array.isArray(location.coordinates) ||
-//       location.coordinates.length !== 2
-//     ) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid location format"
-//       });
-//     }
+        if (order.assignedEngineer?.toString() !== engineerId.toString()) {
+            return res.status(STATUS_CODES.FORBIDDEN).json({ success: false, message: "Not authorized." });
+        }
 
-//     /* ==================================================
-//        1️⃣ ATOMIC CREATE + LOCK (NO RACE CONDITION)
-//     ================================================== */
+        // Parallel Upload to Cloudinary
+        const uploadResults = await Promise.all(
+            files.map((file) => uploadToCloudinary(file.buffer, "order_completions"))
+        );
 
-//     const order = await VendorOrder.findOneAndUpdate(
-//       { vendor_id, call_id },
-//       {
-//         $setOnInsert: {
-//           vendor_id,
-//           projectId: payload.projectId || payload.project_id,
-//           call_id,
+        const imageUrls = uploadResults.map(result => result.url);
 
-//           state_name: payload.state,
-//           branch_name: payload.branch_name,
-//           branch_code: payload.branch_code,
+        // Update Order with Image URLs
+        order.completion_images = imageUrls;
+        await order.save();
 
-//           complete_address: payload.address,
-//           pincode: payload.pincode,
+        res.status(STATUS_CODES.SUCCESS).json({
+            success: true,
+            message: "Work proof photos uploaded successfully.",
+            data: imageUrls
+        });
+    } catch (error) {
+        console.error(">>> [BACKEND] uploadOrderPhotos Error:", error);
+        res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message });
+    }
+};
 
-//           assets_count: payload.asset_count || 1,
-//           support_type: payload.support_type,
-//           asset_type: payload.asset_type,
+export const getRequestDetails = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { type } = req.query;
 
-//           l1_support_name: payload.l1_support_name,
-//           l1_support_number: payload.l1_support_number,
+        console.log(`[getRequestDetails] ID: ${id}, Type: ${type}`);
 
-//           location,
-//           status: "PENDING"
-//         },
-//       },
-//       { upsert: true, new: true }
-//     );
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid Order ID format"
+            });
+        }
 
-   
+        let order;
+        if (type === 'vendor') {
+            order = await vendorOrderModal.findById(id);
+        } else {
+            order = await Order.findById(id)
+                .populate('servicePlan servicePlans')
+                .populate('userId', 'name mobile email');
+        }
 
-//     /* ==================================================
-//        2️⃣ MATCH ENGINEERS
-//     ================================================== */
+        // Robust Fallback: if not found in specified type, check the other collection
+        if (!order) {
+            console.log(`[getRequestDetails] Not found in ${type || 'regular'} collection, trying fallback...`);
+            if (type === 'vendor') {
+                order = await Order.findById(id)
+                    .populate('servicePlan servicePlans')
+                    .populate('userId', 'name mobile email');
+            } else {
+                order = await vendorOrderModal.findById(id);
+            }
+        }
 
-//     const matchedEngineers = await matchEngineers({ location: order.location });
+        if (!order) {
+            console.log(`[getRequestDetails] Order not found for ID: ${id}`);
+            return res.status(404).json({ success: false, message: "Order not found" });
+        }
 
-    
+        // Normalize for PAS frontend compatibility
+        const orderData = order.toObject ? order.toObject() : order;
+        if (orderData.paymentMode && 
+            (orderData.paymentMode.toString().toUpperCase().includes('PAS') || 
+             orderData.paymentMode.toString().toUpperCase().includes('PAY AFTER SERVICE'))) {
+            orderData.paymentMode = 'Payment After Service';
+            if (orderData.paymentStatus !== 'PAID') {
+                orderData.status = 'created';
+            }
+        }
 
-//     if (!matchedEngineers.length) {
-//       await VendorOrder.findByIdAndUpdate(order._id, {
-//         status: "EXPIRED",
-//         failure_reason: "NO_ENGINEERS_AVAILABLE"
-//       });
+        return res.status(STATUS_CODES.SUCCESS || 200).json({
+            success: true,
+            data: orderData
+        });
+    } catch (error) {
+        console.error("Get Request Details Error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error while fetching details",
+            error: error.message
+        });
+    }
+};
 
-//       return res.status(200).json({
-//         success: false,
-//         message: "No engineers available",
-//         orderId: order._id,
-//       });
-//     }
+// Get Engineer Earnings with filtering and pagination
+export const getEngineerEarnings = async (req, res) => {
+    try {
+        const engineerId = req.user.id;
+        const { range = 'all', page = 1, limit = 10 } = req.query;
+        const skip = (parseInt(page) - 1) * parseInt(limit);
 
-//     /* ==================================================
-//        3️⃣ ASYNC NOTIFICATION
-//     ================================================== */
+        const now = new Date();
+        let startDate;
 
-//     const io = getIO();
-    
-//     matchedEngineers.forEach((engineer) => {
-//       // Send to the private room of the engineer
-//       // room name = engineer_id (string)
-//       io.to(engineer.engineer_id.toString()).emit("NEW_ORDER_REQUEST", {
-//         order_id: order._id,
-//         address: order.complete_address,
-//         distance: engineer.distanceKm,
-//         support_type: order.support_type,
-//         timer: 30 // Tell the app to show a 30s countdown
-//       });
-//     });
+        if (range === 'today') {
+            startDate = new Date(now.setHours(0, 0, 0, 0));
+        } else if (range === 'week') {
+            startDate = new Date(now);
+            startDate.setDate(now.getDate() - now.getDay());
+            startDate.setHours(0, 0, 0, 0);
+        } else if (range === 'month') {
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        } else {
+            startDate = new Date(0); // All time
+        }
 
-//     return res.status(200).json({
-//       success: true,
-//       matchType: "H3_GEO_MATCH",
-//       orderId: order._id,
-//       matchedEngineers,
-//       results: {
-//         totalFound: matchedEngineers.length
-//       }
-//     });
+        // 1. Fetch Orders (Regular and Vendor)
+        const regularQuery = {
+            assignedEngineer: engineerId,
+            $or: [{ status: 'paid' }, { orderStatus: 'Completed' }]
+        };
+        if (startDate) regularQuery.createdAt = { $gte: startDate };
 
-//   } catch (err) {
-//     console.error("Match Error:", err);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Internal server error"
-//     });
-//   }
-// };
+        const vendorQuery = {
+            assigned_engineer_id: engineerId,
+            $or: [{ status: 'COMPLETED' }, { work_status: 'COMPLETED' }]
+        };
+        if (startDate) vendorQuery.created_at = { $gte: startDate };
 
+        const [regularOrders, vendorOrders] = await Promise.all([
+            Order.find(regularQuery).select('amount createdAt servicePlan servicePlanNames customerDetails').lean(),
+            vendorOrderModal.find(vendorQuery).select('payout_amount order_price createdAt created_at asset_type contact_name branch_name').lean()
+        ]);
 
-// export const getVendorRequests = async (req, res) => {
-//   try {
-//     const { location, orderId } = req.body;
+        // 2. Combine and format
+        const combined = [
+            ...regularOrders.map(o => ({
+                amount: o.amount || 0,
+                createdAt: o.createdAt,
+                service: o.servicePlanNames || 'General Service',
+                status: 'Paid',
+                id: o._id,
+                type: 'regular',
+                customerName: o.customerDetails?.name || 'Customer'
+            })),
+            ...vendorOrders.map(o => ({
+                amount: o.payout_amount || o.order_price || 0,
+                createdAt: o.createdAt || o.created_at,
+                service: o.asset_type || 'Vendor Service',
+                status: 'Completed',
+                id: o._id,
+                type: 'vendor',
+                customerName: o.contact_name || o.branch_name || 'Vendor'
+            }))
+        ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-//     if (
-//       !location?.coordinates ||
-//       location.coordinates.length !== 2
-//     ) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid location format"
-//       });
-//     }
+        // 3. Paginate the combined results
+        const paginatedEarnings = combined.slice(skip, skip + parseInt(limit));
+        const totalCount = combined.length;
+        const hasMore = skip + parseInt(limit) < totalCount;
 
-//     const [lng, lat] = location.coordinates;
+        // 4. Calculate Summary for the specific range
+        const filteredSummary = {
+            amount: combined.reduce((sum, item) => sum + item.amount, 0),
+            jobs: combined.length
+        };
 
-//     if (
-//       lat < -90 || lat > 90 ||
-//       lng < -180 || lng > 180
-//     ) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid latitude or longitude"
-//       });
-//     }
+        // 5. Also calculate overall summary for the top cards (always)
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const startOfWeek = new Date();
+        startOfWeek.setDate(startOfToday.getDate() - startOfToday.getDay());
+        const startOfMonth = new Date(startOfToday.getFullYear(), startOfToday.getMonth(), 1);
 
-//     const H3_RESOLUTION = 8;
-//     const MAX_RADIUS_KM = 25;
+        const [allReg, allVen] = await Promise.all([
+            Order.find({ assignedEngineer: engineerId, $or: [{ status: 'paid' }, { orderStatus: 'Completed' }] }).select('amount createdAt').lean(),
+            vendorOrderModal.find({ assigned_engineer_id: engineerId, $or: [{ status: 'COMPLETED' }, { work_status: 'COMPLETED' }] }).select('payout_amount order_price createdAt created_at').lean()
+        ]);
 
-//     // Correct ring size for 25km at res 8
-//     const RING_SIZE = Math.ceil((MAX_RADIUS_KM * 1000) / 460);
+        const allCombined = [
+            ...allReg.map(o => ({ amount: o.amount, date: o.createdAt })),
+            ...allVen.map(v => ({ amount: v.payout_amount || v.order_price || 0, date: v.createdAt || v.created_at }))
+        ];
 
-//     /* ------------------ H3 SEARCH ------------------ */
-//     const orderCell = latLngToCell(lat, lng, H3_RESOLUTION);
-//     const searchCells = gridDisk(orderCell, RING_SIZE);
+        const summary = {
+            today: { amount: 0, jobs: 0 },
+            thisWeek: { amount: 0, jobs: 0 },
+            thisMonth: { amount: 0, jobs: 0 },
+            total: { amount: 0, jobs: 0 }
+        };
 
-//     /* ------------------ DB QUERY ------------------ */
-//     const engineers = await Engineer.find({
-//       isActive: true,
-//       isAvailable: true,
-//       isDeleted: false,
-//       isBlocked: false,
-//       isSuspended: false,
-//       h3Index: { $in: searchCells }
-//     })
-//       .select("_id name mobile location h3Index")
-//       .lean();
+        allCombined.forEach(item => {
+            const d = new Date(item.date);
+            summary.total.amount += item.amount;
+            summary.total.jobs += 1;
+            if (d >= startOfToday) { summary.today.amount += item.amount; summary.today.jobs += 1; }
+            if (d >= startOfWeek) { summary.thisWeek.amount += item.amount; summary.thisWeek.jobs += 1; }
+            if (d >= startOfMonth) { summary.thisMonth.amount += item.amount; summary.thisMonth.jobs += 1; }
+        });
 
-//     if (!engineers.length) {
-//       return res.json({
-//         success: true,
-//         results: { totalFound: 0, engineers: [] },
-//         orderId
-//       });
-//     }
+        res.status(STATUS_CODES.SUCCESS || 200).json({
+            success: true,
+            range,
+            filteredSummary,
+            summary,
+            recent: paginatedEarnings,
+            pagination: {
+                currentPage: parseInt(page),
+                limit: parseInt(limit),
+                totalCount,
+                hasMore
+            }
+        });
 
-//     /* ------------------ PRECISE FILTER ------------------ */
-//     const matchedEngineers = engineers
-//       .map(e => {
-//         const [eLng, eLat] = e.location.coordinates;
-//         return {
-//           ...e,
-//           distanceInMeters: getDistanceInMeters(
-//             lat, lng, eLat, eLng
-//           )
-//         };
-//       })
-//       .filter(e => e.distanceInMeters <= MAX_RADIUS_KM * 1000)
-//       .sort((a, b) => a.distanceInMeters - b.distanceInMeters);
+    } catch (error) {
+        console.error("getEngineerEarnings error:", error);
+        res.status(STATUS_CODES.INTERNAL_SERVER_ERROR || 500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
 
-//     return res.json({
-//       success: true,
-//       matchType: "H3_GEO_MATCH",
-//       results: {
-//         totalFound: matchedEngineers.length,
-//         engineers: matchedEngineers
-//       },
-//       orderId
-//     });
+export const sendQuickReply = async (req, res) => {
+    try {
+        const { orderId, message } = req.body;
+        const engineerId = req.user.id;
 
-//   } catch (error) {
-//     console.error("Match Error:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Internal server error"
-//     });
-//   }
-// };
+        if (!orderId || !message) {
+            return res.status(400).json({ success: false, message: 'OrderId and message are required' });
+        }
+
+        const order = await Order.findById(orderId);
+        if (!order) {
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+
+        // Notify User
+        if (order.userId) {
+            await notifyBookingUpdate(order.userId, order._id, 'QUICK_REPLY', {
+                engineerName: req.user.name || 'Partner',
+                message: message
+            });
+        }
+
+        res.status(200).json({ success: true, message: 'Quick reply sent successfully' });
+    } catch (error) {
+        console.error('sendQuickReply error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

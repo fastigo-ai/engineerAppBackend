@@ -277,25 +277,44 @@ export const AssignEngineerToOrderController = async (req, res) => {
         const { id } = req.params;
         const { engineerId } = req.body;
 
-        // 1. Fetch order and check status
-        const order = await Order.findById(id);
+        // Try Order first
+        let order = await Order.findById(id);
+        let isVendor = false;
+
+        if (!order) {
+            order = await VendorOrder.findById(id);
+            isVendor = true;
+        }
+
         if (!order) {
             return res.status(404).json({ success: false, message: "Order not found" });
         }
 
-        if (order.orderStatus === 'Cancelled' || order.status === 'cancelled') {
+        const currentStatus = isVendor ? order.status : order.orderStatus;
+        if (currentStatus === 'Cancelled' || currentStatus === 'CANCELLED') {
             return res.status(400).json({ 
                 success: false, 
                 message: "Cannot assign engineer to a cancelled order" 
             });
         }
 
-        // 2. Perform assignment
-        const updatedOrder = await Order.findByIdAndUpdate(id, { assignedEngineer: engineerId }, { new: true });
+        // Perform assignment
+        let updatedOrder;
+        if (isVendor) {
+            updatedOrder = await VendorOrder.findByIdAndUpdate(id, { 
+                assigned_engineer_id: engineerId,
+                status: 'ACCEPTED',
+                work_status: 'NOT_STARTED'
+            }, { new: true });
+        } else {
+            updatedOrder = await Order.findByIdAndUpdate(id, { assignedEngineer: engineerId }, { new: true });
+        }
+
         await Engineer.findByIdAndUpdate(engineerId, { isAvailable: false, assignedOrders: [id] }, { new: true });
         
         res.status(200).json(updatedOrder);
     } catch (error) {
+        console.error('Assign engineer error:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
@@ -303,48 +322,73 @@ export const AssignEngineerToOrderController = async (req, res) => {
 export const unAssignEngineerFromOrderController = async (req, res) => {
     try {
         const { id } = req.params;
-        const assignedEngineer = await Order.findById(id).populate('assignedEngineer');
-        const engineer = await Order.findByIdAndUpdate(id, { 
-            assignedEngineer: null,
-            acceptedBy: null,
-            status: 'Searching',
-            work_status: 'Searching',
-            $push: {
-                tracking: {
-                    status: 'SEARCHING_DELAYED',
-                    title: 'Partner Declined Visit',
-                    subTitle: 'Finding a new expert for you',
-                    timestamp: new Date()
+
+        // Try Order first
+        let order = await Order.findById(id).populate('assignedEngineer');
+        let isVendor = false;
+
+        if (!order) {
+            order = await VendorOrder.findById(id).populate('assigned_engineer_id');
+            isVendor = true;
+        }
+
+        if (!order) {
+            return res.status(404).json({ success: false, message: "Order not found" });
+        }
+
+        const assignedEngineerId = isVendor ? order.assigned_engineer_id?._id : order.assignedEngineer?._id;
+
+        let updatedOrder;
+        if (isVendor) {
+            updatedOrder = await VendorOrder.findByIdAndUpdate(id, { 
+                assigned_engineer_id: null,
+                status: 'PENDING',
+                work_status: 'NOT_STARTED'
+            }, { new: true });
+        } else {
+            updatedOrder = await Order.findByIdAndUpdate(id, { 
+                assignedEngineer: null,
+                acceptedBy: null,
+                status: 'Searching',
+                work_status: 'Searching',
+                $push: {
+                    tracking: {
+                        status: 'SEARCHING_DELAYED',
+                        title: 'Partner Declined Visit',
+                        subTitle: 'Finding a new expert for you',
+                        timestamp: new Date()
+                    }
                 }
-            }
-        }, { new: true })
-        .populate('userId')
-        .populate('servicePlan servicePlans');
+            }, { new: true })
+            .populate('userId')
+            .populate('servicePlan servicePlans');
 
-        await Engineer.findByIdAndUpdate(assignedEngineer._id, { isAvailable: true, assignedOrders: [] }, { new: true });
+            // 🔔 Notify User and Redispatch (Only for regular orders)
+            if (updatedOrder.userId) {
+                try {
+                    const { notifyBookingUpdate } = await import("../services/notification/notificationService.js");
+                    const { notifyEngineersForOrder } = await import("../services/notificationEngineerService.js");
 
-        // 🔔 Notify User and Redispatch
-        if (engineer.userId) {
-            try {
-                const { notifyBookingUpdate } = await import("../services/notification/notificationService.js");
-                const { notifyEngineersForOrder } = await import("../services/notificationEngineerService.js");
+                    notifyBookingUpdate(updatedOrder.userId._id, updatedOrder._id, 'ENGINEER_DECLINED_REASSIGNING', {
+                        serviceName: updatedOrder.servicePlan?.name || 'Service'
+                    }).catch(err => console.error('Failed to notify user after unassignment:', err));
 
-                // 1. Notify User (Uses template from registry)
-                notifyBookingUpdate(engineer.userId._id, engineer._id, 'ENGINEER_DECLINED_REASSIGNING', {
-                    serviceName: engineer.servicePlan?.name || 'Service'
-                }).catch(err => console.error('Failed to notify user after unassignment:', err));
+                    notifyEngineersForOrder(updatedOrder);
 
-                // 2. Trigger Redispatch
-                notifyEngineersForOrder(engineer);
-
-            } catch (notifyError) {
-                console.error('Failed to notify/redispatch after unassignment:', notifyError);
+                } catch (notifyError) {
+                    console.error('Failed to notify/redispatch after unassignment:', notifyError);
+                }
             }
         }
 
-        res.status(200).json(engineer);
+        if (assignedEngineerId) {
+            await Engineer.findByIdAndUpdate(assignedEngineerId, { isAvailable: true, assignedOrders: [] }, { new: true });
+        }
+
+        res.status(200).json(updatedOrder);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error('Unassign engineer error:', error);
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 

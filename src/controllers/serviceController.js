@@ -15,6 +15,7 @@ import { uploadToCloudinary } from '../utils/uploadToCloudinary.js';
 import { ServicePlan } from '../models/serviceModal.js';
 import { ServicePlans } from '../models/planModal.js';
 import { Order } from '../models/orderSchema.js';
+import VendorOrder from '../models/vendorOrderModal.js';
 import { notifyEngineersForOrder } from '../services/notificationEngineerService.js';
 import { notifyBookingUpdate } from '../services/notification/notificationService.js';
 import mongoose from 'mongoose';
@@ -1561,17 +1562,25 @@ export const updateOrderStatusAdmin = async (req, res) => {
 
     console.log(`[Admin] Manual status update for Order ${id} to ${status}`);
 
-    const existingOrder = await Order.findById(id);
+    // Try regular Order first
+    let existingOrder = await Order.findById(id);
+    let isVendor = false;
+
+    if (!existingOrder) {
+      existingOrder = await VendorOrder.findById(id);
+      isVendor = true;
+    }
+
     if (!existingOrder) {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
 
     // --- IMMUTABILITY CHECK ---
-    // Prevent any updates to orders that are already Completed or Cancelled
-    if (existingOrder.orderStatus === 'Completed' || existingOrder.orderStatus === 'Cancelled') {
+    const currentStatus = isVendor ? existingOrder.status : existingOrder.orderStatus;
+    if (currentStatus === 'Completed' || currentStatus === 'COMPLETED' || currentStatus === 'Cancelled' || currentStatus === 'CANCELLED') {
       return res.status(400).json({ 
         success: false, 
-        message: `This order is already ${existingOrder.orderStatus} and cannot be modified further.` 
+        message: `This order is already ${currentStatus} and cannot be modified further.` 
       });
     }
 
@@ -1579,79 +1588,215 @@ export const updateOrderStatusAdmin = async (req, res) => {
     let trackingEntry = null;
     let shouldCleanupTracking = false;
 
-    switch (status) {
-      case 'Arrived':
-        updateData.orderStatus = 'Accepted';
-        updateData.work_status = 'In Progress';
-        trackingEntry = { status: 'ARRIVED', title: 'Partner Arrived', subTitle: 'Expert has reached your location', timestamp: new Date() };
-        break;
-      case 'Started':
-        updateData.orderStatus = 'Accepted';
-        updateData.work_status = 'In Progress';
-        trackingEntry = { status: 'STARTED', title: 'Service Started', subTitle: 'Work is currently in progress', timestamp: new Date() };
-        break;
-      case 'Completed':
-        updateData.orderStatus = 'Completed';
-        updateData.work_status = 'Completed';
-        updateData.status = 'completed';
-        trackingEntry = { status: 'COMPLETED', title: 'Service Completed', subTitle: 'Job finished successfully', timestamp: new Date() };
-        shouldCleanupTracking = true;
-        break;
-      case 'Cancelled':
-        updateData.orderStatus = 'Cancelled';
-        updateData.work_status = 'Cancelled';
-        updateData.status = 'cancelled';
-        updateData.assignedEngineer = null; // Unassign engineer on cancellation
-        trackingEntry = { status: 'CANCELLED', title: 'Booking Cancelled', subTitle: 'Cancelled by Administrator', timestamp: new Date() };
-        shouldCleanupTracking = true;
-        break;
-      case 'Accepted':
-        updateData.orderStatus = 'Accepted';
-        updateData.work_status = 'Accepted';
-        updateData.status = 'paid';
-        break;
-      default:
-        updateData.orderStatus = status;
-        updateData.work_status = status;
-    }
+    if (isVendor) {
+      // Vendor status mapping
+      switch (status) {
+        case 'Started':
+          updateData.status = 'ACCEPTED';
+          updateData.work_status = 'STARTED';
+          trackingEntry = { status: 'STARTED', title: 'Work Started', subTitle: 'Expert has started the job', timestamp: new Date() };
+          break;
+        case 'Completed':
+          updateData.status = 'COMPLETED';
+          updateData.work_status = 'COMPLETED';
+          updateData.completed_at = new Date();
+          trackingEntry = { status: 'COMPLETED', title: 'Service Completed', subTitle: 'Job finished successfully', timestamp: new Date() };
+          break;
+        case 'Cancelled':
+          updateData.status = 'CANCELLED';
+          updateData.work_status = 'CANCELLED';
+          updateData.assigned_engineer_id = null;
+          trackingEntry = { status: 'CANCELLED', title: 'Booking Cancelled', subTitle: 'Cancelled by Administrator', timestamp: new Date() };
+          break;
+        case 'Accepted':
+          updateData.status = 'ACCEPTED';
+          updateData.work_status = 'NOT_STARTED';
+          break;
+        default:
+          updateData.status = status;
+          updateData.work_status = status;
+      }
 
-    let updatedTracking = [...(existingOrder.tracking || [])];
-    if (shouldCleanupTracking) {
-      updatedTracking = updatedTracking.filter(t => 
-        t.status !== 'SEARCHING_DELAYED' && 
-        !t.title?.includes('Expert Not Found') &&
-        !t.title?.includes('Searching')
-      );
-    }
-    
-    if (trackingEntry) {
-      updatedTracking.push(trackingEntry);
-    }
+      const updatedOrder = await VendorOrder.findByIdAndUpdate(
+        id,
+        { $set: updateData, $push: trackingEntry ? { tracking: trackingEntry } : {} },
+        { new: true }
+      ).populate('assigned_engineer_id');
 
-    const updatedOrder = await Order.findByIdAndUpdate(
-      id,
-      { $set: { ...updateData, tracking: updatedTracking } },
-      { new: true }
-    ).populate('servicePlan userId');
+      return res.status(200).json({ success: true, message: "Vendor order updated successfully", data: updatedOrder });
 
-    res.status(200).json({ success: true, message: "Status synchronized successfully", data: updatedOrder });
+    } else {
+      // Regular Order status mapping
+      switch (status) {
+        case 'Arrived':
+          updateData.orderStatus = 'Accepted';
+          updateData.work_status = 'In Progress';
+          trackingEntry = { status: 'ARRIVED', title: 'Partner Arrived', subTitle: 'Expert has reached your location', timestamp: new Date() };
+          break;
+        case 'Started':
+          updateData.orderStatus = 'Accepted';
+          updateData.work_status = 'In Progress';
+          trackingEntry = { status: 'STARTED', title: 'Service Started', subTitle: 'Work is currently in progress', timestamp: new Date() };
+          break;
+        case 'Completed':
+          updateData.orderStatus = 'Completed';
+          updateData.work_status = 'Completed';
+          updateData.status = 'completed';
+          trackingEntry = { status: 'COMPLETED', title: 'Service Completed', subTitle: 'Job finished successfully', timestamp: new Date() };
+          shouldCleanupTracking = true;
+          break;
+        case 'Cancelled':
+          updateData.orderStatus = 'Cancelled';
+          updateData.work_status = 'Cancelled';
+          updateData.status = 'cancelled';
+          updateData.assignedEngineer = null;
+          trackingEntry = { status: 'CANCELLED', title: 'Booking Cancelled', subTitle: 'Cancelled by Administrator', timestamp: new Date() };
+          shouldCleanupTracking = true;
+          break;
+        case 'Accepted':
+          updateData.orderStatus = 'Accepted';
+          updateData.work_status = 'Accepted';
+          updateData.status = 'paid';
+          break;
+        default:
+          updateData.orderStatus = status;
+          updateData.work_status = status;
+      }
 
-    if (updatedOrder.userId) {
-      let eventKey = null;
-      if (status === 'Arrived') eventKey = 'ENGINEER_ARRIVED';
-      else if (status === 'Started') eventKey = 'JOB_STARTED';
-      else if (status === 'Completed') eventKey = 'BOOKING_COMPLETED';
-      else if (status === 'Cancelled') eventKey = 'BOOKING_CANCELLED';
+      let updatedTracking = [...(existingOrder.tracking || [])];
+      if (shouldCleanupTracking) {
+        updatedTracking = updatedTracking.filter(t => 
+          t.status !== 'SEARCHING_DELAYED' && 
+          !t.title?.includes('Expert Not Found') &&
+          !t.title?.includes('Searching')
+        );
+      }
+      
+      if (trackingEntry) {
+        updatedTracking.push(trackingEntry);
+      }
 
-      if (eventKey) {
-        notifyBookingUpdate(updatedOrder.userId, updatedOrder._id, eventKey, {
-          serviceName: updatedOrder.servicePlan?.name || 'Service',
-          engineerName: 'Your engineer'
-        }).catch(err => console.error('[ServiceController] Admin status notification failed:', err));
+      const updatedOrder = await Order.findByIdAndUpdate(
+        id,
+        { $set: { ...updateData, tracking: updatedTracking } },
+        { new: true }
+      ).populate('servicePlan userId');
+
+      res.status(200).json({ success: true, message: "Status synchronized successfully", data: updatedOrder });
+
+      if (updatedOrder.userId) {
+        let eventKey = null;
+        if (status === 'Arrived') eventKey = 'ENGINEER_ARRIVED';
+        else if (status === 'Started') eventKey = 'JOB_STARTED';
+        else if (status === 'Completed') eventKey = 'BOOKING_COMPLETED';
+        else if (status === 'Cancelled') eventKey = 'BOOKING_CANCELLED';
+
+        if (eventKey) {
+          notifyBookingUpdate(updatedOrder.userId, updatedOrder._id, eventKey, {
+            serviceName: updatedOrder.servicePlan?.name || 'Service',
+            engineerName: 'Your engineer'
+          }).catch(err => console.error('[ServiceController] Admin status notification failed:', err));
+        }
       }
     }
   } catch (error) {
     console.error("Admin order status update error:", error);
     return res.status(500).json({ success: false, message: "Internal server error", error: error.message });
+  }
+};
+
+/**
+ * Admin: GET all vendor bookings
+ * Supports: Search, status filtering, and pagination.
+ */
+export const getAllVendorBookingsAdmin = async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 10, 
+      search = '', 
+      status = 'all' 
+    } = req.query;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const limitNum = parseInt(limit);
+
+    const match = {};
+
+    // 1. Search (Call ID, Project ID, Branch Name, Address)
+    if (search) {
+      match.$or = [
+        { call_id: { $regex: search, $options: 'i' } },
+        { projectId: { $regex: search, $options: 'i' } },
+        { branch_name: { $regex: search, $options: 'i' } },
+        { complete_address: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // 2. Status Filter
+    if (status && status !== 'all') {
+      match.status = status;
+    }
+
+    // Execute Aggregation
+    const [results] = await VendorOrder.aggregate([
+      { $match: match },
+      {
+        $facet: {
+          metadata: [{ $count: "total" }],
+          stats: [
+            {
+              $group: {
+                _id: null,
+                totalRevenue: { $sum: "$order_price" },
+                pendingCount: { $sum: { $cond: [{ $eq: ["$status", "PENDING"] }, 1, 0] } },
+                acceptedCount: { $sum: { $cond: [{ $eq: ["$status", "ACCEPTED"] }, 1, 0] } },
+                completedCount: { $sum: { $cond: [{ $eq: ["$status", "COMPLETED"] }, 1, 0] } }
+              }
+            }
+          ],
+          data: [
+            { $sort: { created_at: -1 } },
+            { $skip: skip },
+            { $limit: limitNum },
+            {
+              $lookup: {
+                from: 'engineers',
+                localField: 'assigned_engineer_id',
+                foreignField: '_id',
+                as: 'assignedEngineer'
+              }
+            },
+            { $unwind: { path: '$assignedEngineer', preserveNullAndEmptyArrays: true } }
+          ]
+        }
+      }
+    ]);
+
+    const totalCount = results.metadata[0]?.total || 0;
+    const globalStats = results.stats[0] || {
+      totalRevenue: 0,
+      pendingCount: 0,
+      acceptedCount: 0,
+      completedCount: 0
+    };
+
+    return res.status(200).json({
+      success: true,
+      message: 'Admin vendor bookings retrieved successfully',
+      data: results.data,
+      stats: globalStats,
+      pagination: {
+        totalCount,
+        totalPages: Math.ceil(totalCount / limitNum),
+        currentPage: parseInt(page),
+        limit: limitNum,
+        hasMore: skip + results.data.length < totalCount
+      }
+    });
+
+  } catch (error) {
+    console.error('[ServiceController] Admin get vendor bookings error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to retrieve vendor bookings', error: error.message });
   }
 };

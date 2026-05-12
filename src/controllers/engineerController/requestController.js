@@ -258,24 +258,14 @@ export const acceptRequest = async (req, res) => {
         const { id } = req.params;
         const engineerId = req.user.id;
 
-        console.log('=== ACCEPT REQUEST ===');
+        console.log('=== ACCEPT REQUEST (Refactored) ===');
         console.log('Order ID from params:', id);
         console.log('Engineer ID:', engineerId);
 
-        // --- ATOMIC UPDATE START ---
-        // We use findOneAndUpdate with a filter that ensures the order is NOT already accepted.
-        // This prevents race conditions where two engineers click 'Accept' simultaneously.
-        // Check current payment state to determine initial status
-        const prelimOrder = await Order.findById(id);
-        const isPrePaid = prelimOrder?.status === 'paid' || 
-                         prelimOrder?.paymentStatus === 'PAID' ||
-                         ['ONLINE', 'RAZORPAY'].includes(prelimOrder?.paymentMode?.toString().toUpperCase());
-        
-        const isPASOrder = prelimOrder?.paymentMode && 
-                         (prelimOrder.paymentMode.toString().toUpperCase().includes('PAS') || 
-                          prelimOrder.paymentMode.toString().toUpperCase().includes('PAY AFTER SERVICE'));
-
-        const order = await Order.findOneAndUpdate(
+        // --- ATOMIC UPDATE WITH PIPELINE ---
+        // This approach determines the status (PrePaid vs PAS) inside the DB in a single operation,
+        // avoiding an extra findById query.
+        const updatedDoc = await Order.findOneAndUpdate(
             {
                 _id: id,
                 $and: [
@@ -291,40 +281,62 @@ export const acceptRequest = async (req, res) => {
                             { assignedEngineer: { $exists: false } }
                         ]
                     },
-                    {
-                        status: { $ne: 'completed' }
-                    },
-                    {
-                        orderStatus: { $ne: 'Completed' }
-                    }
+                    { status: { $ne: 'completed' } },
+                    { orderStatus: { $ne: 'Completed' } }
                 ]
             },
-            {
-                $set: {
-                    status: isPrePaid ? 'paid' : 'created',
-                    orderStatus: 'Accepted',
-                    acceptedBy: engineerId,
-                    assignedEngineer: engineerId,
-                    work_status: 'Accepted',
-                    isOtpVerified: false
+            [
+                {
+                    $set: {
+                        status: {
+                            $cond: {
+                                if: {
+                                    $or: [
+                                        { $eq: ["$status", "paid"] },
+                                        { $eq: ["$paymentStatus", "PAID"] },
+                                        { $in: [{ $toUpper: { $toString: "$paymentMode" } }, ["ONLINE", "RAZORPAY", "PAID"]] }
+                                    ]
+                                },
+                                then: "paid",
+                                else: "created"
+                            }
+                        },
+                        orderStatus: 'Accepted',
+                        acceptedBy: new mongoose.Types.ObjectId(engineerId),
+                        assignedEngineer: new mongoose.Types.ObjectId(engineerId),
+                        work_status: 'Accepted',
+                        isOtpVerified: false,
+                        tracking: {
+                            $concatArrays: [
+                                { $ifNull: ["$tracking", []] },
+                                [
+                                    {
+                                        status: 'ACCEPTED',
+                                        title: 'Expert Assigned',
+                                        subTitle: `Partner ${req.user.name || 'Partner'} identified`,
+                                        timestamp: new Date()
+                                    }
+                                ]
+                            ]
+                        }
+                    }
                 },
-                $pull: { rejectedBy: engineerId }, // Remove from rejectedBy if they previously rejected
-                $push: {
-                    tracking: {
-                        status: 'ACCEPTED',
-                        title: 'Expert Assigned',
-                        subTitle: `Partner ${req.user.name || 'Partner'} identified`,
-                        timestamp: new Date()
+                {
+                    $set: {
+                        rejectedBy: {
+                            $filter: {
+                                input: { $ifNull: ["$rejectedBy", []] },
+                                as: "rid",
+                                cond: { $ne: ["$$rid", new mongoose.Types.ObjectId(engineerId)] }
+                            }
+                        }
                     }
                 }
-            },
+            ],
             { new: true }
-        ).populate('userId', 'name mobile address')
-         .populate('servicePlan', 'name')
-         .populate('assignedEngineer', 'name mobile email')
-         .populate('acceptedBy', 'name mobile email');
+        );
 
-        if (!order) {
+        if (!updatedDoc) {
             console.log('❌ Order already accepted or not found:', id);
             return res.status(STATUS_CODES.CONFLICT || 409).json({
                 success: false,
@@ -332,24 +344,70 @@ export const acceptRequest = async (req, res) => {
                 isAlreadyTaken: true
             });
         }
-        // --- ATOMIC UPDATE END ---
+
+        // --- FAST AGGREGATION FETCH ---
+        // Instead of 4 separate populate queries, we use a single aggregation pipeline with $lookup.
+        const orderAggregation = await Order.aggregate([
+            { $match: { _id: updatedDoc._id } },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'userId',
+                    foreignField: '_id',
+                    pipeline: [{ $project: { name: 1, mobile: 1, address: 1 } }],
+                    as: 'userId'
+                }
+            },
+            { $unwind: { path: '$userId', preserveNullAndEmptyArrays: true } },
+            {
+                $lookup: {
+                    from: 'servicePlan',
+                    localField: 'servicePlan',
+                    foreignField: '_id',
+                    pipeline: [{ $project: { name: 1 } }],
+                    as: 'servicePlan'
+                }
+            },
+            { $unwind: { path: '$servicePlan', preserveNullAndEmptyArrays: true } },
+            {
+                $lookup: {
+                    from: 'engineers',
+                    localField: 'assignedEngineer',
+                    foreignField: '_id',
+                    pipeline: [{ $project: { name: 1, mobile: 1, email: 1 } }],
+                    as: 'assignedEngineer'
+                }
+            },
+            { $unwind: { path: '$assignedEngineer', preserveNullAndEmptyArrays: true } },
+            {
+                $lookup: {
+                    from: 'engineers',
+                    localField: 'acceptedBy',
+                    foreignField: '_id',
+                    pipeline: [{ $project: { name: 1, mobile: 1, email: 1 } }],
+                    as: 'acceptedBy'
+                }
+            },
+            { $unwind: { path: '$acceptedBy', preserveNullAndEmptyArrays: true } }
+        ]);
+
+        const order = orderAggregation[0];
 
         console.log('✅ Order accepted successfully by:', engineerId);
 
         // 🔔 Notify User: Engineer Assigned
         if (order.userId) {
-            notifyBookingUpdate(order.userId, order._id, 'ENGINEER_ASSIGNED', {
+            // Use _id if populated userId is an object
+            const targetUserId = order.userId._id || order.userId;
+            notifyBookingUpdate(targetUserId, order._id, 'ENGINEER_ASSIGNED', {
                 engineerName: req.user.name || 'Partner'
             }).catch(notifyError => console.error('Failed to send assignment notification to user:', notifyError));
         }
 
-        const updatedOrder = order;
-
         // Normalize for frontend compatibility
-        const orderData = updatedOrder.toObject ? updatedOrder.toObject() : updatedOrder;
-        if (orderData.paymentMode && 
-            (orderData.paymentMode.toString().toUpperCase().includes('PAS') || 
-             orderData.paymentMode.toString().toUpperCase().includes('PAY AFTER SERVICE'))) {
+        const orderData = order;
+        const paymentModeStr = (orderData.paymentMode || '').toString().toUpperCase();
+        if (paymentModeStr.includes('PAS') || paymentModeStr.includes('PAY AFTER SERVICE')) {
             orderData.paymentMode = 'Payment After Service';
             if (orderData.paymentStatus !== 'PAID') {
                 orderData.status = 'created';
@@ -364,10 +422,6 @@ export const acceptRequest = async (req, res) => {
         console.log(' Response sent successfully');
     } catch (error) {
         console.error(' ERROR in acceptRequest:', error);
-        console.error('Error name:', error.name);
-        console.error('Error message:', error.message);
-        console.error('Error stack:', error.stack);
-
         res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({
             success: false,
             message: error.message,
