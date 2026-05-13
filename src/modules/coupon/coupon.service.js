@@ -36,7 +36,7 @@ export const validateCoupon = async ({ userId, couponCode, amount, servicePlans 
   
   if (amount < coupon.minOrderAmount) {
     const diff = (coupon.minOrderAmount - amount) / 100;
-    throw new Error(`Add ₹${diff.toFixed(0)} more to your cart to use this coupon`);
+    throw new Error(`Minimum order amount for this coupon is ₹${(coupon.minOrderAmount / 100).toFixed(0)}. Add ₹${diff.toFixed(0)} more to your cart.`);
   }
 
   // Check overall usage limit
@@ -86,24 +86,36 @@ export const validateCoupon = async ({ userId, couponCode, amount, servicePlans 
 
   // --- Plan & Category targeting ---
   if (servicePlans.length > 0) {
-    const normalizedPlanIds = servicePlans.map(p => (typeof p === 'object' && p.id) ? p.id : p);
+    const normalizedPlanIds = servicePlans.map(p => {
+      if (typeof p === 'string') return p;
+      if (typeof p === 'object') return p.id || p._id || p;
+      return p;
+    }).filter(id => typeof id === 'string' || mongoose.Types.ObjectId.isValid(id));
+
     const plansData = await ServicePlan.find({ _id: { $in: normalizedPlanIds } }).populate('category').lean();
     
+    if (plansData.length === 0 && normalizedPlanIds.length > 0) {
+      console.warn('[ValidateCoupon] No plans found for IDs:', normalizedPlanIds);
+    }
     if (coupon.applicablePlans?.length > 0) {
       const planIdsStrings = coupon.applicablePlans.map(id => id.toString());
       const hasApplicablePlan = normalizedPlanIds.some(pid => planIdsStrings.includes(pid.toString()));
       if (!hasApplicablePlan) {
-        throw new Error('This coupon is not valid for the selected service(s)');
+        throw new Error('This coupon is not valid for the selected services');
       }
     }
 
     if (coupon.applicableCategories?.length > 0) {
       const catIdsStrings = coupon.applicableCategories.map(id => id.toString());
-      const hasApplicableCategory = plansData.some(p => p.category && catIdsStrings.includes(p.category._id.toString()));
-      if (!hasApplicableCategory) {
-        throw new Error('This coupon is not valid for this service category');
+      const matchedPlan = plansData.find(p => p.category && (catIdsStrings.includes(p.category._id.toString()) || catIdsStrings.includes(p.category.toString())));
+      
+      if (!matchedPlan) {
+        throw new Error('This coupon is not valid for the service categories in your cart');
       }
     }
+  } else if (coupon.applicablePlans?.length > 0 || coupon.applicableCategories?.length > 0) {
+    // If coupon is restricted but no plans provided, we should fail for safety
+    throw new Error('This coupon requires specific services which are missing from your cart');
   }
 
   const discount = calculateDiscount(coupon, amount);

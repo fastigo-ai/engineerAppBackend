@@ -18,7 +18,13 @@ export const applyCoupon = async (req, res) => {
       servicePlans
     });
 
-
+    console.log('[ApplyCoupon] SUCCESS:', {
+      userId,
+      couponCode,
+      amount,
+      servicePlansCount: servicePlans?.length || 0,
+      discount: validationResult.discount
+    });
     const validationKey = generateValidationKey({
       userId,
       couponId: validationResult.coupon._id,
@@ -34,7 +40,12 @@ export const applyCoupon = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Apply coupon error:', error);
+    console.error('[ApplyCoupon] CRITICAL ERROR:', {
+      message: error.message,
+      stack: error.stack,
+      body: req.body,
+      user: req.user.id
+    });
     return res.status(400).json({
       success: false,
       message: error.message || 'Failed to apply coupon'
