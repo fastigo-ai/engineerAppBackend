@@ -69,6 +69,33 @@ export const initStaleOrderJob = () => {
       // --- CASE 2: ENGINEER NOTIFICATIONS & NO-SHOW MANAGEMENT ---
       console.log(`[StaleJob] Scanning for overdue orders at ${now.toISOString()}...`);
       
+      // PHASE -1: 15-minute Reminder (T-15 minutes)
+      const upcomingReminders15m = await Order.find({
+        orderStatus: 'Accepted',
+        assignedEngineer: { $ne: null },
+        scheduledAt: { 
+          $gte: now, 
+          $lte: new Date(now.getTime() + 16 * 60000) // Within next 16 minutes
+        },
+        reminder15mSent: { $ne: true }
+      }).populate('assignedEngineer servicePlan');
+
+      for (const order of upcomingReminders15m) {
+        try {
+          const eng = order.assignedEngineer;
+          if (eng) {
+            await sendPushToEngineer(eng._id, {
+              title: 'Booking Reminder!',
+              body: `Hi ${eng.name}, your scheduled booking for ${order.servicePlan?.name || 'your service'} starts in 15 minutes. Please reach the customer location on time.`,
+              data: { type: 'BOOKING_REMINDER', orderId: order._id.toString() }
+            });
+            order.reminder15mSent = true;
+            await order.save();
+            console.log(`[StaleJob] 15m Reminder sent to engineer for ${order._id}`);
+          }
+        } catch (err) { console.error(`[StaleJob] Error sending 15m reminder for ${order._id}:`, err); }
+      }
+
       // PHASE 0: 5-minute Reminder (T-5 minutes)
       const upcomingReminders = await Order.find({
         orderStatus: 'Accepted',

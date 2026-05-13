@@ -271,6 +271,10 @@ const OrderSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    reminder15mSent: {
+      type: Boolean,
+      default: false,
+    },
     reminder5mSent: {
       type: Boolean,
       default: false,
