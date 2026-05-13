@@ -140,21 +140,21 @@ export const initStaleOrderJob = () => {
         try {
           const oldEngineer = order.assignedEngineer;
           
-          // 1. Unassign and set back to Searching
+          // 1. Mark as ExpertUnavailable but keep orderStatus as Upcoming for App visibility
           await Order.findByIdAndUpdate(order._id, {
             $set: {
-              status: 'Searching',
-              orderStatus: 'Upcoming',
-              work_status: 'Searching',
+              status: 'paid', 
+              orderStatus: 'Upcoming', // Keep as Upcoming so it shows in the Customer App
+              work_status: 'ExpertUnavailable', // Hide from nearby list
               assignedEngineer: null,
               acceptedBy: null,
-              noShowPhase: 2 // Mark as processed
+              noShowPhase: 2 
             },
             $push: {
               tracking: {
                 status: 'UNAVAILABLE',
                 title: 'Expert Unavailable',
-                subTitle: 'Partner could not reach location. Please reschedule or cancel.',
+                subTitle: 'Partner could not reach location. Please reschedule to assign a new expert.',
                 timestamp: new Date()
               }
             }

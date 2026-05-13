@@ -60,8 +60,13 @@ export const createFundAccount = async (contactId, bankDetails) => {
 
 export const createPayout = async ({ fundAccountId, amount, accountNumber, referenceId, idempotencyKey }) => {
     try {
+        const accNum = accountNumber || RAZORPAY_ACCOUNT_NUMBER;
+        if (!accNum) {
+            throw new Error("RAZORPAY_ACCOUNT_NUMBER is missing in .env. This is required for payouts.");
+        }
+
         const response = await axios.post(`${BASE_URL}/payouts`, {
-            account_number: accountNumber || RAZORPAY_ACCOUNT_NUMBER,
+            account_number: accNum,
             fund_account_id: fundAccountId,
             amount: Math.round(amount * 100), // Convert to paise
             currency: "INR",
@@ -82,7 +87,8 @@ export const createPayout = async ({ fundAccountId, amount, accountNumber, refer
         return response.data;
     } catch (error) {
         const message = error.response?.data?.error?.description || error.message;
-        console.error("Razorpay Payout Error:", message);
+        const code = error.response?.data?.error?.code || 'UNKNOWN_ERROR';
+        console.error(`Razorpay Payout Error [${code}]:`, message);
         throw new Error(message);
     }
 };

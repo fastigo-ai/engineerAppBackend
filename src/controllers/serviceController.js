@@ -1157,14 +1157,15 @@ export const getUserOrders = async (req, res) => {
 export const cancelBooking = async (req, res) => {
   try {
     const { id } = req.params;
-    const order = await Order.findByIdAndUpdate(
-      id,
+    // Prevent double cancellation by checking current status
+    const order = await Order.findOneAndUpdate(
+      { _id: id, orderStatus: { $ne: 'Cancelled' } },
       {
         $set: { 
           orderStatus: 'Cancelled', 
           work_status: 'Cancelled', 
           status: 'cancelled',
-          assignedEngineer: null // Unassign engineer
+          assignedEngineer: null 
         },
         $push: {
           tracking: {
@@ -1179,7 +1180,12 @@ export const cancelBooking = async (req, res) => {
     );
 
     if (!order) {
-      return res.status(404).json({ success: false, message: 'Order not found' });
+      // Check if it's already cancelled or just not found
+      const existing = await Order.findById(id);
+      if (existing && existing.orderStatus === 'Cancelled') {
+         return res.status(200).json({ success: true, message: 'Booking already cancelled', data: existing });
+      }
+      return res.status(404).json({ success: false, message: 'Order not found or already cancelled' });
     }
 
     res.status(200).json({

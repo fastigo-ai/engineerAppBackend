@@ -33,7 +33,7 @@ export const getNearbyOrdersService = async ({ engineer, type = "all", page = 1,
       assignedEngineer: null,
       isDeleted: { $ne: true },
       rejectedBy: { $ne: engineer._id },
-      work_status: { $nin: ["Completed", "Cancelled"] },
+      work_status: { $nin: ["Completed", "Cancelled", "ExpertUnavailable"] },
       $or: [
         { orderType: "INSTANT" },
         { 

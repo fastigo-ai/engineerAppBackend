@@ -65,10 +65,10 @@ export const bookingLimiter = rateLimit({
 });
 
 // Limiter for sensitive admin operations
-// Max 10 requests per 15 minutes per IP
+// Max 500 requests per 15 minutes per IP
 export const adminLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10,
+  max: 500,
   standardHeaders: true,
   legacyHeaders: false,
   message: {

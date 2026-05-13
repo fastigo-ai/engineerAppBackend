@@ -8,8 +8,16 @@ import { Ledger } from '../models/Ledger.js';
 import { BankAccount } from '../models/BankAccount.js';
 import Notification from '../modules/notification/Notification.model.js';
 import * as payoutService from '../services/payoutService.js';
+import { notifyEngineersForOrder } from '../services/notificationEngineerService.js';
+import { getIO } from '../config/socket.js';
 import mongoose from 'mongoose';
 import STATUS_CODES from '../constants/statusCodes.js';
+import { Worker } from 'worker_threads';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Get all orders that are pending a refund
@@ -20,14 +28,30 @@ export const getPendingRefunds = async (req, res) => {
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.max(1, parseInt(req.query.limit) || 10);
 
+    const { search } = req.query;
+
+    let query = { refundStatus: 'PENDING' };
+    if (search) {
+      const users = await User.find({
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { mobile: { $regex: search, $options: 'i' } }
+        ]
+      }).select('_id');
+      query.$or = [
+        { userId: { $in: users.map(u => u._id) } },
+        { orderId: { $regex: search, $options: 'i' } }
+      ];
+    }
+
     const [orders, count] = await Promise.all([
-      Order.find({ refundStatus: 'PENDING' })
+      Order.find(query)
         .populate('userId', 'name email mobile')
         .sort({ updatedAt: -1 })
         .limit(limit)
         .skip((page - 1) * limit)
         .lean(),
-      Order.countDocuments({ refundStatus: 'PENDING' })
+      Order.countDocuments(query)
     ]);
 
     const totalPages = Math.ceil(count / limit);
@@ -63,14 +87,27 @@ export const getPendingPayouts = async (req, res) => {
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.max(1, parseInt(req.query.limit) || 10);
 
+    const { search } = req.query;
+
+    let query = { status: 'requested' };
+    if (search) {
+      const engineers = await Engineer.find({
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { mobile: { $regex: search, $options: 'i' } }
+        ]
+      }).select('_id');
+      query.engineerId = { $in: engineers.map(e => e._id) };
+    }
+
     const [withdrawals, count] = await Promise.all([
-      WithdrawalRequest.find({ status: 'requested' })
+      WithdrawalRequest.find(query)
         .populate('engineerId', 'name mobile email')
         .sort({ createdAt: -1 })
         .limit(limit)
         .skip((page - 1) * limit)
         .lean(),
-      WithdrawalRequest.countDocuments({ status: 'requested' })
+      WithdrawalRequest.countDocuments(query)
     ]);
 
     return res.status(200).json({
@@ -508,5 +545,361 @@ export const searchUsers = async (req, res) => {
   } catch (error) {
     console.error('[AdminController] Search users error:', error);
     return res.status(500).json({ success: false, message: 'Search failed' });
+  }
+};
+
+/**
+ * Get Ledger/Transaction history with filters
+ */
+export const getLedger = async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.max(1, parseInt(req.query.limit) || 20);
+    const { engineerId, category, type, search } = req.query;
+
+    let query = {};
+    if (engineerId) query.engineerId = engineerId;
+    if (category) query.category = category;
+    if (type) query.type = type;
+
+    if (search) {
+      const engineers = await Engineer.find({
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { mobile: { $regex: search, $options: 'i' } }
+        ]
+      }).select('_id');
+      query.engineerId = { $in: engineers.map(e => e._id) };
+    }
+
+    const [transactions, count] = await Promise.all([
+      Ledger.find(query)
+        .populate('engineerId', 'name mobile')
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .skip((page - 1) * limit)
+        .lean(),
+      Ledger.countDocuments(query)
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        transactions,
+        pagination: {
+          total: count,
+          totalPages: Math.ceil(count / limit),
+          currentPage: page,
+          limit
+        }
+      }
+    });
+  } catch (error) {
+    console.error('[AdminController] Get ledger error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch ledger', error: error.message });
+  }
+};
+
+/**
+ * Get all engineer wallets with engineer details
+ */
+export const getAllWallets = async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.max(1, parseInt(req.query.limit) || 10);
+    const search = req.query.search || '';
+
+    let query = {};
+    if (search) {
+      const engineers = await Engineer.find({
+        name: { $regex: search, $options: 'i' }
+      }).select('_id');
+      query.engineerId = { $in: engineers.map(e => e._id) };
+    }
+
+    const [wallets, count] = await Promise.all([
+      Wallet.find(query)
+        .populate('engineerId', 'name mobile email')
+        .sort({ availableBalance: -1 })
+        .limit(limit)
+        .skip((page - 1) * limit)
+        .lean(),
+      Wallet.countDocuments(query)
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        wallets,
+        pagination: {
+          total: count,
+          totalPages: Math.ceil(count / limit),
+          currentPage: page,
+          limit
+        }
+      }
+    });
+  } catch (error) {
+    console.error('[AdminController] Get all wallets error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch wallets', error: error.message });
+  }
+};
+
+/**
+ * Get Finance-specific analytics (Revenue, Commission, Top Earners)
+ */
+export const getFinanceStats = async (req, res) => {
+  try {
+    const [stats] = await Order.aggregate([
+      {
+        $facet: {
+          revenue: [
+            { $match: { status: { $in: ['paid', 'completed'] } } },
+            {
+              $group: {
+                _id: null,
+                totalGross: { $sum: "$finalAmount" }
+              }
+            }
+          ],
+          payouts: [
+            {
+              $lookup: {
+                from: 'withdrawal_requests',
+                pipeline: [{ $match: { status: 'success' } }],
+                as: 'completed'
+              }
+            },
+            { $unwind: { path: "$completed", preserveNullAndEmptyArrays: true } },
+            { $group: { _id: null, totalPaid: { $sum: "$completed.amount" } } }
+          ],
+          topEarners: [
+            {
+              $lookup: {
+                from: 'wallets',
+                pipeline: [
+                  { $sort: { withdrawnAmount: -1 } },
+                  { $limit: 5 },
+                  {
+                    $lookup: {
+                      from: 'engineers',
+                      localField: 'engineerId',
+                      foreignField: '_id',
+                      as: 'details'
+                    }
+                  },
+                  { $unwind: "$details" }
+                ],
+                as: 'earners'
+              }
+            }
+          ]
+        }
+      }
+    ]);
+
+    const gross = (stats.revenue[0]?.totalGross || 0) / 100;
+    const paid = stats.payouts[0]?.totalPaid || 0;
+    const commission = gross * 0.25; 
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        metrics: {
+          totalGross: gross,
+          totalCommission: commission,
+          totalPaidOut: paid,
+          netPlatformBalance: commission - paid,
+        },
+        topEarners: stats.topEarners[0]?.earners.map(e => ({
+          name: e.details.name,
+          totalEarned: (e.withdrawnAmount || 0) + (e.availableBalance || 0),
+          withdrawn: e.withdrawnAmount || 0
+        })) || []
+      }
+    });
+  } catch (error) {
+    console.error('[AdminController] Get finance stats error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch finance stats' });
+  }
+};
+
+/**
+ * Get Payout History (Success/Failed)
+ */
+export const getPayoutHistory = async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.max(1, parseInt(req.query.limit) || 10);
+    const { search } = req.query;
+
+    let query = { status: { $in: ['success', 'failed', 'rejected', 'processing'] } };
+    
+    if (search) {
+      const engineers = await Engineer.find({
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { mobile: { $regex: search, $options: 'i' } }
+        ]
+      }).select('_id');
+      query.engineerId = { $in: engineers.map(e => e._id) };
+    }
+
+    const [payouts, count] = await Promise.all([
+      WithdrawalRequest.find(query)
+        .populate('engineerId', 'name mobile email')
+        .sort({ updatedAt: -1 })
+        .limit(limit)
+        .skip((page - 1) * limit)
+        .lean(),
+      WithdrawalRequest.countDocuments(query)
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        payouts,
+        pagination: {
+          total: count,
+          totalPages: Math.ceil(count / limit),
+          currentPage: page,
+          limit
+        }
+      }
+    });
+  } catch (error) {
+    console.error('[AdminController] Get payout history error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch payout history' });
+  }
+};
+
+
+/**
+ * Export Ledger to CSV using Worker Threads
+ */
+export const exportLedger = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    let query = {};
+    
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) query.createdAt.$gte = new Date(startDate);
+      if (endDate) query.createdAt.$lte = new Date(endDate);
+    }
+
+    const transactions = await Ledger.find(query)
+      .populate('engineerId', 'name mobile')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const workerPath = path.resolve(__dirname, '../utils/csvWorker.js');
+    const worker = new Worker(workerPath, { workerData: transactions });
+
+    worker.on('message', (result) => {
+      if (result.success) {
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=ledger_export.csv');
+        return res.status(200).send(result.csv);
+      } else {
+        throw new Error(result.error);
+      }
+    });
+
+    worker.on('error', (err) => {
+      console.error('Worker error:', err);
+      res.status(500).json({ success: false, message: 'Export failed' });
+    });
+
+  } catch (error) {
+    console.error('[AdminController] Export ledger error:', error);
+    return res.status(500).json({ success: false, message: 'Export failed' });
+  }
+};
+/**
+ * Manually trigger re-dispatch for an order (notify engineers again)
+ */
+export const redispatchOrder = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const order = await Order.findById(orderId);
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    // Reset rejected list if admin wants a fresh start? 
+    // For now, let's just trigger notifications.
+    const result = await notifyEngineersForOrder(order);
+
+    if (!result.success) {
+      return res.status(400).json({ 
+        success: false, 
+        message: result.reason === 'no_engineers' ? 'No nearby engineers found' : 'Failed to dispatch',
+        error: result.reason
+      });
+    }
+
+    return res.status(200).json({ 
+      success: true, 
+      message: `Notifications sent to ${result.count} engineers` 
+    });
+  } catch (error) {
+    console.error('[AdminController] Redispatch order error:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+/**
+ * Manually assign an engineer to an order
+ */
+export const assignEngineerToOrder = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { engineerId } = req.body;
+
+    const [order, engineer] = await Promise.all([
+      Order.findById(orderId),
+      Engineer.findById(engineerId)
+    ]);
+
+    if (!order || !engineer) {
+      return res.status(404).json({ success: false, message: 'Order or Engineer not found' });
+    }
+
+    if (order.acceptedBy) {
+      return res.status(400).json({ success: false, message: 'Order already has an assigned engineer' });
+    }
+
+    // Update order
+    order.acceptedBy = engineerId;
+    order.assignedEngineer = engineerId; // Depending on which field your schema uses
+    order.orderStatus = 'Assigned'; // or 'Upcoming'
+    
+    // Add tracking
+    order.tracking.push({
+      status: 'Assigned',
+      timestamp: new Date(),
+      remarks: `Manually assigned by Admin to ${engineer.name}`
+    });
+
+    await order.save();
+
+    // Notify the engineer that they have been assigned
+    const io = getIO();
+    io.to(engineerId.toString()).emit('ORDER_MANUALLY_ASSIGNED', {
+      order_id: orderId,
+      orderId: order.orderId,
+      message: 'You have been manually assigned to a new job'
+    });
+
+    return res.status(200).json({ 
+      success: true, 
+      message: `Order successfully assigned to ${engineer.name}`,
+      data: order
+    });
+  } catch (error) {
+    console.error('[AdminController] Manual assign error:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };

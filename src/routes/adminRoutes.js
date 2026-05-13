@@ -61,6 +61,13 @@ router.post('/payouts/reject/:id', adminController.rejectPayout);
  * Dashboard Analytics
  */
 router.get('/dashboard/stats', adminController.getDashboardStats);
+router.get('/wallets', adminController.getAllWallets);
+router.get('/ledger', adminController.getLedger);
+router.get('/finance/stats', adminController.getFinanceStats);
+router.get('/payouts/history', adminController.getPayoutHistory);
+router.get('/ledger/export', adminController.exportLedger);
+router.post('/orders/:orderId/redispatch', adminController.redispatchOrder);
+router.post('/orders/:orderId/assign', adminController.assignEngineerToOrder);
 router.get('/users/search', adminController.searchUsers);
 
 /**

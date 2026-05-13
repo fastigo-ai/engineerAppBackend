@@ -131,7 +131,7 @@ export const getNearbyRequests = async (req, res) => {
             requests = await Order.find({
                 status: { $in: ['created', 'paid', 'Searching', 'pending'] },
                 assignedEngineer: null,
-                work_status: { $nin: ['Completed', 'Cancelled'] },
+                work_status: { $nin: ['Completed', 'Cancelled', 'ExpertUnavailable'] },
                 rejectedBy: { $ne: engineerId },
                 location: {
                     $near: {
