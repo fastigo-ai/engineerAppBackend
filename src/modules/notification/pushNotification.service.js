@@ -90,13 +90,11 @@ export async function sendPushNotification(notification) {
     notification: { 
       title: notification.title, 
       body: notification.body,
-      image: notification.image,
     },
     data: {
       ...stringData,
       title: notification.title,
       body: notification.body,
-      image: notification.image || '',
       screen: notification.screen || '',
     },
     android: {
@@ -104,7 +102,6 @@ export async function sendPushNotification(notification) {
       notification: {
         sound: 'default',
         channelId: 'default',
-        imageUrl: notification.image,
       }
     },
     apns: {
@@ -113,14 +110,21 @@ export async function sendPushNotification(notification) {
           sound: 'default',
           badge: 1,
           contentAvailable: true,
-          mutableContent: !!notification.image,
         },
       },
-      fcmOptions: {
-        imageUrl: notification.image,
-      }
     },
   };
+
+  // Add image only if it exists and is a valid string
+  if (notification.image && typeof notification.image === 'string' && notification.image.trim() !== '') {
+    message.notification.image = notification.image;
+    message.data.image = notification.image;
+    message.android.notification.imageUrl = notification.image;
+    message.apns.payload.aps.mutableContent = true;
+    message.apns.fcmOptions = { imageUrl: notification.image };
+  } else {
+    message.data.image = ''; // Consistent fallback for frontend
+  }
 
   try {
     const projectId = admin.app().options.credential?.projectId || process.env.FIREBASE_PROJECT_ID;
@@ -134,13 +138,11 @@ export async function sendPushNotification(notification) {
         notification: { 
           title: notification.title, 
           body: notification.body,
-          image: notification.image,
         },
         data: {
           ...stringData,
           title: notification.title,
           body: notification.body,
-          image: notification.image || '',
           screen: notification.screen || '',
         },
         android: {
@@ -148,7 +150,6 @@ export async function sendPushNotification(notification) {
           notification: {
             sound: 'default',
             channelId: 'default',
-            imageUrl: notification.image,
           }
         },
         apns: {
@@ -157,14 +158,20 @@ export async function sendPushNotification(notification) {
               sound: 'default',
               badge: 1,
               contentAvailable: true,
-              mutableContent: !!notification.image,
             },
           },
-          fcmOptions: {
-            imageUrl: notification.image,
-          }
         },
       };
+
+      if (notification.image && typeof notification.image === 'string' && notification.image.trim() !== '') {
+        singleMessage.notification.image = notification.image;
+        singleMessage.data.image = notification.image;
+        singleMessage.android.notification.imageUrl = notification.image;
+        singleMessage.apns.payload.aps.mutableContent = true;
+        singleMessage.apns.fcmOptions = { imageUrl: notification.image };
+      } else {
+        singleMessage.data.image = '';
+      }
 
       try {
         const messageId = await admin.messaging().send(singleMessage);
