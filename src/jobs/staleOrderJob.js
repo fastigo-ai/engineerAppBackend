@@ -17,26 +17,6 @@ export const initStaleOrderJob = () => {
     try {
       const now = new Date();
 
-      // --- CASE 0: UPCOMING SCHEDULED DISPATCH (UNASSIGNED) ---
-      // Re-trigger dispatch for scheduled orders starting within next 60 minutes
-      const upcomingUnassigned = await Order.find({
-        status: { $in: ['paid', 'Searching'] },
-        orderStatus: 'Upcoming',
-        orderType: 'SCHEDULED',
-        assignedEngineer: null,
-        scheduledAt: { 
-          $gte: now, 
-          $lte: new Date(now.getTime() + 60 * 60000) // Within next 1 hour
-        }
-      });
-
-      if (upcomingUnassigned.length > 0) {
-        console.log(`[StaleJob] Found ${upcomingUnassigned.length} upcoming unassigned scheduled orders for dispatch`);
-        const { dispatchOrder } = await import('../services/dispatch/dispatchService.js');
-        for (const order of upcomingUnassigned) {
-          dispatchOrder(order._id).catch(err => console.error(`[StaleJob] Auto-dispatch failed for ${order._id}:`, err));
-        }
-      }
 
       // --- CASE 1: SEARCHING TIMEOUT (UNASSIGNED) ---
       const staleUnassigned = await Order.find({
@@ -87,7 +67,7 @@ export const initStaleOrderJob = () => {
             await sendPushToEngineer(eng._id, {
               title: 'Booking Reminder!',
               body: `Hi ${eng.name}, your scheduled booking for ${order.servicePlan?.name || 'your service'} starts in 15 minutes. Please reach the customer location on time.`,
-              data: { type: 'BOOKING_REMINDER', orderId: order._id.toString() }
+              data: { type: 'MATCHING', orderId: order._id.toString() }
             });
             order.reminder15mSent = true;
             await order.save();
@@ -132,80 +112,75 @@ export const initStaleOrderJob = () => {
         noShowPhase: { $in: [0, null] }
       }).populate('assignedEngineer');
 
-      if (overduePing.length > 0) {
-        console.log(`[StaleJob] Found ${overduePing.length} orders for Phase 1 Ping`);
-      }
-
       for (const order of overduePing) {
         try {
           const eng = order.assignedEngineer;
           if (eng) {
             await sendPushToEngineer(eng._id, {
               title: 'Are you coming?',
-              body: `Hi ${eng.name}, you have a scheduled order starting now. You are coming? Please start work or reach location immediately.`,
+              body: `Hi ${eng.name}, you have a scheduled order starting now. Please start work or reach location immediately.`,
               data: { type: 'MATCHING', orderId: order._id.toString() }
             });
           }
-          
           order.noShowPhase = 1;
           order.noShowPingedAt = now;
           await order.save();
-          console.log(`[StaleJob] No-Show Phase 1 (Ping) for ${order._id}`);
         } catch (err) { console.error(`[StaleJob] Error updating phase 1 for ${order._id}:`, err); }
       }
 
-      // PHASE 2: Auto-Cancel at T+15 minutes (or 5 mins after ping)
-      const overdueCancel = await Order.find({
+      // PHASE 2: Unassign & Re-search at T+15 minutes (or 5 mins after ping)
+      const overdueUnassign = await Order.find({
         noShowPhase: 1,
         noShowPingedAt: { $lte: new Date(now.getTime() - 5 * 60000) }, // 15 mins total or 5 mins after ping
         orderStatus: 'Accepted',
         work_status: { $in: ['Upcoming', 'Accepted'] }
       }).populate('servicePlan servicePlans assignedEngineer');
 
-      if (overdueCancel.length > 0) {
-        console.log(`[StaleJob] Found ${overdueCancel.length} orders for Phase 2 Cancellation`);
-      }
-
-      for (const order of overdueCancel) {
+      for (const order of overdueUnassign) {
         try {
           const oldEngineer = order.assignedEngineer;
           
-          // 1. Update Order Status to Cancelled
+          // 1. Unassign and set back to Searching
           await Order.findByIdAndUpdate(order._id, {
             $set: {
-              status: 'cancelled',
-              orderStatus: 'Cancelled',
-              work_status: 'Cancelled',
-              noShowPhase: 2,
-              failureReason: 'EXPERT_UNAVAILABLE'
+              status: 'Searching',
+              orderStatus: 'Upcoming',
+              work_status: 'Searching',
+              assignedEngineer: null,
+              acceptedBy: null,
+              noShowPhase: 2 // Mark as processed
             },
             $push: {
               tracking: {
                 status: 'UNAVAILABLE',
                 title: 'Expert Unavailable',
-                subTitle: 'Partner could not reach location within scheduled time.',
+                subTitle: 'Partner could not reach location. Please reschedule or cancel.',
                 timestamp: new Date()
               }
             }
-          }, { runValidators: false });
+          });
 
-
-          // 2. Notify User (Reschedule/Cancel Option)
-          await notifyBookingUpdate(order.userId, order._id, 'USER_NOSHOW_ALERT', {
-            serviceName: order.servicePlan?.name || order.servicePlans?.[0]?.name || 'scheduled service'
+          // 2. Notify User
+          await notifyBookingUpdate(order.userId, order._id, 'ENGINEER_DECLINED_REASSIGNING', {
+            serviceName: order.servicePlan?.name || 'scheduled service'
           });
 
           // 3. Notify Engineer
           if (oldEngineer) {
             await sendPushToEngineer(oldEngineer._id, {
-              title: 'Job Cancelled',
-              body: 'Your scheduled job was cancelled due to no-show at the location.',
+              title: 'Order Unassigned',
+              body: 'You were unassigned from the job due to no-show at the scheduled time.',
               data: { type: 'SYSTEM', orderId: order._id.toString() }
             });
+            
+            // Also mark engineer as available again
+            await Engineer.findByIdAndUpdate(oldEngineer._id, { isAvailable: true });
           }
-          console.log(`[StaleJob] Auto-Cancelled No-Show order ${order._id}`);
-        } catch (err) { console.error(`[StaleJob] Error cancelling no-show ${order._id}:`, err); }
+
+          console.log(`[StaleJob] Auto-Unassigned No-Show order ${order._id} (IDLE)`);
+        } catch (err) { console.error(`[StaleJob] Error unassigning no-show ${order._id}:`, err); }
       }
+
 
       // --- CASE 3: VENDOR ORDER TIMEOUT (6 HOURS) ---
       const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60000);

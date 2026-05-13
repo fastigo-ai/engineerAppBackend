@@ -65,9 +65,9 @@ export const createCheckoutService = async ({
       scheduleDate = new Date(scheduledAt);
       if (isNaN(scheduleDate.getTime())) throw new Error("Invalid scheduled time");
       
-      const leadTimeBuffer = 10 * 60 * 1000; // 10 minutes
+      const leadTimeBuffer = 15 * 60 * 1000; // 15 minutes
       if (scheduleDate < new Date(Date.now() + leadTimeBuffer)) {
-        throw new Error("Booking must be scheduled at least 10 minutes in advance");
+        throw new Error("Booking must be scheduled at least 15 minutes in advance");
       }
       orderType = "SCHEDULED";
     }
