@@ -17,6 +17,27 @@ export const initStaleOrderJob = () => {
     try {
       const now = new Date();
 
+      // --- CASE 0: UPCOMING SCHEDULED DISPATCH (UNASSIGNED) ---
+      // Re-trigger dispatch for scheduled orders starting within next 60 minutes
+      const upcomingUnassigned = await Order.find({
+        status: { $in: ['paid', 'Searching'] },
+        orderStatus: 'Upcoming',
+        orderType: 'SCHEDULED',
+        assignedEngineer: null,
+        scheduledAt: { 
+          $gte: now, 
+          $lte: new Date(now.getTime() + 60 * 60000) // Within next 1 hour
+        }
+      });
+
+      if (upcomingUnassigned.length > 0) {
+        console.log(`[StaleJob] Found ${upcomingUnassigned.length} upcoming unassigned scheduled orders for dispatch`);
+        const { dispatchOrder } = await import('../services/dispatch/dispatchService.js');
+        for (const order of upcomingUnassigned) {
+          dispatchOrder(order._id).catch(err => console.error(`[StaleJob] Auto-dispatch failed for ${order._id}:`, err));
+        }
+      }
+
       // --- CASE 1: SEARCHING TIMEOUT (UNASSIGNED) ---
       const staleUnassigned = await Order.find({
         status: 'paid',

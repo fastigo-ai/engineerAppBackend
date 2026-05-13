@@ -205,7 +205,7 @@ export const dispatchOrder = async (orderId) => {
 
         if (!order) throw new Error("Order not found");
 
-        if (order.status !== "Searching") {
+        if (!['Searching', 'paid'].includes(order.status)) {
             return;
         }
 
