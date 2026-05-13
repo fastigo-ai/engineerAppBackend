@@ -103,12 +103,12 @@ export const initStaleOrderJob = () => {
         } catch (err) { console.error(`[StaleJob] Error sending 5m reminder for ${order._id}:`, err); }
       }
 
-      // PHASE 1: Ping Engineer at T+10 minutes
+      // PHASE 1: Ping Engineer at T+30 minutes
       const overduePing = await Order.find({
         orderStatus: 'Accepted',
         work_status: { $in: ['Upcoming', 'Accepted'] }, // Haven't started yet
         assignedEngineer: { $ne: null },
-        scheduledAt: { $lte: new Date(now.getTime() - 10 * 60000) }, // 10 mins overdue
+        scheduledAt: { $lte: new Date(now.getTime() - 30 * 60000) }, // 30 mins overdue
         noShowPhase: { $in: [0, null] }
       }).populate('assignedEngineer');
 
@@ -128,10 +128,10 @@ export const initStaleOrderJob = () => {
         } catch (err) { console.error(`[StaleJob] Error updating phase 1 for ${order._id}:`, err); }
       }
 
-      // PHASE 2: Unassign & Re-search at T+15 minutes (or 5 mins after ping)
+      // PHASE 2: Unassign & Mark Unavailable at T+50 minutes (20 mins after ping)
       const overdueUnassign = await Order.find({
         noShowPhase: 1,
-        noShowPingedAt: { $lte: new Date(now.getTime() - 5 * 60000) }, // 15 mins total or 5 mins after ping
+        noShowPingedAt: { $lte: new Date(now.getTime() - 20 * 60000) }, // 50 mins total (30 + 20)
         orderStatus: 'Accepted',
         work_status: { $in: ['Upcoming', 'Accepted'] }
       }).populate('servicePlan servicePlans assignedEngineer');
