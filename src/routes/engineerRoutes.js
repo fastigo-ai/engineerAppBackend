@@ -123,6 +123,7 @@ router.post("/requests/quick-reply", authenticateEngineer, sendQuickReply);
 // Vender-specific routes can be added here
 
 router.post("/vendorOrder/request", createVendorRequests);
+//webhook for serviceable
 router.get("/vendorOrder/serviceable", servicableLocation);
 router.post("/vendorOrder/accept", authenticateEngineer, acceptVendorOrder);
 router.post("/vendorOrder/reject", authenticateEngineer, rejectVendorOrder);

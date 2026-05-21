@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { sendPushToMatchedEngineers } from "./notification/notificationService.js";
+import { sendPushToMatchedEngineers, sendPushToEngineer } from "./notification/notificationService.js";
 import { latLngToCell, gridDisk } from "h3-js";
 import { Engineer } from "../models/engineersModal.js";
 import { getIO } from "../config/socket.js";
@@ -134,28 +134,32 @@ export const notifyMatchedEngineers = async (engineers, order) => {
   }
 
   const engineerIds = engineers.map(e => e._id);
-  const payload = {
-    notification: {
-      title: 'New Job Request!',
-      body: `New ${orderData.type ?? 'job'} available at ${orderData.address ?? orderData.addressText ?? 'nearby location'}`,
-    },
-    data: {
-      order_id: String(orderId),
-      support_type: orderData.type ?? '',
-      complete_address: orderData.address ?? orderData.addressText ?? '',
-      customer_name: orderData.customerDetails?.name ?? '',
-      type: 'NEW_ORDER',
-      isVendorOrder: orderData.isVendorOrder,
-      orderType: orderData.isVendorOrder ? 'vendor' : 'regular',
-    },
-  };
+  
+  for (const eng of engineers) {
+    const payload = {
+      notification: {
+        title: 'New Job Request!',
+        body: `New ${orderData.type ?? 'job'} available at ${orderData.address ?? orderData.addressText ?? 'nearby location'}`,
+      },
+      data: {
+        order_id: String(orderId),
+        support_type: orderData.type ?? '',
+        complete_address: orderData.address ?? orderData.addressText ?? '',
+        customer_name: orderData.customerDetails?.name ?? '',
+        type: 'NEW_ORDER',
+        isVendorOrder: String(orderData.isVendorOrder),
+        orderType: orderData.isVendorOrder ? 'vendor' : 'regular',
+        distance: String(eng.distanceKm),
+      },
+    };
 
-  try {
-    await sendPushToMatchedEngineers(engineerIds, payload);
-    console.log(`[Notify] FCM push queued for ${engineerIds.length} engineers`);
-  } catch (err) {
-    console.error(`[Notify] FCM batch failed for order ${orderId}:`, err.message);
+    try {
+      await sendPushToEngineer(eng._id, payload);
+    } catch (err) {
+      console.error(`[Notify] FCM individual push failed for engineer ${eng._id} on order ${orderId}:`, err.message);
+    }
   }
+  console.log(`[Notify] FCM individual pushes queued for ${engineers.length} engineers`);
 };
 
 export const notifyEngineersForOrder = async (order, options = {}) => {
