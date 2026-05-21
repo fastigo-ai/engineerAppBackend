@@ -494,7 +494,7 @@ const handlePaymentCaptured = async (payload) => {
     // --- SIDE EFFECTS (Post-Transaction) ---
 
     // 1. Trigger Dispatch for NEW orders (status was paid, not completed)
-    if (newStatus === 'paid') {
+    if (newStatus === 'paid' && !order.assignedEngineer) {
       dispatchOrder(order._id);
     }
 
