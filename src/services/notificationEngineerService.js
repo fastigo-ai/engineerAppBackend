@@ -245,7 +245,7 @@ export async function matchEngineersByLocation({ location, excludeEngineers = []
         return null;
       };
 
-      const orderCoords = getCoords(order.location);
+      const orderCoords = getCoords(location);
       const engineerCoords = getCoords(e.location);
 
       if (seenIds.has(id) || !orderCoords || !engineerCoords) continue;
