@@ -70,9 +70,14 @@ export const getNearbyOrdersService = async ({ engineer, type = "all", page = 1,
   // 3. Mark types, unify address, and STRICTLY REDACT sensitive info
   const mappedRegular = allRegularOrders.map(o => {
     let distance = "TBD";
-    if (engLat && engLon && o.location?.coordinates) {
-        const d = getDistanceInMeters(engLat, engLon, o.location.coordinates[1], o.location.coordinates[0]);
-        distance = (d / 1000).toFixed(2);
+    const ordLoc = o.location;
+    if (engLat && engLon && ordLoc) {
+        const lat2 = ordLoc.coordinates ? ordLoc.coordinates[1] : ordLoc.lat;
+        const lon2 = ordLoc.coordinates ? ordLoc.coordinates[0] : ordLoc.lng;
+        if (lat2 !== undefined && lon2 !== undefined) {
+            const d = getDistanceInMeters(engLat, engLon, lat2, lon2);
+            distance = (d / 1000).toFixed(2);
+        }
     }
     const { addressText, location, customerDetails, ...safeOrder } = o;
     return { 
@@ -93,9 +98,14 @@ export const getNearbyOrdersService = async ({ engineer, type = "all", page = 1,
 
   const mappedVendor = allVendorOrders.map(o => {
     let distance = "TBD";
-    if (engLat && engLon && o.location?.coordinates) {
-        const d = getDistanceInMeters(engLat, engLon, o.location.coordinates[1], o.location.coordinates[0]);
-        distance = (d / 1000).toFixed(2);
+    const ordLoc = o.location;
+    if (engLat && engLon && ordLoc) {
+        const lat2 = ordLoc.coordinates ? ordLoc.coordinates[1] : ordLoc.lat;
+        const lon2 = ordLoc.coordinates ? ordLoc.coordinates[0] : ordLoc.lng;
+        if (lat2 !== undefined && lon2 !== undefined) {
+            const d = getDistanceInMeters(engLat, engLon, lat2, lon2);
+            distance = (d / 1000).toFixed(2);
+        }
     }
     const { complete_address, location, contact_phone, contact_name, ...safeOrder } = o;
     return { 

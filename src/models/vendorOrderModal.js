@@ -27,12 +27,10 @@ const VendorOrderSchema = new mongoose.Schema(
     assets_count: { type: Number, default: 1 },
     support_type: {
       type: String,
-      enum: ["pm_activity", "breakfix", "on_call"],
       required: true,
     },
     asset_type: {
       type: String,
-      enum: ["Laptop", "Printer", "Network", "ATM", "Desktop"],
       required: true,
     },
 

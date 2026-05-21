@@ -13,7 +13,7 @@ const RING_START = 0;
 const RING_MAX = 20;
 const RING_STEP = 2;
 const MAX_EXCLUSIONS = 100;
-const HEARTBEAT_WINDOW = 30 * 60 * 1000; // 30 minutes
+const HEARTBEAT_WINDOW = 30 * 60 * 1000;
 
 export const mapOrderToNotificationData = (order) => {
   const isVendor = !!order.vendor_id;
@@ -237,13 +237,29 @@ export async function matchEngineersByLocation({ location, excludeEngineers = []
 
     for (const e of engineers) {
       const id = e._id.toString();
-      if (seenIds.has(id) || !e.location?.coordinates) continue;
+      // Helper to get coordinates regardless of format (GeoJSON vs {lat,lng})
+      const getCoords = (loc) => {
+        if (!loc) return null;
+        if (Array.isArray(loc.coordinates)) return { lng: loc.coordinates[0], lat: loc.coordinates[1] };
+        if (loc.lat !== undefined && loc.lng !== undefined) return { lat: loc.lat, lng: loc.lng };
+        return null;
+      };
 
-      const [eLng, eLat] = e.location.coordinates;
-      const distanceInMeters = getDistanceInMeters(lat, lng, eLat, eLng);
+      const orderCoords = getCoords(order.location);
+      const engineerCoords = getCoords(e.location);
+
+      if (seenIds.has(id) || !orderCoords || !engineerCoords) continue;
+
+      const distanceInMeters = getDistanceInMeters(
+        orderCoords.lat, 
+        orderCoords.lng, 
+        engineerCoords.lat, 
+        engineerCoords.lng
+      );
 
       if (distanceInMeters <= MAX_RADIUS_M) {
         seenIds.add(id);
+        const distKm = +(distanceInMeters / 1000).toFixed(2);
         matched.push({
           _id: e._id,
           name: e.name,
@@ -252,7 +268,7 @@ export async function matchEngineersByLocation({ location, excludeEngineers = []
           fcmTokens: e.fcmTokens,
           h3Index: e.h3Index,
           distanceInMeters,
-          distanceKm: +(distanceInMeters / 1000).toFixed(2),
+          distanceKm: distKm.toString(), // Send as string to avoid 0 being falsy on frontend
         });
       }
     }
