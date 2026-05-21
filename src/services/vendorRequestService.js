@@ -220,120 +220,210 @@ export const rejectOrderService = async ({ orderId, engineerId }) => {
  * Bulk Serviceability Check using H3 indexing and local distance verification.
  * Optimized for high performance and minimal DB load.
  */
-export const checkServiceability = async ({ projectId, calls }) => {
-  const H3_RESOLUTION = 8;
-  const RING_SIZE = 22;
-  const SERVICE_RADIUS_METERS = 20000;
-  const SAFE_RING_LIMIT = 18; // Rings <= 18 are guaranteed within 20km
+// export const checkServiceability = async ({ projectId, calls }) => {
+//   const H3_RESOLUTION = 8;
+//   const RING_SIZE = 22;
+//   const SERVICE_RADIUS_METERS = 20000;
+//   const SAFE_RING_LIMIT = 18; // Rings <= 18 are guaranteed within 20km
 
-  const callMap = new Map();         
-  const allRequiredCells = new Set();
+//   const callMap = new Map();         
+//   const allRequiredCells = new Set();
+//   const serviceable = [];
+//   const non_serviceable = [];
+
+//   // 1. Prepare H3 Search Areas
+//   for (const call of calls) {
+//     const { call_id, lat, lng } = call;
+
+//     if (call_id == null) {
+//       non_serviceable.push({ call_id: null, reason: "Missing call_id" });
+//       continue;
+//     }
+
+//     if (typeof lat !== "number" || typeof lng !== "number" ||
+//       isNaN(lat) || isNaN(lng) ||
+//       lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+//       non_serviceable.push({ call_id, reason: "Invalid coordinates" });
+//       continue;
+//     }
+
+//     try {
+//       const centerCell = latLngToCell(lat, lng, H3_RESOLUTION);
+//       // Use gridDiskDistances to separate safe inner rings from edge rings
+//       const cellsWithDistances = gridDiskDistances(centerCell, RING_SIZE);
+      
+//       const safeCells = [];
+//       const edgeCells = [];
+
+//       for (const [cell, distance] of cellsWithDistances) {
+//         if (distance <= SAFE_RING_LIMIT) {
+//           safeCells.push(cell);
+//         } else {
+//           edgeCells.push(cell);
+//         }
+//         allRequiredCells.add(cell);
+//       }
+
+//       callMap.set(call_id, { lat, lng, safeCells, edgeCells });
+//     } catch (err) {
+//       console.error(`H3 error for call_id=${call_id}:`, err.message);
+//       non_serviceable.push({ call_id, reason: "H3 processing error" });
+//     }
+//   }
+
+//   if (callMap.size === 0) {
+//     return { serviceable, non_serviceable };
+//   }
+
+//   // 2. Single DB Query for all potential engineers
+//   const availableEngineers = await Engineer.find({
+//     isActive: true,
+//     isAvailable: true,
+//     isDeleted: false,
+//     isBlocked: false,
+//     isSuspended: false,
+//     h3Index: { $in: Array.from(allRequiredCells) },
+//   }).select("h3Index location").lean();
+
+//   // 3. Index Engineers by H3 Cell and track occupied cells
+//   const cellToEngineers = new Map();
+//   const occupiedCells = new Set();
+
+//   for (const eng of availableEngineers) {
+//     if (!eng.h3Index || !eng.location?.coordinates?.length) continue;
+    
+//     occupiedCells.add(eng.h3Index);
+    
+//     if (!cellToEngineers.has(eng.h3Index)) {
+//       cellToEngineers.set(eng.h3Index, []);
+//     }
+//     cellToEngineers.get(eng.h3Index).push(eng);
+//   }
+
+//   // 4. Optimized Final Check
+//   for (const [call_id, { lat, lng, safeCells, edgeCells }] of callMap) {
+//     let found = false;
+
+//     // STEP 4A: Check Safe Inner Rings (Instant O(1) lookup)
+//     for (const cell of safeCells) {
+//       if (occupiedCells.has(cell)) {
+//         found = true;
+//         break;
+//       }
+//     }
+
+//     // STEP 4B: Only if not found in inner rings, check Edge Rings with Distance Math
+//     if (!found) {
+//       outer: for (const cell of edgeCells) {
+//         const engineersInCell = cellToEngineers.get(cell);
+//         if (!engineersInCell) continue;
+
+//         for (const eng of engineersInCell) {
+//           const [engLng, engLat] = eng.location.coordinates;
+//           if (getDistanceInMeters(lat, lng, engLat, engLng) <= SERVICE_RADIUS_METERS) {
+//             found = true;
+//             break outer;
+//           }
+//         }
+//       }
+//     }
+
+//     if (found) {
+//       serviceable.push({ call_id });
+//     } else {
+//       non_serviceable.push({ call_id });
+//     }
+//   }
+
+//   return { serviceable, non_serviceable };
+// };
+
+export const checkServiceability = async ({ calls }) => {
+
+  const SERVICE_RADIUS_METERS = 25000;
+
   const serviceable = [];
   const non_serviceable = [];
 
-  // 1. Prepare H3 Search Areas
+  const validCalls = [];
+
+  // 1. Validate Calls
   for (const call of calls) {
+
     const { call_id, lat, lng } = call;
 
     if (call_id == null) {
-      non_serviceable.push({ call_id: null, reason: "Missing call_id" });
+      non_serviceable.push({
+        call_id: null,
+        reason: "Missing call_id"
+      });
       continue;
     }
 
-    if (typeof lat !== "number" || typeof lng !== "number" ||
-      isNaN(lat) || isNaN(lng) ||
-      lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-      non_serviceable.push({ call_id, reason: "Invalid coordinates" });
+    if (
+      typeof lat !== "number" ||
+      typeof lng !== "number" ||
+      isNaN(lat) ||
+      isNaN(lng) ||
+      lat < -90 ||
+      lat > 90 ||
+      lng < -180 ||
+      lng > 180
+    ) {
+      non_serviceable.push({
+        call_id,
+        reason: "Invalid coordinates"
+      });
       continue;
     }
 
-    try {
-      const centerCell = latLngToCell(lat, lng, H3_RESOLUTION);
-      // Use gridDiskDistances to separate safe inner rings from edge rings
-      const cellsWithDistances = gridDiskDistances(centerCell, RING_SIZE);
-      
-      const safeCells = [];
-      const edgeCells = [];
-
-      for (const [cell, distance] of cellsWithDistances) {
-        if (distance <= SAFE_RING_LIMIT) {
-          safeCells.push(cell);
-        } else {
-          edgeCells.push(cell);
-        }
-        allRequiredCells.add(cell);
-      }
-
-      callMap.set(call_id, { lat, lng, safeCells, edgeCells });
-    } catch (err) {
-      console.error(`H3 error for call_id=${call_id}:`, err.message);
-      non_serviceable.push({ call_id, reason: "H3 processing error" });
-    }
+    validCalls.push(call);
   }
 
-  if (callMap.size === 0) {
-    return { serviceable, non_serviceable };
-  }
+  // 2. Check Serviceability
+  await Promise.all(
 
-  // 2. Single DB Query for all potential engineers
-  const availableEngineers = await Engineer.find({
-    isActive: true,
-    isAvailable: true,
-    isDeleted: false,
-    isBlocked: false,
-    isSuspended: false,
-    h3Index: { $in: Array.from(allRequiredCells) },
-  }).select("h3Index location").lean();
+    validCalls.map(async (call) => {
 
-  // 3. Index Engineers by H3 Cell and track occupied cells
-  const cellToEngineers = new Map();
-  const occupiedCells = new Set();
+      const { call_id, lat, lng } = call;
 
-  for (const eng of availableEngineers) {
-    if (!eng.h3Index || !eng.location?.coordinates?.length) continue;
-    
-    occupiedCells.add(eng.h3Index);
-    
-    if (!cellToEngineers.has(eng.h3Index)) {
-      cellToEngineers.set(eng.h3Index, []);
-    }
-    cellToEngineers.get(eng.h3Index).push(eng);
-  }
+      const engineer = await Engineer.findOne({
 
-  // 4. Optimized Final Check
-  for (const [call_id, { lat, lng, safeCells, edgeCells }] of callMap) {
-    let found = false;
+        isActive: true,
+        isAvailable: true,
+        isDeleted: false,
+        isBlocked: false,
+        isSuspended: false,
 
-    // STEP 4A: Check Safe Inner Rings (Instant O(1) lookup)
-    for (const cell of safeCells) {
-      if (occupiedCells.has(cell)) {
-        found = true;
-        break;
-      }
-    }
-
-    // STEP 4B: Only if not found in inner rings, check Edge Rings with Distance Math
-    if (!found) {
-      outer: for (const cell of edgeCells) {
-        const engineersInCell = cellToEngineers.get(cell);
-        if (!engineersInCell) continue;
-
-        for (const eng of engineersInCell) {
-          const [engLng, engLat] = eng.location.coordinates;
-          if (getDistanceInMeters(lat, lng, engLat, engLng) <= SERVICE_RADIUS_METERS) {
-            found = true;
-            break outer;
+        location: {
+          $near: {
+            $geometry: {
+              type: "Point",
+              coordinates: [lng, lat]
+            },
+            $maxDistance: SERVICE_RADIUS_METERS
           }
         }
+
+      }).select("_id").lean();
+
+      if (engineer) {
+
+        serviceable.push({
+          call_id
+        });
+
+      } else {
+
+        non_serviceable.push({
+          call_id
+        });
       }
-    }
+    })
+  );
 
-    if (found) {
-      serviceable.push({ call_id });
-    } else {
-      non_serviceable.push({ call_id });
-    }
-  }
-
-  return { serviceable, non_serviceable };
+  return {
+    serviceable,
+    non_serviceable
+  };
 };
