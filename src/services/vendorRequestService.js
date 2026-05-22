@@ -98,6 +98,11 @@ export const acceptOrderService = async ({ orderId, engineerId, distance }) => {
     throw { status: 404, message: "Engineer not found" };
   }
 
+  const existingOrder = await VendorOrder.findById(orderId).lean();
+  if (existingOrder && existingOrder.status === 'ON_HOLD') {
+    throw { status: 403, message: "Order is on hold and cannot be accepted at this time" };
+  }
+
   // 2. Atomic Update (Locking the order)
   const order = await VendorOrder.findOneAndUpdate(
     {

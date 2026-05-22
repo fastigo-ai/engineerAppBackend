@@ -320,6 +320,13 @@ export const updateVendorOrderWorkStatus = async (req, res) => {
       });
     }
 
+    if (order.status === 'ON_HOLD') {
+      return res.status(403).json({
+        success: false,
+        message: "Order is currently on hold. You cannot update its status."
+      });
+    }
+
     // Geo-fencing verification for STARTED status
     if (workStatus === "STARTED") {
       const { latitude, longitude } = req.body;
@@ -698,3 +705,116 @@ export const getCompletedVendorOrders = async (req, res) => {
 // };
 
 
+
+
+export const toggleVendorOrderHoldWebhook = async (req, res) => {
+  try {
+    const { call_id } = req.body;
+
+    if (!call_id) {
+      return res.status(400).json({ success: false, message: 'call_id is required' });
+    }
+
+    const order = await VendorOrder.findOne({ call_id });
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Vendor Order not found' });
+    }
+
+    // Check if the order can be put on hold (engineer has not started)
+    if (['STARTED', 'IN_PROGRESS', 'COMPLETED'].includes(order.work_status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot modify hold status after the engineer has started the work'
+      });
+    }
+
+    if (order.status !== 'ON_HOLD') {
+      // Put on hold
+      order.status = 'ON_HOLD';
+      order.tracking.push({
+        status: 'ON_HOLD',
+        title: 'Order on Hold',
+        subTitle: 'Order paused by vendor webhook',
+        timestamp: new Date()
+      });
+    } else {
+      // Remove hold
+      // Determine the previous state based on whether an engineer is assigned
+      order.status = order.assigned_engineer_id ? 'ACCEPTED' : 'PENDING';
+      order.tracking.push({
+        status: order.status,
+        title: 'Hold Removed',
+        subTitle: `Order resumed to ${order.status} state`,
+        timestamp: new Date()
+      });
+    }
+
+    await order.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `Order hold status toggled. Current status: ${order.status}`,
+      data: order
+    });
+  } catch (err) {
+    console.error('Toggle hold webhook error:', err);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+
+export const redispatchVendorOrderWebhook = async (req, res) => {
+  try {
+    const { call_id } = req.body;
+
+    if (!call_id) {
+      return res.status(400).json({ success: false, message: 'call_id is required' });
+    }
+
+    const order = await VendorOrder.findOne({ call_id });
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Vendor Order not found' });
+    }
+
+    // Check if the order is already accepted by an engineer
+    if (order.assigned_engineer_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot redispatch an order that is already accepted by an engineer'
+      });
+    }
+
+    // Reset status to PENDING if it was EXPIRED or CANCELLED
+    if (order.status === 'EXPIRED' || order.status === 'CANCELLED') {
+      order.status = 'PENDING';
+      order.tracking.push({
+        status: 'PENDING',
+        title: 'Order Redispatched',
+        subTitle: 'Order was redispatched via vendor webhook',
+        timestamp: new Date()
+      });
+      await order.save();
+    }
+
+    // Notify engineers
+    const { notifyEngineersForOrder } = await import('../../services/notificationEngineerService.js');
+    const notifyResult = await notifyEngineersForOrder(order);
+
+    if (!notifyResult.success) {
+      return res.status(200).json({
+        success: false,
+        message: 'Order status reset to PENDING, but no engineers found nearby to notify',
+        data: order
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Order successfully redispatched to ${notifyResult.count} engineers`,
+      data: order
+    });
+  } catch (err) {
+    console.error('Redispatch webhook error:', err);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};

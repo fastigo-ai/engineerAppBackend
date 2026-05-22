@@ -48,7 +48,7 @@ const VendorOrderSchema = new mongoose.Schema(
     /* -------- Assignment -------- */
     status: {
       type: String,
-      enum: ["PENDING", "MATCHING", "ACCEPTED", "EXPIRED", "CANCELLED", "COMPLETED"],
+      enum: ["PENDING", "MATCHING", "ACCEPTED", "EXPIRED", "CANCELLED", "COMPLETED", "ON_HOLD"],
       default: "PENDING",
       index: true,
     },

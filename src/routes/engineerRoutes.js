@@ -57,6 +57,8 @@ import {
   getRejectedVendorOrders,
   getCompletedVendorOrders,
   createVendorRequests,
+  toggleVendorOrderHoldWebhook,
+  redispatchVendorOrderWebhook,
 } from "../controllers/engineerController/venderRequestController.js";
 import {
   authenticate,
@@ -123,6 +125,8 @@ router.post("/requests/quick-reply", authenticateEngineer, sendQuickReply);
 // Vender-specific routes can be added here
 
 router.post("/vendorOrder/request", createVendorRequests);
+router.post("/vendorOrder/toggle-hold", toggleVendorOrderHoldWebhook);
+router.post("/vendorOrder/redispatch", redispatchVendorOrderWebhook);
 //webhook for serviceable
 router.get("/vendorOrder/serviceable", servicableLocation);
 router.post("/vendorOrder/accept", authenticateEngineer, acceptVendorOrder);
