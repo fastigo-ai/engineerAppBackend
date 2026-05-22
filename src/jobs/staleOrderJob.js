@@ -32,29 +32,33 @@ export const initStaleOrderJob = () => {
           await notifyBookingUpdate(order.userId, order._id, 'SEARCHING_DELAYED', {
             serviceName: order.servicePlan?.name || 'your service'
           });
-          order.searchingDelayedNotificationSent = true;
-          
-          order.tracking.push({
-            status: 'SEARCHING_DELAYED',
-            title: 'Expert Not Found',
-            subTitle: 'Still searching for an expert...',
-            timestamp: new Date()
-          });
-
-          await order.save();
+          await Order.updateOne(
+            { _id: order._id },
+            {
+              $set: { searchingDelayedNotificationSent: true },
+              $push: {
+                tracking: {
+                  status: 'SEARCHING_DELAYED',
+                  title: 'Expert Not Found',
+                  subTitle: 'Still searching for an expert...',
+                  timestamp: new Date()
+                }
+              }
+            }
+          );
           console.log(`[StaleJob] Unassigned Alert sent for ${order._id}`);
         } catch (err) { console.error(`[StaleJob] Error notifying unassigned ${order._id}:`, err); }
       }
 
       // --- CASE 2: ENGINEER NOTIFICATIONS & NO-SHOW MANAGEMENT ---
       console.log(`[StaleJob] Scanning for overdue orders at ${now.toISOString()}...`);
-      
+
       // PHASE -1: 15-minute Reminder (T-15 minutes)
       const upcomingReminders15m = await Order.find({
         orderStatus: 'Accepted',
         assignedEngineer: { $ne: null },
-        scheduledAt: { 
-          $gte: now, 
+        scheduledAt: {
+          $gte: now,
           $lte: new Date(now.getTime() + 16 * 60000) // Within next 16 minutes
         },
         reminder15mSent: { $ne: true }
@@ -69,8 +73,7 @@ export const initStaleOrderJob = () => {
               body: `Hi ${eng.name}, your scheduled booking for ${order.servicePlan?.name || 'your service'} starts in 15 minutes. Please reach the customer location on time.`,
               data: { type: 'MATCHING', orderId: order._id.toString() }
             });
-            order.reminder15mSent = true;
-            await order.save();
+            await Order.updateOne({ _id: order._id }, { $set: { reminder15mSent: true } });
             console.log(`[StaleJob] 15m Reminder sent to engineer for ${order._id}`);
           }
         } catch (err) { console.error(`[StaleJob] Error sending 15m reminder for ${order._id}:`, err); }
@@ -80,8 +83,8 @@ export const initStaleOrderJob = () => {
       const upcomingReminders = await Order.find({
         orderStatus: 'Accepted',
         assignedEngineer: { $ne: null },
-        scheduledAt: { 
-          $gte: now, 
+        scheduledAt: {
+          $gte: now,
           $lte: new Date(now.getTime() + 6 * 60000) // Within next 6 minutes
         },
         reminder5mSent: { $ne: true }
@@ -96,8 +99,7 @@ export const initStaleOrderJob = () => {
               body: `Hi ${eng.name}, you have a scheduled order for ${order.servicePlan?.name || 'your service'} starting in 5 minutes. Please reach location on time.`,
               data: { type: 'MATCHING', orderId: order._id.toString() }
             });
-            order.reminder5mSent = true;
-            await order.save();
+            await Order.updateOne({ _id: order._id }, { $set: { reminder5mSent: true } });
             console.log(`[StaleJob] 5m Reminder sent to engineer for ${order._id}`);
           }
         } catch (err) { console.error(`[StaleJob] Error sending 5m reminder for ${order._id}:`, err); }
@@ -122,9 +124,10 @@ export const initStaleOrderJob = () => {
               data: { type: 'MATCHING', orderId: order._id.toString() }
             });
           }
-          order.noShowPhase = 1;
-          order.noShowPingedAt = now;
-          await order.save();
+          await Order.updateOne(
+            { _id: order._id }, 
+            { $set: { noShowPhase: 1, noShowPingedAt: now } }
+          );
         } catch (err) { console.error(`[StaleJob] Error updating phase 1 for ${order._id}:`, err); }
       }
 
@@ -139,16 +142,16 @@ export const initStaleOrderJob = () => {
       for (const order of overdueUnassign) {
         try {
           const oldEngineer = order.assignedEngineer;
-          
+
           // 1. Mark as ExpertUnavailable but keep orderStatus as Upcoming for App visibility
           await Order.findByIdAndUpdate(order._id, {
             $set: {
-              status: 'paid', 
+              status: 'paid',
               orderStatus: 'Upcoming', // Keep as Upcoming so it shows in the Customer App
               work_status: 'ExpertUnavailable', // Hide from nearby list
               assignedEngineer: null,
               acceptedBy: null,
-              noShowPhase: 2 
+              noShowPhase: 2
             },
             $push: {
               tracking: {
@@ -172,7 +175,7 @@ export const initStaleOrderJob = () => {
               body: 'You were unassigned from the job due to no-show at the scheduled time.',
               data: { type: 'SYSTEM', orderId: order._id.toString() }
             });
-            
+
             // Also mark engineer as available again
             await Engineer.findByIdAndUpdate(oldEngineer._id, { isAvailable: true });
           }
