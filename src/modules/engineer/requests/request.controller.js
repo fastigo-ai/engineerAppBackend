@@ -1,16 +1,16 @@
-import { Order } from "../../models/orderSchema.js";
-import User from "../../models/user.js";
-import { Engineer } from "../../models/engineersModal.js";
-import STATUS_CODES from "../../constants/statusCodes.js";
-import vendorOrderModal from "../../models/vendorOrderModal.js";
-import { Wallet } from "../../modules/finance/wallet/Wallet.model.js";
+import { Order } from "../../../models/orderSchema.js";
+import User from "../../../models/user.js";
+import { Engineer } from "../../auth/engineer/engineer.model.js";
+import STATUS_CODES from "../../../constants/statusCodes.js";
+import vendorOrderModal from "../../../models/vendorOrderModal.js";
+import { Wallet } from "../../finance/wallet/Wallet.model.js";
 import mongoose from "mongoose";
-import { getDistanceInMeters } from "../../utils/distance.js";
-import razorpay from "../../config/razorpay.js";
-import { notifyEngineersForOrder } from "../../services/notificationEngineerService.js";
-import { notifyBookingUpdate } from "../../modules/notification/core/notification.facade.js";
-import { uploadToCloudinary } from "../../utils/uploadToCloudinary.js";
-import { creditEngineerWallet } from "../../modules/finance/wallet/wallet.service.js";
+import { getDistanceInMeters } from "../../../utils/distance.js";
+import razorpay from "../../../config/razorpay.js";
+import { notifyEngineersForOrder } from "../../../services/notificationEngineerService.js";
+import { notifyBookingUpdate } from "../../notification/core/notification.facade.js";
+import { uploadToCloudinary } from "../../../utils/uploadToCloudinary.js";
+import { creditEngineerWallet } from "../../finance/wallet/wallet.service.js";
 
 
 // Controller functions follow
@@ -1230,7 +1230,7 @@ export const updateWorkStatus = async (req, res) => {
             if (work_status === 'Completed') {
                 await vendorOrderModal.findByIdAndUpdate(id, { status: 'COMPLETED' });
                 try {
-                    const { creditEngineerWallet } = await import('../../services/walletService.js');
+                    const { creditEngineerWallet } = await import('../../../services/walletService.js');
                     const payoutAmount = vendorOrder.totalAmount || vendorOrder.order_price || 0;
                     if (payoutAmount > 0) {
                         await creditEngineerWallet({

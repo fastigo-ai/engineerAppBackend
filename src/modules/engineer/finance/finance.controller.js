@@ -1,12 +1,12 @@
 import mongoose from 'mongoose';
-import { Wallet } from "../../modules/finance/wallet/Wallet.model.js";
-import { Ledger } from "../../modules/finance/ledger/Ledger.model.js";
-import { BankAccount } from '../../models/BankAccount.js';
-import { WithdrawalRequest } from "../../modules/finance/wallet/WithdrawalRequest.model.js";
-import { Order } from '../../models/orderSchema.js';
-import * as payoutService from "../../modules/finance/payouts/payout.service.js";
+import { Wallet } from "../../finance/wallet/Wallet.model.js";
+import { Ledger } from "../../finance/ledger/Ledger.model.js";
+import { BankAccount } from '../finance/BankAccount.model.js';
+import { WithdrawalRequest } from "../../finance/wallet/WithdrawalRequest.model.js";
+import { Order } from '../../../models/orderSchema.js';
+import * as payoutService from "../../finance/payouts/payout.service.js";
 import { v4 as uuidv4 } from 'uuid';
-import STATUS_CODES from '../../constants/statusCodes.js';
+import STATUS_CODES from '../../../constants/statusCodes.js';
 
 /**
  * Request a withdrawal from wallet
@@ -125,7 +125,7 @@ export const getWalletBalance = async (req, res) => {
             }).select('_id amount').lean();
 
             // B. Find all completed vendor orders
-            const VendorOrder = (await import('../../models/vendorOrderModal.js')).default;
+            const VendorOrder = (await import('../../../models/vendorOrderModal.js')).default;
             const completedVendorOrders = await VendorOrder.find({
                 assigned_engineer_id: engineerId,
                 work_status: 'COMPLETED'
@@ -146,7 +146,7 @@ export const getWalletBalance = async (req, res) => {
             const existingIds = new Set(existingLedgerEntries.map(l => l.referenceId?.toString()));
 
             // E. Create missing Ledger entries
-            const { creditEngineerWallet } = await import('../../services/walletService.js');
+            const { creditEngineerWallet } = await import('../../../services/walletService.js');
             for (const cred of potentialCredits) {
                 if (!existingIds.has(cred.id.toString()) && cred.amount > 0) {
                     console.log(`Syncing missing credit for order ${cred.id}: ₹${cred.amount}`);

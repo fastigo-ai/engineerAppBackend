@@ -15,7 +15,7 @@ import logger from './middleware/logger.js';
 import catalogRoutes from './modules/catalog/index.js';
 import { userAuthRoutes as authRoutes, engineerAuthRoutes, adminAuthRoutes } from './modules/auth/index.js';
 import paymentRoutes from "./modules/finance/payments/payment.routes.js";
-import engineerRoutes from './routes/engineerRoutes.js';
+import engineerRoutes from "./modules/engineer/index.js";
 import connectDB from './config/db.js';
 import { isFirebaseConnected } from './config/firebase.js';
 

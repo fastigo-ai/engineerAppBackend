@@ -1,7 +1,7 @@
-import { Order } from "../models/orderSchema.js";
-import VendorOrder from "../models/vendorOrderModal.js";
-import { Payment } from "../modules/finance/payments/Payment.model.js";
-import { Engineer } from "../models/engineersModal.js";
+import { Order } from "../../../models/orderSchema.js";
+import VendorOrder from "../../../models/vendorOrderModal.js";
+import { Payment } from "../../finance/payments/Payment.model.js";
+import { Engineer } from "../../auth/engineer/engineer.model.js";
 import { gridDisk } from "h3-js";
 
 export const getEngineerStatsService = async (engineerId) => {
@@ -23,7 +23,7 @@ export const getEngineerStatsService = async (engineerId) => {
   ]);
 
   // 4. Get Wallet Balance
-  const { Wallet } = await import("../models/Wallet.js");
+  const { Wallet } = await import("../../../models/Wallet.js");
   const walletPromise = Wallet.findOne({ engineerId }).select('availableBalance').lean();
 
 

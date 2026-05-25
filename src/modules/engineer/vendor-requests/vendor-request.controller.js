@@ -1,16 +1,16 @@
 import mongoose from "mongoose";
-import { Engineer } from "../../models/engineersModal.js";
-import VendorOrder from "../../models/vendorOrderModal.js";
+import { Engineer } from "../../auth/engineer/engineer.model.js";
+import VendorOrder from "../../../models/vendorOrderModal.js";
 import {
   checkServiceability,
   createAndMatchVendorOrder,
   acceptOrderService,
   rejectOrderService
-} from "../../services/vendorRequestService.js";
-import { getDistanceInMeters } from "../../utils/distance.js";
+} from "../../../services/vendorRequestService.js";
+import { getDistanceInMeters } from "../../../utils/distance.js";
 import { latLngToCell, gridDisk } from "h3-js";
-import { getIO } from "../../config/socket.js";
-import { uploadToCloudinary } from "../../utils/uploadToCloudinary.js";
+import { getIO } from "../../../config/socket.js";
+import { uploadToCloudinary } from "../../../utils/uploadToCloudinary.js";
 import axios from 'axios';
 
 const H3_RESOLUTION = 8;
@@ -473,7 +473,7 @@ export const completeOrder = async (req, res) => {
 
     // --- NEW: CREDIT WALLET FOR VENDOR WORK ---
     try {
-      const { creditEngineerWallet } = await import('../../services/walletService.js');
+      const { creditEngineerWallet } = await import('../../../services/walletService.js');
       if (order.order_price > 0) {
         await creditEngineerWallet({
           engineerId,
@@ -797,7 +797,7 @@ export const redispatchVendorOrderWebhook = async (req, res) => {
     }
 
     // Notify engineers
-    const { notifyEngineersForOrder } = await import('../../services/notificationEngineerService.js');
+    const { notifyEngineersForOrder } = await import('../../../services/notificationEngineerService.js');
     const notifyResult = await notifyEngineersForOrder(order);
 
     if (!notifyResult.success) {

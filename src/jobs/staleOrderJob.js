@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import { Order } from '../models/orderSchema.js';
 import VendorOrder from '../models/vendorOrderModal.js';
-import { Engineer } from '../models/engineersModal.js';
+import { Engineer } from "../modules/auth/engineer/engineer.model.js";
 import { notifyBookingUpdate, sendPushToEngineer } from '../modules/notification/core/notification.facade.js';
 
 

@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import { WithdrawalRequest } from '../wallet/WithdrawalRequest.model.js';
-import { BankAccount } from '../../../models/BankAccount.js';
+import { BankAccount } from "../../../modules/engineer/finance/BankAccount.model.js";
 import { Ledger } from '../ledger/Ledger.model.js';
 import * as payoutService from './payout.service.js';
 

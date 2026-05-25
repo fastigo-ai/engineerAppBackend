@@ -27,7 +27,12 @@ const doc = {
     { name: 'Catalog Services', description: 'Services available' },
     { name: 'Notification', description: 'Push notification controls' },
     { name: 'Finance Payments', description: 'Payment processing and webhooks' },
-    { name: 'Map', description: 'Geolocation and routing' }
+    { name: 'Map', description: 'Geolocation and routing' },
+    { name: 'Engineer Profile', description: 'Engineer profile and management' },
+    { name: 'Engineer Location', description: 'Location and online status' },
+    { name: 'Engineer Requests', description: 'Standard service requests' },
+    { name: 'Engineer Vendor Requests', description: 'B2B vendor orders' },
+    { name: 'Engineer Finance', description: 'Earnings and bank account' }
   ]
 };
 
@@ -57,6 +62,16 @@ swaggerAutogen({ openapi: '3.0.0' })(outputFile, endpointsFiles, doc).then(({ da
         data.paths[path][method].tags = ['Finance Payments'];
       } else if (path.startsWith('/api/map')) {
         data.paths[path][method].tags = ['Map'];
+      } else if (path.startsWith('/api/engineer/requests')) {
+        data.paths[path][method].tags = ['Engineer Requests'];
+      } else if (path.startsWith('/api/engineer/vendorOrder')) {
+        data.paths[path][method].tags = ['Engineer Vendor Requests'];
+      } else if (path.startsWith('/api/engineer/wallet') || path.startsWith('/api/engineer/withdraw') || path.startsWith('/api/engineer/bank-account') || path.startsWith('/api/engineer/earnings') || path.startsWith('/api/engineer/transactions')) {
+        data.paths[path][method].tags = ['Engineer Finance'];
+      } else if (path.startsWith('/api/engineer/goOnline') || path.startsWith('/api/engineer/goOffline') || path.startsWith('/api/engineer/heartbeat') || path.startsWith('/api/engineer/updateLocation') || path.startsWith('/api/engineer/update/location')) {
+        data.paths[path][method].tags = ['Engineer Location'];
+      } else if (path.startsWith('/api/engineer')) {
+        data.paths[path][method].tags = ['Engineer Profile'];
       }
     }
   }

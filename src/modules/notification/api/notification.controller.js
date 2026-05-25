@@ -3,7 +3,7 @@ import * as service from '../core/notification.service.js';
 import Notification from '../core/Notification.model.js';
 import DeviceToken from '../core/DeviceToken.model.js';
 import User from '../../../models/user.js';
-import { Engineer } from '../../../models/engineersModal.js';
+import { Engineer } from "../../../modules/auth/engineer/engineer.model.js";
 
 /**
  * Register/Update a device token

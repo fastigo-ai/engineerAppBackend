@@ -1,5 +1,5 @@
 import { Order } from "../../models/orderSchema.js";
-import { Engineer } from "../../models/engineersModal.js";
+import { Engineer } from "../../modules/auth/engineer/engineer.model.js";
 import { EngineerSchedule } from "../../models/engineerSchedule.js";
 import { notifyMatchedEngineers } from "../notificationEngineerService.js"
 import { getDistanceInMeters } from "../../utils/distance.js";

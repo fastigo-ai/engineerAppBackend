@@ -1,6 +1,6 @@
-import { Engineer } from "../../models/engineersModal.js";
-import { getNearbyOrdersService } from "../../services/nearbyService.js";
-import STATUS_CODES from "../../constants/statusCodes.js";
+import { Engineer } from "../../auth/engineer/engineer.model.js";
+import { getNearbyOrdersService } from "../../../services/nearbyService.js";
+import STATUS_CODES from "../../../constants/statusCodes.js";
 
 /**
  * Controller to fetch nearby orders based on the engineer's H3 index.

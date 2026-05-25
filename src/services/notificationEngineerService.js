@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { sendPushToMatchedEngineers, sendPushToEngineer } from "../modules/notification/core/notification.facade.js";
 import { latLngToCell, gridDisk } from "h3-js";
-import { Engineer } from "../models/engineersModal.js";
+import { Engineer } from "../modules/auth/engineer/engineer.model.js";
 import { getIO } from "../config/socket.js";
 import { getDistanceInMeters } from "../utils/distance.js";
 

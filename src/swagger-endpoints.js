@@ -8,6 +8,7 @@ import serviceRoutes from './modules/catalog/service/service.routes.js';
 import notificationRoutes from './modules/notification/api/notification.routes.js';
 import paymentRoutes from './modules/finance/payments/payment.routes.js';
 import mapRoutes from './modules/map/map.routes.js';
+import engineerRoutes from './modules/engineer/index.js';
 
 const app = express();
 
@@ -29,5 +30,8 @@ app.use('/api/payment', paymentRoutes);
 
 // Map module
 app.use('/api/map', mapRoutes);
+
+// Engineer module
+app.use('/api/engineer', engineerRoutes);
 
 export default app;

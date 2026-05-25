@@ -1,10 +1,10 @@
 import mongoose from 'mongoose';
-import { Engineer } from '../models/engineersModal.js';
-import { Order } from '../models/orderSchema.js';
-import { Wallet } from "../modules/finance/wallet/Wallet.model.js";
-import VendorOrder from '../models/vendorOrderModal.js';
-import { WithdrawalRequest } from "../modules/finance/wallet/WithdrawalRequest.model.js";
-import { getEngineerStatsService, goOnlineService, goOfflineService, heartbeatService, updateLocationService } from '../services/engineerService.js';
+import { Engineer } from '../../auth/engineer/engineer.model.js';
+import { Order } from '../../../models/orderSchema.js';
+import { Wallet } from "../../finance/wallet/Wallet.model.js";
+import VendorOrder from '../../../models/vendorOrderModal.js';
+import { WithdrawalRequest } from "../../finance/wallet/WithdrawalRequest.model.js";
+import { getEngineerStatsService, goOnlineService, goOfflineService, heartbeatService, updateLocationService } from "./engineer.service.js";
 
 
 export const addengineerController = async (req, res) => {
@@ -366,8 +366,8 @@ export const unAssignEngineerFromOrderController = async (req, res) => {
             // 🔔 Notify User and Redispatch (Only for regular orders)
             if (updatedOrder.userId) {
                 try {
-                    const { notifyBookingUpdate } = await import("../modules/notification/core/notification.facade.js");
-                    const { notifyEngineersForOrder } = await import("../services/notificationEngineerService.js");
+                    const { notifyBookingUpdate } = await import("../../notification/core/notification.facade.js");
+                    const { notifyEngineersForOrder } = await import("../../../services/notificationEngineerService.js");
 
                     notifyBookingUpdate(updatedOrder.userId._id, updatedOrder._id, 'ENGINEER_DECLINED_REASSIGNING', {
                         serviceName: updatedOrder.servicePlan?.name || 'Service'
