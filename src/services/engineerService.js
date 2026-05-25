@@ -1,6 +1,6 @@
 import { Order } from "../models/orderSchema.js";
 import VendorOrder from "../models/vendorOrderModal.js";
-import { Payment } from "../models/paymentSchema.js";
+import { Payment } from "../modules/finance/payments/Payment.model.js";
 import { Engineer } from "../models/engineersModal.js";
 import { gridDisk } from "h3-js";
 

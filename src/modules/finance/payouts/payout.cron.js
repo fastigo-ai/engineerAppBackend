@@ -1,8 +1,8 @@
 import cron from 'node-cron';
-import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
-import { BankAccount } from '../models/BankAccount.js';
-import { Ledger } from '../models/Ledger.js';
-import * as payoutService from '../services/payoutService.js';
+import { WithdrawalRequest } from '../wallet/WithdrawalRequest.model.js';
+import { BankAccount } from '../../../models/BankAccount.js';
+import { Ledger } from '../ledger/Ledger.model.js';
+import * as payoutService from './payout.service.js';
 
 /**
  * Cron to retry 'pending' withdrawal requests that failed to reach Razorpay

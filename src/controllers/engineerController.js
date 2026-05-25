@@ -1,9 +1,9 @@
 import mongoose from 'mongoose';
 import { Engineer } from '../models/engineersModal.js';
 import { Order } from '../models/orderSchema.js';
-import { Wallet } from '../models/Wallet.js';
+import { Wallet } from "../modules/finance/wallet/Wallet.model.js";
 import VendorOrder from '../models/vendorOrderModal.js';
-import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
+import { WithdrawalRequest } from "../modules/finance/wallet/WithdrawalRequest.model.js";
 import { getEngineerStatsService, goOnlineService, goOfflineService, heartbeatService, updateLocationService } from '../services/engineerService.js';
 
 

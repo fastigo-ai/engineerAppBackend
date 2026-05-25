@@ -1,7 +1,7 @@
 import { Engineer } from "./engineer.model.js";
 import cloudinary from "../../../config/cloudinary.js";
 import { uploadToCloudinary } from "../../../utils/uploadToCloudinary.js";
-import * as payoutService from "../../../services/payoutService.js";
+import * as payoutService from "../../../modules/finance/payouts/payout.service.js";
 import jwt from "jsonwebtoken";
 import { syncDeviceToken } from "../../notification/core/notification.service.js";
 import { engineerAuthService } from "./engineer.service.js";

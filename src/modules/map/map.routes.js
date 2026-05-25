@@ -1,5 +1,5 @@
 import express from 'express';
-import { reverseGeocodeController } from '../controllers/mapController.js';
+import { reverseGeocodeController } from "./map.controller.js";
 
 const router = express.Router();
 

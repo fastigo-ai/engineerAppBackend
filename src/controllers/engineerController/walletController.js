@@ -1,10 +1,10 @@
 import mongoose from 'mongoose';
-import { Wallet } from '../../models/Wallet.js';
-import { Ledger } from '../../models/Ledger.js';
+import { Wallet } from "../../modules/finance/wallet/Wallet.model.js";
+import { Ledger } from "../../modules/finance/ledger/Ledger.model.js";
 import { BankAccount } from '../../models/BankAccount.js';
-import { WithdrawalRequest } from '../../models/WithdrawalRequest.js';
+import { WithdrawalRequest } from "../../modules/finance/wallet/WithdrawalRequest.model.js";
 import { Order } from '../../models/orderSchema.js';
-import * as payoutService from '../../services/payoutService.js';
+import * as payoutService from "../../modules/finance/payouts/payout.service.js";
 import { v4 as uuidv4 } from 'uuid';
 import STATUS_CODES from '../../constants/statusCodes.js';
 

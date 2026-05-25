@@ -1,4 +1,4 @@
-import { getReverseGeoCache } from '../services/map/geoCacheService.js';
+import { getReverseGeoCache } from "./geoCache.service.js";
 
 export const reverseGeocodeController = async (req, res) => {
   try {

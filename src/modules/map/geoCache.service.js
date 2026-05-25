@@ -1,4 +1,4 @@
-import { GeoCache } from "../../models/geoCache.js";
+import { GeoCache } from "./GeoCache.model.js";
 import axios from "axios";
 
 export const getGeoCacheService = async (address) => {

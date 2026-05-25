@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
-import { Wallet } from '../models/Wallet.js';
-import { Ledger } from '../models/Ledger.js';
+import { Wallet } from './Wallet.model.js';
+import { Ledger } from '../ledger/Ledger.model.js';
 import { v4 as uuidv4 } from 'uuid';
 
 /**

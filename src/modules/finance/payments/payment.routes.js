@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticate, authorize } from '../middleware/authMiddleWare.js';
+import { authenticate, authorize } from '../../../middleware/authMiddleWare.js';
 import { 
   createCheckoutSession, 
   verifyPayment, 
@@ -10,8 +10,8 @@ import {
   updateOrderStatus, 
   initiateOrderPayment,
   getAllPayments
-} from '../controllers/paymentController.js';
-import { bookingLimiter } from '../middleware/rateLimiter.js';
+} from './payment.controller.js';
+import { bookingLimiter } from '../../../middleware/rateLimiter.js';
 
 
 const router = express.Router();

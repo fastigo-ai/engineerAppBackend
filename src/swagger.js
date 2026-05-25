@@ -25,7 +25,9 @@ const doc = {
     { name: 'Catalog Categories', description: 'Service categories' },
     { name: 'Catalog Plans', description: 'Service plans' },
     { name: 'Catalog Services', description: 'Services available' },
-    { name: 'Notification', description: 'Push notification controls' }
+    { name: 'Notification', description: 'Push notification controls' },
+    { name: 'Finance Payments', description: 'Payment processing and webhooks' },
+    { name: 'Map', description: 'Geolocation and routing' }
   ]
 };
 
@@ -51,6 +53,10 @@ swaggerAutogen({ openapi: '3.0.0' })(outputFile, endpointsFiles, doc).then(({ da
         data.paths[path][method].tags = ['Catalog Services'];
       } else if (path.startsWith('/api/notification')) {
         data.paths[path][method].tags = ['Notification'];
+      } else if (path.startsWith('/api/payment')) {
+        data.paths[path][method].tags = ['Finance Payments'];
+      } else if (path.startsWith('/api/map')) {
+        data.paths[path][method].tags = ['Map'];
       }
     }
   }

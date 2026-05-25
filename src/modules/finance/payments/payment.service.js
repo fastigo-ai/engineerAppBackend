@@ -1,12 +1,12 @@
 import mongoose from 'mongoose';
-import { Order } from "../../models/orderSchema.js"
-import { ServicePlan } from '../../models/serviceModal.js';
-import User from "../../models/user.js";
+import { Order } from "../../../models/orderSchema.js"
+import { ServicePlan } from '../../../models/serviceModal.js';
+import User from "../../../models/user.js";
 import { latLngToCell } from "h3-js";
-import { dispatchOrder } from "../dispatch/dispatchService.js";
-import razorpay from "../../config/razorpay.js";
-import { validateCoupon, reserveCoupon } from "../../modules/coupon/coupon.service.js";
-import { verifyValidationKey } from "../../modules/coupon/coupon.validator.js";
+import { dispatchOrder } from "../../../services/dispatch/dispatchService.js";
+import razorpay from "../../../config/razorpay.js";
+import { validateCoupon, reserveCoupon } from "../../../modules/coupon/coupon.service.js";
+import { verifyValidationKey } from "../../../modules/coupon/coupon.validator.js";
 
 const H3_RESOLUTION = 8;
 
@@ -186,7 +186,7 @@ export const createCheckoutService = async ({
       dispatchOrder(order._id);
 
       //  Notify User: Booking Confirmed (PAS)
-      import("../modules/notification/core/notification.facade.js").then(({ notifyBookingUpdate }) => {
+      import("../../../modules/notification/core/notification.facade.js").then(({ notifyBookingUpdate }) => {
         notifyBookingUpdate(userId, order._id, 'BOOKING_CONFIRMED', {
           serviceName: servicePlans[0]?.name || 'Service'
         });
