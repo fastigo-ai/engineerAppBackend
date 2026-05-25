@@ -31,7 +31,7 @@ import {
   getAllVendorBookingsAdmin
 } from '../controllers/serviceController.js';
 import upload from '../middleware/multer.js';
-import { bulkImportServices } from '../repositories/serviceRepository.js';
+import { bulkImportServices } from "../modules/catalog/service/service.repository.js";
 import { authenticate, authorize } from '../middleware/authMiddleWare.js';
 
 const router = express.Router();

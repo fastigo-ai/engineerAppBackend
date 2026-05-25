@@ -1,6 +1,6 @@
-import { Category } from "../models/categoryModal.js";
-import { ServicePlan } from "../models/serviceModal.js";
-import { ServicePlans } from "../models/planModal.js";
+import { Category } from "../category/category.model.js";
+import { ServicePlan } from "./service.model.js";
+import { ServicePlans } from "../plan/plan.model.js";
 import mongoose from 'mongoose';
 
 export const addServiceToPlanRepository = async (planType, serviceData) => {

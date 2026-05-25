@@ -8,7 +8,7 @@ import {
   createCategoryRepository,
   createServicePlanRepository,
   getAllCategoryRepository
-} from "../../../repositories/serviceRepository.js";
+} from "./service.repository.js";
 import { Category } from "../category/category.model.js";
 import mongoose from 'mongoose';
 import { uploadToCloudinary } from "../../../utils/uploadToCloudinary.js";

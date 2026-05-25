@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { Order } from "../../../models/orderSchema.js"
-import { ServicePlan } from '../../../models/serviceModal.js';
+import { ServicePlan } from "../../../modules/catalog/service/service.model.js";
 import User from "../../../models/user.js";
 import { latLngToCell } from "h3-js";
 import { dispatchOrder } from "../../../services/dispatch/dispatchService.js";

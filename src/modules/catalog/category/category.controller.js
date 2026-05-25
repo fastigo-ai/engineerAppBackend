@@ -1,7 +1,7 @@
 import STATUS_CODES from '../../../constants/statusCodes.js';
 import { Category } from './category.model.js';
 import { uploadToCloudinary } from '../../../utils/uploadToCloudinary.js';
-import { createCategoryService } from '../../../services/servicePlanService.js';
+import { createCategoryService } from "../../../modules/catalog/service/service.service.js";
 
 export const createCategoryController = async (req, res) => {
   try {

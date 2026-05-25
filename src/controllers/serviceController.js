@@ -9,11 +9,11 @@ import {
   createCategoryService,
   createServicePlanService,
   getAllCategoryService,
-} from '../services/servicePlanService.js';
-import { Category } from "../models/categoryModal.js"
+} from "../modules/catalog/service/service.service.js";
+import { Category } from "../modules/catalog/category/category.model.js"
 import { uploadToCloudinary } from '../utils/uploadToCloudinary.js';
-import { ServicePlan } from '../models/serviceModal.js';
-import { ServicePlans } from '../models/planModal.js';
+import { ServicePlan } from "../modules/catalog/service/service.model.js";
+import { ServicePlans } from "../modules/catalog/plan/plan.model.js";
 import { Order } from '../models/orderSchema.js';
 import VendorOrder from '../models/vendorOrderModal.js';
 import { notifyEngineersForOrder } from '../services/notificationEngineerService.js';

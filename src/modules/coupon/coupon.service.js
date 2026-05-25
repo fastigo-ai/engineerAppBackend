@@ -3,7 +3,7 @@ import couponRepository from './coupon.repository.js';
 import usageRepository from './couponUsage.repository.js';
 import { Order } from '../../models/orderSchema.js';
 import User from '../../models/user.js';
-import { ServicePlan } from '../../models/serviceModal.js';
+import { ServicePlan } from "../../modules/catalog/service/service.model.js";
 import Coupon from './coupon.model.js';
 
 /**

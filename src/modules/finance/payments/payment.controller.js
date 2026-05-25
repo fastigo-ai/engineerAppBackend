@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import crypto from 'crypto';
 import razorpay from '../../../config/razorpay.js';
-import { ServicePlan } from '../../../models/serviceModal.js';
+import { ServicePlan } from "../../../modules/catalog/service/service.model.js";
 import { Order } from '../../../models/orderSchema.js';
 import { Payment } from './Payment.model.js';
 import { getGeoCacheService } from "../../../modules/map/geoCache.service.js";
