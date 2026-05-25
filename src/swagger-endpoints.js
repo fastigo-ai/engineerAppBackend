@@ -1,6 +1,12 @@
 import express from 'express';
-import { userAuthRoutes, engineerAuthRoutes, adminAuthRoutes } from './modules/auth/index.js';
-import catalogRoutes from './modules/catalog/index.js';
+import userAuthRoutes from './modules/auth/user/user.routes.js';
+import engineerAuthRoutes from './modules/auth/engineer/engineer.routes.js';
+import adminAuthRoutes from './modules/auth/admin/admin.routes.js';
+
+import categoryRoutes from './modules/catalog/category/category.routes.js';
+import planRoutes from './modules/catalog/plan/plan.routes.js';
+import serviceRoutes from './modules/catalog/service/service.routes.js';
+
 import notificationRoutes from './modules/notification/api/notification.routes.js';
 import paymentRoutes from './modules/finance/payments/payment.routes.js';
 import mapRoutes from './modules/map/map.routes.js';
@@ -15,8 +21,10 @@ app.use('/api/auth', userAuthRoutes);
 app.use('/api/admin/auth', adminAuthRoutes);
 app.use('/api/engineer/auth', engineerAuthRoutes);
 
-// Catalog modules (mounted at /api/services)
-app.use('/api/services', catalogRoutes);
+// Catalog modules (mounted directly like index does)
+app.use('/api/services', categoryRoutes);
+app.use('/api/services', planRoutes);
+app.use('/api/services', serviceRoutes);
 
 // Notification module
 app.use('/api/notification', notificationRoutes);
