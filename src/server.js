@@ -1,6 +1,10 @@
 import dotenv from 'dotenv';
 dotenv.config();
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
 import express from 'express';
+import swaggerUi from 'swagger-ui-express';
+const swaggerDocument = require("./config/swagger_output.json");
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
@@ -78,6 +82,9 @@ app.get('/health', (req, res) => {
 });
 
 // API routes
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+}
 app.use('/api/services', catalogRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/auth', authRoutes);

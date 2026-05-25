@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
+    "dev": "nodemon src/server.js",
+    "swagger": "node src/swagger.js"
   },
   "dependencies": {
     "axios": "^1.12.2",
@@ -25,6 +26,8 @@
     "nodemon": "^3.1.10",
     "razorpay": "^2.9.6",
     "socket.io": "^4.8.3",
+    "swagger-autogen": "^2.23.7",
+    "swagger-ui-express": "^5.0.1",
     "twilio": "^5.10.7",
     "uuid": "^11.1.0",
     "web-push": "^3.6.7"
