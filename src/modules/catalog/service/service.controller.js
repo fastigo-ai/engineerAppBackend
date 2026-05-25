@@ -1,4 +1,4 @@
-import STATUS_CODES from '../../../../constants/statusCodes.js';
+import STATUS_CODES from '../../../constants/statusCodes.js';
 import {
   addServiceToPlanService,
   bulkAddServicesAllTypesService,
@@ -11,13 +11,13 @@ import {
   getAllCategoryService,
 } from './service.service.js';
 import { Category } from "../category/category.model.js"
-import { uploadToCloudinary } from '../../../../utils/uploadToCloudinary.js';
+import { uploadToCloudinary } from '../../../utils/uploadToCloudinary.js';
 import { ServicePlan } from './service.model.js';
 import { ServicePlans } from '../plan/plan.model.js';
-import { Order } from '../../../../models/orderSchema.js';
-import VendorOrder from '../../../../models/vendorOrderModal.js';
-import { notifyEngineersForOrder } from '../../../../services/notificationEngineerService.js';
-import { notifyBookingUpdate } from '../../../../services/notification/notificationService.js';
+import { Order } from '../../../models/orderSchema.js';
+import VendorOrder from '../../../models/vendorOrderModal.js';
+import { notifyEngineersForOrder } from '../../../services/notificationEngineerService.js';
+import { notifyBookingUpdate } from '../../../services/notification/notificationService.js';
 import mongoose from 'mongoose';
 
 
@@ -1277,7 +1277,7 @@ export const rescheduleBooking = async (req, res) => {
     }
 
     // Trigger optimized re-dispatch
-    const { dispatchOrder } = await import("../../../../services/dispatch/dispatchService.js");
+    const { dispatchOrder } = await import("../../../services/dispatch/dispatchService.js");
     dispatchOrder(order._id).catch(err => console.error('[Reschedule] Dispatch failed:', err));
 
     res.status(200).json({

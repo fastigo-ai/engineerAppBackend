@@ -3,7 +3,7 @@ import {
   createServicePlanType,
   getPlanTypes
 } from './plan.controller.js';
-import { authenticate, authorize } from '../../../../middleware/authMiddleWare.js';
+import { authenticate, authorize } from '../../../middleware/authMiddleWare.js';
 
 const router = express.Router();
 

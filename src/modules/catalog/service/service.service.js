@@ -8,10 +8,10 @@ import {
   createCategoryRepository,
   createServicePlanRepository,
   getAllCategoryRepository
-} from "../../../../repositories/serviceRepository.js";
+} from "../../../repositories/serviceRepository.js";
 import { Category } from "../category/category.model.js";
 import mongoose from 'mongoose';
-import { uploadToCloudinary } from "../../../../utils/uploadToCloudinary.js";
+import { uploadToCloudinary } from "../../../utils/uploadToCloudinary.js";
 
 export const addServiceToPlanService = async (planType, serviceData) => {
   if (!planType || !serviceData) {

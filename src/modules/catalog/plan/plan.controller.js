@@ -1,4 +1,4 @@
-import STATUS_CODES from '../../../../constants/statusCodes.js';
+import STATUS_CODES from '../../../constants/statusCodes.js';
 import { ServicePlans } from './plan.model.js';
 
 export const createServicePlanType = async (req, res) => {

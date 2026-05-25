@@ -7,8 +7,8 @@ import {
   deleteCategory,
   editCategory
 } from './category.controller.js';
-import upload from '../../../../middleware/multer.js';
-import { authenticate, authorize } from '../../../../middleware/authMiddleWare.js';
+import upload from '../../../middleware/multer.js';
+import { authenticate, authorize } from '../../../middleware/authMiddleWare.js';
 
 const router = express.Router();
 
