@@ -366,7 +366,7 @@ export const unAssignEngineerFromOrderController = async (req, res) => {
             // 🔔 Notify User and Redispatch (Only for regular orders)
             if (updatedOrder.userId) {
                 try {
-                    const { notifyBookingUpdate } = await import("../services/notification/notificationService.js");
+                    const { notifyBookingUpdate } = await import("../modules/notification/core/notification.facade.js");
                     const { notifyEngineersForOrder } = await import("../services/notificationEngineerService.js");
 
                     notifyBookingUpdate(updatedOrder.userId._id, updatedOrder._id, 'ENGINEER_DECLINED_REASSIGNING', {

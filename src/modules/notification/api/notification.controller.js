@@ -1,9 +1,9 @@
-import { catchAsync } from '../../utils/catchAsync.js';
-import * as service from './notification.service.js';
-import Notification from './Notification.model.js';
-import DeviceToken from './DeviceToken.model.js';
-import User from '../../models/user.js';
-import { Engineer } from '../../models/engineersModal.js';
+import { catchAsync } from '../../../utils/catchAsync.js';
+import * as service from '../core/notification.service.js';
+import Notification from '../core/Notification.model.js';
+import DeviceToken from '../core/DeviceToken.model.js';
+import User from '../../../models/user.js';
+import { Engineer } from '../../../models/engineersModal.js';
 
 /**
  * Register/Update a device token
@@ -215,7 +215,7 @@ export const adminSendCampaign = catchAsync(async (req, res) => {
   let targetUsers = users;
 
   if (target === 'segment' && segment) {
-    const { getUserSegment } = await import('../user/user.segment.js');
+    const { getUserSegment } = await import('../../user/user.segment.js');
     const filteredResults = await Promise.all(
       users.map(async (u) => {
         const s = await getUserSegment(u._id);

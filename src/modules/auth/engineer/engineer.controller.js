@@ -3,7 +3,7 @@ import cloudinary from "../../../config/cloudinary.js";
 import { uploadToCloudinary } from "../../../utils/uploadToCloudinary.js";
 import * as payoutService from "../../../services/payoutService.js";
 import jwt from "jsonwebtoken";
-import { syncDeviceToken } from "../../notification/notification.service.js";
+import { syncDeviceToken } from "../../notification/core/notification.service.js";
 import { engineerAuthService } from "./engineer.service.js";
 
 export const sendOTP = async (req, res) => {

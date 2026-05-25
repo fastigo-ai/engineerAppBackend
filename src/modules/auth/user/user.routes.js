@@ -11,7 +11,7 @@ import {
   getCustomersAdminController
 } from './user.controller.js';
 import { authenticate, authorize } from '../../../middleware/authMiddleWare.js';
-import { registerDevice, unregisterDevice } from '../../notification/notification.controller.js';
+import { registerDevice, unregisterDevice } from '../../notification/api/notification.controller.js';
 import upload from '../../../middleware/multer.js';
 import { authLimiter } from '../../../middleware/rateLimiter.js';
 

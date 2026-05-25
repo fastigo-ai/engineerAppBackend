@@ -1,7 +1,7 @@
 import cron from 'node-cron';
-import Notification from './Notification.model.js';
-import { dispatchNotification } from './notification.service.js';
-import { logger } from '../../utils/logger.js';
+import Notification from '../core/Notification.model.js';
+import { dispatchNotification } from '../core/notification.service.js';
+import { logger } from '../../../utils/logger.js';
 
 const LOCK_DURATION_MS = 60000;  // 60s lock timeout
 const BATCH_SIZE = 20;           // jobs per poll tick

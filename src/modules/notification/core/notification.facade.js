@@ -1,5 +1,5 @@
-import { enqueueNotification, enqueueBulk } from '../../modules/notification/notification.service.js';
-import { formatTemplate } from '../../modules/notification/notification.registry.js';
+import { enqueueNotification, enqueueBulk } from './notification.service.js';
+import { formatTemplate } from './notification.registry.js';
 
 /**
  * PRODUCTION REFACTOR: Now sends all notifications via the MongoDB Queue

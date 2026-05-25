@@ -1,9 +1,9 @@
 import mongoose from 'mongoose';
-import DeviceToken from './DeviceToken.model.js';
-import { admin } from '../../config/firebase.js';
-import { logger } from '../../utils/logger.js';
-import User from '../../models/user.js';
-import { Engineer } from '../../models/engineersModal.js';
+import DeviceToken from '../core/DeviceToken.model.js';
+import { admin } from '../../../config/firebase.js';
+import { logger } from '../../../utils/logger.js';
+import User from '../../../models/user.js';
+import { Engineer } from '../../../models/engineersModal.js';
 
 /**
  * Sends a notification using FCM

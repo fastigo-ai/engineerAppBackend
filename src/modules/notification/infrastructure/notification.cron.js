@@ -1,6 +1,6 @@
 import cron from 'node-cron';
-import DeviceToken from './DeviceToken.model.js';
-import { logger } from '../../utils/logger.js';
+import DeviceToken from '../core/DeviceToken.model.js';
+import { logger } from '../../../utils/logger.js';
 
 /**
  * TOKEN CLEANUP — runs daily at 3am

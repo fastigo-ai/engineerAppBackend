@@ -23,9 +23,9 @@ import couponRoutes from './modules/coupon/coupon.routes.js';
 import { initCouponCron } from './modules/coupon/coupon.cron.js';
 import adminRoutes from './routes/adminRoutes.js';
 
-import notificationRoutes from './modules/notification/notification.routes.js';
-import { startNotificationWorker } from './modules/notification/notification.worker.js';
-import { startAllNotificationCrons } from './modules/notification/notification.cron.js';
+import notificationRoutes from './modules/notification/api/notification.routes.js';
+import { startNotificationWorker } from './modules/notification/infrastructure/notification.worker.js';
+import { startAllNotificationCrons } from './modules/notification/infrastructure/notification.cron.js';
 import { initStaleOrderJob } from './jobs/staleOrderJob.js';
 
 // Load environment variables

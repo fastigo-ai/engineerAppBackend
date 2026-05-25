@@ -8,7 +8,7 @@ import mongoose from "mongoose";
 import { getDistanceInMeters } from "../../utils/distance.js";
 import razorpay from "../../config/razorpay.js";
 import { notifyEngineersForOrder } from "../../services/notificationEngineerService.js";
-import { notifyBookingUpdate } from "../../services/notification/notificationService.js";
+import { notifyBookingUpdate } from "../../modules/notification/core/notification.facade.js";
 import { uploadToCloudinary } from "../../utils/uploadToCloudinary.js";
 import { creditEngineerWallet } from "../../services/walletService.js";
 

@@ -1,10 +1,9 @@
 import Notification from './Notification.model.js';
-import { sendPushNotification } from './pushNotification.service.js';
-import { sendInAppNotification } from './inAppNotification.service.js';
-import { logger } from '../../utils/logger.js';
+import { sendPushNotification, sendInAppNotification } from '../providers/index.js';
+import { logger } from '../../../utils/logger.js';
 
 // Re-export sync for convenience (used by controllers)
-export { syncDeviceToken } from './pushNotification.service.js';
+export { syncDeviceToken } from '../providers/index.js';
 
 /**
  * Enqueues a notification into the MongoDB queue

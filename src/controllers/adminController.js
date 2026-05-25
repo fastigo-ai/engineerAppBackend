@@ -6,7 +6,7 @@ import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
 import { Wallet } from '../models/Wallet.js';
 import { Ledger } from '../models/Ledger.js';
 import { BankAccount } from '../models/BankAccount.js';
-import Notification from '../modules/notification/Notification.model.js';
+import Notification from '../modules/notification/core/Notification.model.js';
 import * as payoutService from '../services/payoutService.js';
 import { notifyEngineersForOrder } from '../services/notificationEngineerService.js';
 import { getIO } from '../config/socket.js';

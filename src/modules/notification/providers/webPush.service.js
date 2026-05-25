@@ -1,6 +1,6 @@
 import webpush from 'web-push';
-import config from '../../config/config.js';
-import AdminSubscription from '../../models/AdminSubscription.js';
+import config from '../../../config/config.js';
+import AdminSubscription from '../../../models/AdminSubscription.js';
 
 // Configure VAPID keys
 if (config.vapid && config.vapid.publicKey && config.vapid.privateKey) {

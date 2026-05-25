@@ -238,7 +238,7 @@ export const dispatchOrder = async (orderId) => {
             // 🔔 Notify User that we are still searching
             if (order.userId) {
                 try {
-                    const { sendPushToUser } = await import("../notification/notificationService.js");
+                    const { sendPushToUser } = await import("../modules/notification/core/notification.facade.js");
                     sendPushToUser(order.userId, {
                         notification: {
                             title: 'Searching for Partners...',

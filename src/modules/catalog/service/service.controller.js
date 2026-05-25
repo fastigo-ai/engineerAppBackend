@@ -17,7 +17,7 @@ import { ServicePlans } from '../plan/plan.model.js';
 import { Order } from '../../../models/orderSchema.js';
 import VendorOrder from '../../../models/vendorOrderModal.js';
 import { notifyEngineersForOrder } from '../../../services/notificationEngineerService.js';
-import { notifyBookingUpdate } from '../../../services/notification/notificationService.js';
+import { notifyBookingUpdate } from '../../../modules/notification/core/notification.facade.js';
 import mongoose from 'mongoose';
 
 

@@ -8,10 +8,10 @@ import { getGeoCacheService } from '../services/map/geoCacheService.js';
 import { dispatchOrder } from '../services/dispatch/dispatchService.js';
 import User from '../models/user.js';
 import { createCheckoutService } from '../services/user/paymentService.js';
-import { notifyAdmins } from "../services/notification/webPushService.js";
+import { notifyAdmins } from "../modules/notification/providers/webPush.service.js";
 import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
 import { markCouponAsUsed, markCouponAsFailed } from '../modules/coupon/coupon.service.js';
-import { notifyBookingUpdate } from '../services/notification/notificationService.js';
+import { notifyBookingUpdate } from '../modules/notification/core/notification.facade.js';
 import { getIO } from '../config/socket.js';
 
 
@@ -499,7 +499,7 @@ const handlePaymentCaptured = async (payload) => {
     }
 
     // 2. NOTIFICATIONS
-    const { notifyBookingUpdate, notifyEngineerUpdate } = await import('../services/notification/notificationService.js');
+    const { notifyBookingUpdate, notifyEngineerUpdate } = await import('../modules/notification/core/notification.facade.js');
 
     // Notify User
     notifyBookingUpdate(order.userId, order._id, 'PAYMENT_RECEIVED', {

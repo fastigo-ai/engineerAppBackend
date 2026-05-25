@@ -186,7 +186,7 @@ export const createCheckoutService = async ({
       dispatchOrder(order._id);
 
       //  Notify User: Booking Confirmed (PAS)
-      import("../notification/notificationService.js").then(({ notifyBookingUpdate }) => {
+      import("../modules/notification/core/notification.facade.js").then(({ notifyBookingUpdate }) => {
         notifyBookingUpdate(userId, order._id, 'BOOKING_CONFIRMED', {
           serviceName: servicePlans[0]?.name || 'Service'
         });

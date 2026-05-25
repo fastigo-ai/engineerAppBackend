@@ -15,7 +15,7 @@ import {
   markOpened,
   deleteNotification,
   clearAllNotifications
-} from '../../notification/notification.controller.js';
+} from '../../notification/api/notification.controller.js';
 
 const router = express.Router();
 
