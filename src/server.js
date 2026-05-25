@@ -32,6 +32,7 @@ import { initStaleOrderJob } from './jobs/staleOrderJob.js';
 
 // Initialize Express app
 const app = express();
+app.set('trust proxy', 1); // Trust first proxy for express-rate-limit
 const httpServer = createServer(app);
 initSocket(httpServer);
 
