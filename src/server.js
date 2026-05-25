@@ -8,7 +8,7 @@ import config from './config/config.js';
 import { initSocket } from './config/socket.js';
 import { createServer } from 'http';
 import logger from './middleware/logger.js';
-import serviceRoutes from './routes/serviceRoutes.js';
+import catalogRoutes from './modules/catalog/index.js';
 import { userAuthRoutes as authRoutes, engineerAuthRoutes, adminAuthRoutes } from './modules/auth/index.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import engineerRoutes from './routes/engineerRoutes.js';
@@ -77,7 +77,7 @@ app.get('/health', (req, res) => {
 });
 
 // API routes
-app.use('/api/services', serviceRoutes);
+app.use('/api/services', catalogRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/engineer', engineerRoutes);
