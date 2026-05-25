@@ -44,17 +44,17 @@ swaggerAutogen({ openapi: '3.0.0' })(outputFile, endpointsFiles, doc).then(({ da
   // Post-process the generated JSON to add tags based on URL paths
   for (const path in data.paths) {
     for (const method in data.paths[path]) {
-      if (path.startsWith('/api/auth/user')) {
+      if (path.startsWith('/api/auth')) {
         data.paths[path][method].tags = ['Auth User'];
-      } else if (path.startsWith('/api/auth/engineer')) {
+      } else if (path.startsWith('/api/engineer/auth')) {
         data.paths[path][method].tags = ['Auth Engineer'];
-      } else if (path.startsWith('/api/auth/admin')) {
+      } else if (path.startsWith('/api/admin/auth')) {
         data.paths[path][method].tags = ['Auth Admin'];
-      } else if (path.startsWith('/api/catalog/categories')) {
+      } else if (path.startsWith('/api/services/category') || path.startsWith('/api/services/categories')) {
         data.paths[path][method].tags = ['Catalog Categories'];
-      } else if (path.startsWith('/api/catalog/plans')) {
+      } else if (path.startsWith('/api/services/plan')) {
         data.paths[path][method].tags = ['Catalog Plans'];
-      } else if (path.startsWith('/api/catalog/services')) {
+      } else if (path.startsWith('/api/services')) {
         data.paths[path][method].tags = ['Catalog Services'];
       } else if (path.startsWith('/api/notification')) {
         data.paths[path][method].tags = ['Notification'];
@@ -72,6 +72,10 @@ swaggerAutogen({ openapi: '3.0.0' })(outputFile, endpointsFiles, doc).then(({ da
         data.paths[path][method].tags = ['Engineer Location'];
       } else if (path.startsWith('/api/engineer')) {
         data.paths[path][method].tags = ['Engineer Profile'];
+      } else if (path.startsWith('/api/admin')) {
+        data.paths[path][method].tags = ['Admin'];
+      } else if (path.startsWith('/api/coupon')) {
+        data.paths[path][method].tags = ['Coupon'];
       }
     }
   }
