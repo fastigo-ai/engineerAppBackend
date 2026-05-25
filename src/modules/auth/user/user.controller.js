@@ -1,10 +1,10 @@
-import { admin } from "../../config/firebase.js";
-import User from "../../models/user.js";
+import { admin } from "../../../config/firebase.js";
+import User from "./user.model.js";
 import jwt from "jsonwebtoken";
-import { syncDeviceToken } from "../notification/notification.service.js";
-import { uploadToCloudinary } from "../../utils/uploadToCloudinary.js";
-import cloudinary from "../../config/cloudinary.js";
-import { userAuthService } from "./userAuth.service.js";
+import { syncDeviceToken } from "../../notification/notification.service.js";
+import { uploadToCloudinary } from "../../../utils/uploadToCloudinary.js";
+import cloudinary from "../../../config/cloudinary.js";
+import { userAuthService } from "./user.service.js";
 
 export const sendOTP = async (req, res) => {
   try {

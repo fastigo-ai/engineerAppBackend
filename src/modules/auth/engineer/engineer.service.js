@@ -1,19 +1,21 @@
-import { twilioClient, verifySid } from "../../config/twilio.js";
-import User from "../../models/user.js";
+import { twilioClient, verifySid } from "../../../config/twilio.js";
+import { Engineer } from "./engineer.model.js";
 
 /**
- * Service to handle User OTP operations with production-grade rate limiting
+ * Service to handle Engineer OTP operations with production-grade rate limiting
  */
-export const userAuthService = {
+export const engineerAuthService = {
   /**
    * Send an OTP with rate limiting and cooldown checks
    */
   sendOtp: async (mobile) => {
-    const user = await User.findOne({ mobile });
+    // 1. Find engineer to check metadata
+    const mobileForDb = mobile.length > 10 ? mobile.slice(-10) : mobile;
+    const engineer = await Engineer.findOne({ mobile: mobileForDb });
 
-    if (user) {
+    if (engineer) {
       const now = new Date();
-      const meta = user.otpMetadata || { requestCount: 0, windowStart: now };
+      const meta = engineer.otpMetadata || { requestCount: 0, windowStart: now };
 
       // Check for block
       if (meta.blockedUntil && meta.blockedUntil > now) {
@@ -41,8 +43,8 @@ export const userAuthService = {
       // Update metadata
       meta.requestCount += 1;
       meta.lastSentAt = now;
-      user.otpMetadata = meta;
-      await user.save();
+      engineer.otpMetadata = meta;
+      await engineer.save();
     }
 
     try {
@@ -60,7 +62,7 @@ export const userAuthService = {
 
       return { success: true, status: verification.status, message: "OTP sent successfully" };
     } catch (error) {
-      console.error("[UserAuth Service] Send OTP Error:", error);
+      console.error("[EngineerAuth Service] Send OTP Error:", error);
       throw error;
     }
   },
@@ -69,9 +71,10 @@ export const userAuthService = {
    * Verify an OTP with attempt limiting
    */
   verifyOtp: async (mobile, otp) => {
-    const user = await User.findOne({ mobile });
+    const mobileForDb = mobile.length > 10 ? mobile.slice(-10) : mobile;
+    const engineer = await Engineer.findOne({ mobile: mobileForDb });
 
-    if (user && user.otpMetadata?.blockedUntil && user.otpMetadata.blockedUntil > new Date()) {
+    if (engineer && engineer.otpMetadata?.blockedUntil && engineer.otpMetadata.blockedUntil > new Date()) {
       throw new Error("Account temporarily blocked due to too many wrong attempts.");
     }
 
@@ -80,9 +83,9 @@ export const userAuthService = {
       const testNumbers = process.env.TEST_PHONE_NUMBERS ? process.env.TEST_PHONE_NUMBERS.split(',') : [];
       const testOtp = process.env.TEST_OTP || "1111";
       if (testNumbers.some(num => mobile.includes(num.trim())) && otp === testOtp) {
-        if (user) {
-          user.otpMetadata.verifyAttempts = 0;
-          await user.save();
+        if (engineer) {
+          engineer.otpMetadata.verifyAttempts = 0;
+          await engineer.save();
         }
         return { success: true, status: "approved", message: "Test OTP verified" };
       }
@@ -94,31 +97,24 @@ export const userAuthService = {
         .verificationChecks.create({ to: mobile, code: otp });
 
       if (verificationCheck.status === 'approved') {
-        if (user) {
-          user.otpMetadata.verifyAttempts = 0;
-          await user.save();
+        if (engineer) {
+          engineer.otpMetadata.verifyAttempts = 0;
+          await engineer.save();
         }
         return { success: true, status: verificationCheck.status, message: "OTP verified" };
       } else {
-        if (user) {
-          user.otpMetadata.verifyAttempts = (user.otpMetadata.verifyAttempts || 0) + 1;
-          if (user.otpMetadata.verifyAttempts >= 5) {
-            user.otpMetadata.blockedUntil = new Date(Date.now() + 15 * 60 * 1000);
+        if (engineer) {
+          engineer.otpMetadata.verifyAttempts = (engineer.otpMetadata.verifyAttempts || 0) + 1;
+          if (engineer.otpMetadata.verifyAttempts >= 5) {
+            engineer.otpMetadata.blockedUntil = new Date(Date.now() + 15 * 60 * 1000);
           }
-          await user.save();
+          await engineer.save();
         }
         return { success: false, status: verificationCheck.status, message: "Invalid OTP" };
       }
     } catch (error) {
-      console.error("[UserAuth Service] Verify OTP Error:", error);
+      console.error("[EngineerAuth Service] Verify OTP Error:", error);
       throw error;
     }
-  },
-
-  /**
-   * Resend an OTP (uses the same rate limiting as sendOtp)
-   */
-  resendOtp: async (mobile) => {
-    return userAuthService.sendOtp(mobile);
   }
 };

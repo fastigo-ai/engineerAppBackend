@@ -1,7 +1,7 @@
 import express from 'express';
-import { sendOTP, verifyOTP, refreshAccessToken, logout, getMe } from './adminAuth.controller.js';
-import { authLimiter } from '../../middleware/rateLimiter.js';
-import { authenticate } from '../../middleware/authMiddleWare.js';
+import { sendOTP, verifyOTP, refreshAccessToken, logout, getMe } from './admin.controller.js';
+import { authLimiter } from '../../../middleware/rateLimiter.js';
+import { authenticate } from '../../../middleware/authMiddleWare.js';
 
 const router = express.Router();
 

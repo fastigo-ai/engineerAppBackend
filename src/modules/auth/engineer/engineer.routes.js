@@ -4,9 +4,9 @@ import {
   verifyOTP, 
   register, 
   onboardEngineer 
-} from './engineerAuth.controller.js';
-import { authenticateEngineer } from '../../middleware/authMiddleWare.js';
-import { authLimiter } from '../../middleware/rateLimiter.js';
+} from './engineer.controller.js';
+import { authenticate, authenticateEngineer } from '../../../middleware/authMiddleWare.js';
+import { authLimiter } from '../../../middleware/rateLimiter.js';
 import { 
   registerDevice, 
   unregisterDevice,
@@ -15,7 +15,7 @@ import {
   markOpened,
   deleteNotification,
   clearAllNotifications
-} from '../notification/notification.controller.js';
+} from '../../notification/notification.controller.js';
 
 const router = express.Router();
 

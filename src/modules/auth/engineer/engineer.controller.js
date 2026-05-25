@@ -1,9 +1,10 @@
-import { Engineer } from "../../models/engineersModal.js";
-import { BankAccount } from "../../models/BankAccount.js";
-import * as payoutService from "../../services/payoutService.js";
+import { Engineer } from "./engineer.model.js";
+import cloudinary from "../../../config/cloudinary.js";
+import { uploadToCloudinary } from "../../../utils/uploadToCloudinary.js";
+import * as payoutService from "../../../services/payoutService.js";
 import jwt from "jsonwebtoken";
-import { syncDeviceToken } from "../notification/notification.service.js";
-import { engineerAuthService } from "./engineerAuth.service.js";
+import { syncDeviceToken } from "../../notification/notification.service.js";
+import { engineerAuthService } from "./engineer.service.js";
 
 export const sendOTP = async (req, res) => {
   try {

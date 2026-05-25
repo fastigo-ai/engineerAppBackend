@@ -9,12 +9,12 @@ import { initSocket } from './config/socket.js';
 import { createServer } from 'http';
 import logger from './middleware/logger.js';
 import serviceRoutes from './routes/serviceRoutes.js';
-import authRoutes from './modules/userAuth/userAuth.routes.js';
+import { userAuthRoutes as authRoutes, engineerAuthRoutes, adminAuthRoutes } from './modules/auth/index.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import engineerRoutes from './routes/engineerRoutes.js';
 import connectDB from './config/db.js';
 import { isFirebaseConnected } from './config/firebase.js';
-import engineerAuthRoutes from './modules/engineerAuth/engineerAuth.routes.js';
+
 import mapRoutes from './routes/mapRoutes.js';
 import errorHandler from './middleware/errorHandler.js';
 import { handleRazorpayWebhook as handlePaymentWebhook } from './controllers/paymentController.js';
@@ -22,7 +22,7 @@ import { initPayoutCron } from './utils/payoutCron.js';
 import couponRoutes from './modules/coupon/coupon.routes.js';
 import { initCouponCron } from './modules/coupon/coupon.cron.js';
 import adminRoutes from './routes/adminRoutes.js';
-import adminAuthRoutes from './modules/adminAuth/adminAuth.routes.js';
+
 import notificationRoutes from './modules/notification/notification.routes.js';
 import { startNotificationWorker } from './modules/notification/notification.worker.js';
 import { startAllNotificationCrons } from './modules/notification/notification.cron.js';

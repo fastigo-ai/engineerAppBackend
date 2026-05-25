@@ -9,11 +9,11 @@ import {
   uploadProfileImage,
   removeProfileImage,
   getCustomersAdminController
-} from './userAuth.controller.js';
-import { authenticate, authorize } from '../../middleware/authMiddleWare.js';
-import { registerDevice, unregisterDevice } from '../notification/notification.controller.js';
-import upload from '../../middleware/multer.js';
-import { authLimiter } from '../../middleware/rateLimiter.js';
+} from './user.controller.js';
+import { authenticate, authorize } from '../../../middleware/authMiddleWare.js';
+import { registerDevice, unregisterDevice } from '../../notification/notification.controller.js';
+import upload from '../../../middleware/multer.js';
+import { authLimiter } from '../../../middleware/rateLimiter.js';
 
 const router = express.Router();
 

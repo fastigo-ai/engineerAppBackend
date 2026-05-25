@@ -1,6 +1,6 @@
-import User from "../../models/user.js";
+import User from "../user/user.model.js";
 import jwt from "jsonwebtoken";
-import { userAuthService } from "../userAuth/userAuth.service.js";
+import { userAuthService } from "../user/user.service.js";
 
 // Cookie options
 const cookieOptions = {
