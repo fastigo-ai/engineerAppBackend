@@ -5,6 +5,7 @@ import { Order } from '../userOrder/core/userOrder.model.js';
 import User from '../auth/user/user.model.js';
 import { ServicePlan } from "../catalog/service/service.model.js";
 import Coupon from './coupon.model.js';
+import { getUserSegment } from '../user/user.segment.js';
 
 /**
  * Logic for calculating discount (FLAT vs PERCENTAGE)
@@ -62,7 +63,7 @@ export const validateCoupon = async ({ userId, couponCode, amount, servicePlans 
 
   // User Segment check
   if (coupon.targeting?.userSegments?.length > 0) {
-    const userSegment = hasPreviousOrders ? 'ACTIVE' : 'NEW';
+    const userSegment = await getUserSegment(userId);
     if (!coupon.targeting.userSegments.includes(userSegment)) {
       throw new Error(`This coupon is only valid for ${coupon.targeting.userSegments.join('/')} users`);
     }
@@ -218,7 +219,7 @@ export const getAvailableCoupons = async (userId) => {
     return acc;
   }, {});
 
-  const userSegment = hasPreviousOrders ? 'ACTIVE' : 'NEW';
+  const userSegment = await getUserSegment(userId);
 
   const filtered = [];
   for (const coupon of coupons) {
