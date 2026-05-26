@@ -5391,6 +5391,9 @@
           "Admin"
         ],
         "description": "",
+        "produces": [
+          "text/csv"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -5421,8 +5424,25 @@
           "403": {
             "description": "Forbidden"
           },
+          "404": {
+            "description": "Not Found"
+          },
           "500": {
             "description": "Internal Server Error"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "engineerId": {
+                    "example": "any"
+                  }
+                }
+              }
+            }
           }
         }
       }
