@@ -12,7 +12,7 @@ import {
   getAcceptedVendorOrders,
   getRejectedVendorOrders,
   getCompletedVendorOrders
-} from './vendor-request.controller.js';
+} from './vendorOrder.controller.js';
 import { authenticateEngineer } from '../../../middleware/authMiddleWare.js';
 import { nearbyApiLimiter } from '../../../middleware/rateLimiter.js';
 import upload from '../../../middleware/multer.js';

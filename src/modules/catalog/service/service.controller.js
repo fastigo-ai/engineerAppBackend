@@ -15,7 +15,7 @@ import { uploadToCloudinary } from '../../../utils/uploadToCloudinary.js';
 import { ServicePlan } from './service.model.js';
 import { ServicePlans } from '../plan/plan.model.js';
 import { Order } from '../../../models/orderSchema.js';
-import VendorOrder from '../../../models/vendorOrderModal.js';
+import VendorOrder from '../../vendorOrder/core/vendorOrder.model.js';
 import { notifyEngineersForOrder } from '../../../services/notificationEngineerService.js';
 import { notifyBookingUpdate } from '../../../modules/notification/core/notification.facade.js';
 import mongoose from 'mongoose';

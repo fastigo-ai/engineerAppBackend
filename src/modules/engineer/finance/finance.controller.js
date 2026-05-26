@@ -125,7 +125,7 @@ export const getWalletBalance = async (req, res) => {
             }).select('_id amount').lean();
 
             // B. Find all completed vendor orders
-            const VendorOrder = (await import('../../../models/vendorOrderModal.js')).default;
+            const VendorOrder = (await import('../../vendorOrder/core/vendorOrder.model.js')).default;
             const completedVendorOrders = await VendorOrder.find({
                 assigned_engineer_id: engineerId,
                 work_status: 'COMPLETED'

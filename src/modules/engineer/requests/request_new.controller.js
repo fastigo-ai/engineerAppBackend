@@ -2,7 +2,7 @@ import { Order } from "../../../models/orderSchema.js";
 import User from "../../../models/user.js";
 import { Engineer } from "../../auth/engineer/engineer.model.js";
 import STATUS_CODES from "../../../constants/statusCodes.js";
-import vendorOrderModal from "../../../models/vendorOrderModal.js";
+import vendorOrderModal from '../../vendorOrder/core/vendorOrder.model.js';
 import { Wallet } from "../../finance/wallet/Wallet.model.js";
 import mongoose from "mongoose";
 import { getDistanceInMeters } from "../../../utils/distance.js";

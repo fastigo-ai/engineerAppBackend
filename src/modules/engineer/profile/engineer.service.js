@@ -1,5 +1,5 @@
 import { Order } from "../../../models/orderSchema.js";
-import VendorOrder from "../../../models/vendorOrderModal.js";
+import VendorOrder from '../../vendorOrder/core/vendorOrder.model.js';
 import { Payment } from "../../finance/payments/Payment.model.js";
 import { Engineer } from "../../auth/engineer/engineer.model.js";
 import { gridDisk } from "h3-js";

@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import { Engineer } from '../../auth/engineer/engineer.model.js';
 import { Order } from '../../../models/orderSchema.js';
 import { Wallet } from "../../finance/wallet/Wallet.model.js";
-import VendorOrder from '../../../models/vendorOrderModal.js';
+import VendorOrder from '../../vendorOrder/core/vendorOrder.model.js';
 import { WithdrawalRequest } from "../../finance/wallet/WithdrawalRequest.model.js";
 import { getEngineerStatsService, goOnlineService, goOfflineService, heartbeatService, updateLocationService } from "./engineer.service.js";
 

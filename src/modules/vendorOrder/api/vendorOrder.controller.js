@@ -1,12 +1,12 @@
 import mongoose from "mongoose";
 import { Engineer } from "../../auth/engineer/engineer.model.js";
-import VendorOrder from "../../../models/vendorOrderModal.js";
+import VendorOrder from '../core/vendorOrder.model.js';
 import {
   checkServiceability,
   createAndMatchVendorOrder,
   acceptOrderService,
   rejectOrderService
-} from "../../../services/vendorRequestService.js";
+} from '../core/vendorOrder.service.js';
 import { getDistanceInMeters } from "../../../utils/distance.js";
 import { latLngToCell, gridDisk } from "h3-js";
 import { getIO } from "../../../config/socket.js";
