@@ -89,7 +89,7 @@ router.get('/allBookings', getAllBookings);
 
 router.put('/updateOrderStatus/:id', updateOrderStatus);
 
-router.put('/cancelBooking/:id', cancelBooking);
+router.put('/cancelBooking/:id', authenticate, cancelBooking);
 
 router.put('/rescheduleBooking/:id', authenticate, rescheduleBooking);
 

@@ -1157,9 +1157,24 @@ export const getUserOrders = async (req, res) => {
 export const cancelBooking = async (req, res) => {
   try {
     const { id } = req.params;
-    // Prevent double cancellation by checking current status
-    const order = await Order.findOneAndUpdate(
-      { _id: id, orderStatus: { $ne: 'Cancelled' } },
+    const requesterId = req.user?.id;
+    const requesterRole = req.user?.role;
+
+    const existingOrder = await Order.findById(id);
+    if (!existingOrder) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    if (existingOrder.userId.toString() !== requesterId && requesterRole !== 'admin' && requesterRole !== 'super_admin') {
+      return res.status(403).json({ success: false, message: 'You do not have permission to cancel this order' });
+    }
+
+    if (existingOrder.orderStatus === 'Cancelled') {
+      return res.status(200).json({ success: true, message: 'Booking already cancelled', data: existingOrder });
+    }
+
+    const order = await Order.findByIdAndUpdate(
+      id,
       {
         $set: { 
           orderStatus: 'Cancelled', 
@@ -1171,22 +1186,13 @@ export const cancelBooking = async (req, res) => {
           tracking: {
             status: 'CANCELLED',
             title: 'Booking Cancelled',
-            subTitle: 'Cancelled by user',
+            subTitle: (requesterRole === 'admin' || requesterRole === 'super_admin') ? 'Cancelled by Administrator' : 'Cancelled by user',
             timestamp: new Date()
           }
         }
       },
       { new: true }
     );
-
-    if (!order) {
-      // Check if it's already cancelled or just not found
-      const existing = await Order.findById(id);
-      if (existing && existing.orderStatus === 'Cancelled') {
-         return res.status(200).json({ success: true, message: 'Booking already cancelled', data: existing });
-      }
-      return res.status(404).json({ success: false, message: 'Order not found or already cancelled' });
-    }
 
     res.status(200).json({
       success: true,
