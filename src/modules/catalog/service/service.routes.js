@@ -91,7 +91,7 @@ router.put('/updateOrderStatus/:id', updateOrderStatus);
 
 router.put('/cancelBooking/:id', cancelBooking);
 
-router.put('/rescheduleBooking/:id', rescheduleBooking);
+router.put('/rescheduleBooking/:id', authenticate, rescheduleBooking);
 
 // --- ADMIN BOOKING ROUTES ---
 router.get('/admin/allBookings', authenticate, authorize('admin', 'super_admin'), getAllBookingsAdmin);

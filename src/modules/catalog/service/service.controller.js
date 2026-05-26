@@ -1209,6 +1209,8 @@ export const rescheduleBooking = async (req, res) => {
   try {
     const { id } = req.params;
     const { scheduledAt, bookingDetails } = req.body;
+    const requesterId = req.user?.id;
+    const requesterRole = req.user?.role;
 
     if (!scheduledAt) {
       return res.status(400).json({ success: false, message: 'New schedule time is required' });
@@ -1222,6 +1224,10 @@ export const rescheduleBooking = async (req, res) => {
     const existingOrder = await Order.findById(id);
     if (!existingOrder) {
       return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    if (existingOrder.userId.toString() !== requesterId && requesterRole !== 'admin' && requesterRole !== 'super_admin') {
+      return res.status(403).json({ success: false, message: 'You do not have permission to reschedule this order' });
     }
 
     // When rescheduling, reset the engineer assignment to dispatch it again
