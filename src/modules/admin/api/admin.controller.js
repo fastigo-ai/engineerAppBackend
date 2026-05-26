@@ -1,17 +1,17 @@
-import { Order } from '../models/orderSchema.js';
-import { ServicePlan } from "../modules/catalog/service/service.model.js";
-import User from '../models/user.js';
-import { Engineer } from "../modules/auth/engineer/engineer.model.js";
-import { WithdrawalRequest } from "../modules/finance/wallet/WithdrawalRequest.model.js";
-import { Wallet } from "../modules/finance/wallet/Wallet.model.js";
-import { Ledger } from "../modules/finance/ledger/Ledger.model.js";
-import { BankAccount } from "../modules/engineer/finance/BankAccount.model.js";
-import Notification from '../modules/notification/core/Notification.model.js';
-import * as payoutService from "../modules/finance/payouts/payout.service.js";
-import { notifyEngineersForOrder } from '../services/notificationEngineerService.js';
-import { getIO } from '../config/socket.js';
+import { Order } from '../../../models/orderSchema.js';
+import { ServicePlan } from "../..//catalog/service/service.model.js";
+import User from '../../../models/user.js';
+import { Engineer } from "../..//auth/engineer/engineer.model.js";
+import { WithdrawalRequest } from "../..//finance/wallet/WithdrawalRequest.model.js";
+import { Wallet } from "../..//finance/wallet/Wallet.model.js";
+import { Ledger } from "../..//finance/ledger/Ledger.model.js";
+import { BankAccount } from "../..//engineer/finance/BankAccount.model.js";
+import Notification from '../..//notification/core/Notification.model.js';
+import * as payoutService from "../..//finance/payouts/payout.service.js";
+import { notifyEngineersForOrder } from '../../../services/notificationEngineerService.js';
+import { getIO } from '../../../config/socket.js';
 import mongoose from 'mongoose';
-import STATUS_CODES from '../constants/statusCodes.js';
+import STATUS_CODES from '../../../constants/statusCodes.js';
 import { Worker } from 'worker_threads';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -793,7 +793,7 @@ export const exportLedger = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    const workerPath = path.resolve(__dirname, '../utils/csvWorker.js');
+    const workerPath = path.resolve(__dirname, '../../../utils/csvWorker.js');
     const worker = new Worker(workerPath, { workerData: transactions });
 
     worker.on('message', (result) => {

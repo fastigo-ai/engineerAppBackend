@@ -11,7 +11,7 @@ import notificationRoutes from './modules/notification/api/notification.routes.j
 import paymentRoutes from './modules/finance/payments/payment.routes.js';
 import mapRoutes from './modules/map/map.routes.js';
 import engineerRoutes from './modules/engineer/index.js';
-import adminRoutes from './routes/adminRoutes.js';
+import adminRoutes from './modules/admin/api/admin.routes.js';
 import couponRoutes from './modules/coupon/coupon.routes.js';
 
 const app = express();

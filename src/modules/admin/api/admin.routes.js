@@ -1,9 +1,9 @@
 import express from 'express';
-import AdminSubscription from '../models/AdminSubscription.js';
-import * as notificationController from '../modules/notification/api/notification.controller.js';
-import * as adminController from '../controllers/adminController.js';
-import { authenticate, authorize } from '../middleware/authMiddleWare.js';
-import { adminLimiter } from '../middleware/rateLimiter.js';
+import AdminSubscription from '../../../models/AdminSubscription.js';
+import * as notificationController from '../..//notification/api/notification.controller.js';
+import * as adminController from './admin.controller.js';
+import { authenticate, authorize } from '../../../middleware/authMiddleWare.js';
+import { adminLimiter } from '../../../middleware/rateLimiter.js';
 
 
 const router = express.Router();

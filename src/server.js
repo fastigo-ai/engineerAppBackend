@@ -25,8 +25,7 @@ import { handleRazorpayWebhook as handlePaymentWebhook } from "./modules/finance
 import { initPayoutCron } from "./modules/finance/payouts/payout.cron.js";
 import couponRoutes from './modules/coupon/coupon.routes.js';
 import { initCouponCron } from './modules/coupon/coupon.cron.js';
-import adminRoutes from './routes/adminRoutes.js';
-
+import adminRoutes from './modules/admin/index.js';
 import notificationRoutes from './modules/notification/api/notification.routes.js';
 import { startNotificationWorker } from './modules/notification/infrastructure/notification.worker.js';
 import { startAllNotificationCrons } from './modules/notification/infrastructure/notification.cron.js';
