@@ -1,4 +1,4 @@
-import { Order } from "../../../models/orderSchema.js";
+import { Order } from '../../userOrder/core/userOrder.model.js';
 import VendorOrder from '../../vendorOrder/core/vendorOrder.model.js';
 import { Payment } from "../../finance/payments/Payment.model.js";
 import { Engineer } from "../../auth/engineer/engineer.model.js";

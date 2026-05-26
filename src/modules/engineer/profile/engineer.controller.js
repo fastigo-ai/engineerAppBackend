@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { Engineer } from '../../auth/engineer/engineer.model.js';
-import { Order } from '../../../models/orderSchema.js';
+import { Order } from '../../userOrder/core/userOrder.model.js';
 import { Wallet } from "../../finance/wallet/Wallet.model.js";
 import VendorOrder from '../../vendorOrder/core/vendorOrder.model.js';
 import { WithdrawalRequest } from "../../finance/wallet/WithdrawalRequest.model.js";
@@ -367,7 +367,7 @@ export const unAssignEngineerFromOrderController = async (req, res) => {
             if (updatedOrder.userId) {
                 try {
                     const { notifyBookingUpdate } = await import("../../notification/core/notification.facade.js");
-                    const { notifyEngineersForOrder } = await import("../../../services/notificationEngineerService.js");
+                    const { notifyEngineersForOrder } = await import('../../notification/engineers/notificationEngineer.service.js');
 
                     notifyBookingUpdate(updatedOrder.userId._id, updatedOrder._id, 'ENGINEER_DECLINED_REASSIGNING', {
                         serviceName: updatedOrder.servicePlan?.name || 'Service'

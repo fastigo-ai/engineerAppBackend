@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { Order } from "../../models/orderSchema.js";
+import { Order } from '../userOrder/core/userOrder.model.js';
 
 /**
  * Categorize user into segments based on purchase history

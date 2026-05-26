@@ -2,7 +2,7 @@ import { catchAsync } from '../../../utils/catchAsync.js';
 import * as service from '../core/notification.service.js';
 import Notification from '../core/Notification.model.js';
 import DeviceToken from '../core/DeviceToken.model.js';
-import User from '../../../models/user.js';
+import User from '../../auth/user/user.model.js';
 import { Engineer } from "../../../modules/auth/engineer/engineer.model.js";
 
 /**

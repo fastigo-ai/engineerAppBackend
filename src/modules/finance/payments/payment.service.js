@@ -1,9 +1,9 @@
 import mongoose from 'mongoose';
-import { Order } from "../../../models/orderSchema.js"
+import { Order } from '../../userOrder/core/userOrder.model.js'
 import { ServicePlan } from "../../../modules/catalog/service/service.model.js";
-import User from "../../../models/user.js";
+import User from '../../auth/user/user.model.js';
 import { latLngToCell } from "h3-js";
-import { dispatchOrder } from "../../../services/dispatch/dispatchService.js";
+import { dispatchOrder } from '../../userOrder/core/dispatch.service.js';
 import razorpay from "../../../config/razorpay.js";
 import { validateCoupon, reserveCoupon } from "../../../modules/coupon/coupon.service.js";
 import { verifyValidationKey } from "../../../modules/coupon/coupon.validator.js";

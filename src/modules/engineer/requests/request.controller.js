@@ -1,5 +1,5 @@
-import { Order } from "../../../models/orderSchema.js";
-import User from "../../../models/user.js";
+import { Order } from '../../userOrder/core/userOrder.model.js';
+import User from '../../auth/user/user.model.js';
 import { Engineer } from "../../auth/engineer/engineer.model.js";
 import STATUS_CODES from "../../../constants/statusCodes.js";
 import vendorOrderModal from '../../vendorOrder/core/vendorOrder.model.js';
@@ -7,7 +7,7 @@ import { Wallet } from "../../finance/wallet/Wallet.model.js";
 import mongoose from "mongoose";
 import { getDistanceInMeters } from "../../../utils/distance.js";
 import razorpay from "../../../config/razorpay.js";
-import { notifyEngineersForOrder } from "../../../services/notificationEngineerService.js";
+import { notifyEngineersForOrder } from '../../notification/engineers/notificationEngineer.service.js';
 import { notifyBookingUpdate } from "../../notification/core/notification.facade.js";
 import { uploadToCloudinary } from "../../../utils/uploadToCloudinary.js";
 import { creditEngineerWallet } from "../../finance/wallet/wallet.service.js";

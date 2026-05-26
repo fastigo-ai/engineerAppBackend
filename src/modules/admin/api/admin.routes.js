@@ -1,5 +1,5 @@
 import express from 'express';
-import AdminSubscription from '../../../models/AdminSubscription.js';
+import AdminSubscription from './AdminSubscription.model.js';
 import * as notificationController from '../..//notification/api/notification.controller.js';
 import * as adminController from './admin.controller.js';
 import { authenticate, authorize } from '../../../middleware/authMiddleWare.js';

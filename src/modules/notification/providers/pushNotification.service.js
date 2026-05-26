@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import DeviceToken from '../core/DeviceToken.model.js';
 import { admin } from '../../../config/firebase.js';
 import { logger } from '../../../utils/logger.js';
-import User from '../../../models/user.js';
+import User from '../../auth/user/user.model.js';
 import { Engineer } from "../../../modules/auth/engineer/engineer.model.js";
 
 /**

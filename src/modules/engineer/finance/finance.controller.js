@@ -3,7 +3,7 @@ import { Wallet } from "../../finance/wallet/Wallet.model.js";
 import { Ledger } from "../../finance/ledger/Ledger.model.js";
 import { BankAccount } from '../finance/BankAccount.model.js';
 import { WithdrawalRequest } from "../../finance/wallet/WithdrawalRequest.model.js";
-import { Order } from '../../../models/orderSchema.js';
+import { Order } from '../../userOrder/core/userOrder.model.js';
 import * as payoutService from "../../finance/payouts/payout.service.js";
 import { v4 as uuidv4 } from 'uuid';
 import STATUS_CODES from '../../../constants/statusCodes.js';

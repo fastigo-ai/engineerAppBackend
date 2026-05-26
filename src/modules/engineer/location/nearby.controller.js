@@ -1,5 +1,5 @@
 import { Engineer } from "../../auth/engineer/engineer.model.js";
-import { getNearbyOrdersService } from "../../../services/nearbyService.js";
+import { getNearbyOrdersService } from '../requests/nearby.service.js';
 import STATUS_CODES from "../../../constants/statusCodes.js";
 
 /**

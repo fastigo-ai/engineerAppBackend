@@ -14,9 +14,9 @@ import { Category } from "../category/category.model.js"
 import { uploadToCloudinary } from '../../../utils/uploadToCloudinary.js';
 import { ServicePlan } from './service.model.js';
 import { ServicePlans } from '../plan/plan.model.js';
-import { Order } from '../../../models/orderSchema.js';
+import { Order } from '../../userOrder/core/userOrder.model.js';
 import VendorOrder from '../../vendorOrder/core/vendorOrder.model.js';
-import { notifyEngineersForOrder } from '../../../services/notificationEngineerService.js';
+import { notifyEngineersForOrder } from '../../notification/engineers/notificationEngineer.service.js';
 import { notifyBookingUpdate } from '../../../modules/notification/core/notification.facade.js';
 import mongoose from 'mongoose';
 
@@ -1277,7 +1277,7 @@ export const rescheduleBooking = async (req, res) => {
     }
 
     // Trigger optimized re-dispatch
-    const { dispatchOrder } = await import("../../../services/dispatch/dispatchService.js");
+    const { dispatchOrder } = await import('../../userOrder/core/dispatch.service.js');
     dispatchOrder(order._id).catch(err => console.error('[Reschedule] Dispatch failed:', err));
 
     res.status(200).json({

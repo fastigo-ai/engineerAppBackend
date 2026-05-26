@@ -1,8 +1,8 @@
 import mongoose from 'mongoose';
 import couponRepository from './coupon.repository.js';
 import usageRepository from './couponUsage.repository.js';
-import { Order } from '../../models/orderSchema.js';
-import User from '../../models/user.js';
+import { Order } from '../userOrder/core/userOrder.model.js';
+import User from '../auth/user/user.model.js';
 import { ServicePlan } from "../../modules/catalog/service/service.model.js";
 import Coupon from './coupon.model.js';
 

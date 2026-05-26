@@ -1,4 +1,4 @@
-import { Order } from "../models/orderSchema.js";
+import { Order } from '../../userOrder/core/userOrder.model.js';
 import VendorOrder from '../modules/vendorOrder/core/vendorOrder.model.js';
 import { gridDisk } from "h3-js";
 import { getDistanceInMeters } from "../utils/distance.js";

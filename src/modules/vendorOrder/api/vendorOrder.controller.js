@@ -797,7 +797,7 @@ export const redispatchVendorOrderWebhook = async (req, res) => {
     }
 
     // Notify engineers
-    const { notifyEngineersForOrder } = await import('../../../services/notificationEngineerService.js');
+    const { notifyEngineersForOrder } = await import('../../notification/engineers/notificationEngineer.service.js');
     const notifyResult = await notifyEngineersForOrder(order);
 
     if (!notifyResult.success) {
