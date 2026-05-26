@@ -1,9 +1,9 @@
 import axios from "axios";
 import { latLngToCell, gridDisk, gridDiskDistances } from "h3-js";
 import VendorOrder from './vendorOrder.model.js';
-import { Engineer } from "../modules/auth/engineer/engineer.model.js";
+import { Engineer } from "../../auth/engineer/engineer.model.js";
 import { notifyEngineersForOrder, matchEngineersByLocation } from '../../notification/engineers/notificationEngineer.service.js';
-import { getDistanceInMeters } from "../utils/distance.js";
+import { getDistanceInMeters } from "../../../utils/distance.js";
 
 const H3_RESOLUTION = 8;
 

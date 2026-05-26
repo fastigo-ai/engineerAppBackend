@@ -1,9 +1,9 @@
 import mongoose from "mongoose";
-import { sendPushToMatchedEngineers, sendPushToEngineer } from "../modules/notification/core/notification.facade.js";
+import { sendPushToMatchedEngineers, sendPushToEngineer } from "../core/notification.facade.js";
 import { latLngToCell, gridDisk } from "h3-js";
-import { Engineer } from "../modules/auth/engineer/engineer.model.js";
-import { getIO } from "../config/socket.js";
-import { getDistanceInMeters } from "../utils/distance.js";
+import { Engineer } from "../../auth/engineer/engineer.model.js";
+import { getIO } from "../../../config/socket.js";
+import { getDistanceInMeters } from "../../../utils/distance.js";
 
 const H3_RESOLUTION = 8;
 const MAX_RADIUS_M = 25_000;

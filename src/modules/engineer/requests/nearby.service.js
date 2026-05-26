@@ -1,7 +1,7 @@
 import { Order } from '../../userOrder/core/userOrder.model.js';
-import VendorOrder from '../modules/vendorOrder/core/vendorOrder.model.js';
+import VendorOrder from '../../vendorOrder/core/vendorOrder.model.js';
 import { gridDisk } from "h3-js";
-import { getDistanceInMeters } from "../utils/distance.js";
+import { getDistanceInMeters } from "../../../utils/distance.js";
 
 const USER_RADIUS_RINGS = 12; // ~10km
 const VENDOR_RADIUS_RINGS = 30; // ~25km

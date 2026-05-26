@@ -1,17 +1,17 @@
 import mongoose from 'mongoose';
 import crypto from 'crypto';
 import razorpay from '../../../config/razorpay.js';
-import { ServicePlan } from "../../../modules/catalog/service/service.model.js";
+import { ServicePlan } from "../../catalog/service/service.model.js";
 import { Order } from '../../userOrder/core/userOrder.model.js';
 import { Payment } from './Payment.model.js';
-import { getGeoCacheService } from "../../../modules/map/geoCache.service.js";
+import { getGeoCacheService } from "../../map/geoCache.service.js";
 import { dispatchOrder } from '../../userOrder/core/dispatch.service.js';
 import User from '../../auth/user/user.model.js';
 import { createCheckoutService } from './payment.service.js';
-import { notifyAdmins } from "../../../modules/notification/providers/webPush.service.js";
+import { notifyAdmins } from "../../notification/providers/webPush.service.js";
 import { WithdrawalRequest } from '../wallet/WithdrawalRequest.model.js';
-import { markCouponAsUsed, markCouponAsFailed } from '../../../modules/coupon/coupon.service.js';
-import { notifyBookingUpdate } from '../../../modules/notification/core/notification.facade.js';
+import { markCouponAsUsed, markCouponAsFailed } from '../../coupon/coupon.service.js';
+import { notifyBookingUpdate } from '../../notification/core/notification.facade.js';
 import { getIO } from '../../../config/socket.js';
 
 
@@ -499,7 +499,7 @@ const handlePaymentCaptured = async (payload) => {
     }
 
     // 2. NOTIFICATIONS
-    const { notifyBookingUpdate, notifyEngineerUpdate } = await import('../../../modules/notification/core/notification.facade.js');
+    const { notifyBookingUpdate, notifyEngineerUpdate } = await import('../../notification/core/notification.facade.js');
 
     // Notify User
     notifyBookingUpdate(order.userId, order._id, 'PAYMENT_RECEIVED', {
