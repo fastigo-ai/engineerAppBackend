@@ -144,6 +144,11 @@ export const acceptOrderService = async ({ orderId, engineerId, distance }) => {
     payload,
   );
 
+  // Sync Engineer profile
+  await Engineer.findByIdAndUpdate(engineerId, {
+    $addToSet: { assignedOrders: orderId },
+    isAvailable: false
+  });
 
   return order;
 };
@@ -180,6 +185,12 @@ export const rejectOrderService = async ({ orderId, engineerId }) => {
     };
     shouldReDispatch = true;
     console.log('✅ Vendor order un-assigned and reset to PENDING for re-dispatch');
+
+    // Sync Engineer profile
+    await Engineer.findByIdAndUpdate(engineerId, {
+      $pull: { assignedOrders: orderId },
+      isAvailable: true
+    });
   }
 
   const order = await VendorOrder.findOneAndUpdate(

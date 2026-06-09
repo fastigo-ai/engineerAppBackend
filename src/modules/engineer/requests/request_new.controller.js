@@ -343,6 +343,12 @@ export const acceptRequest = async (req, res) => {
             }).catch(notifyError => console.error('Failed to send assignment notification to user:', notifyError));
         }
 
+        // Sync Engineer profile
+        await Engineer.findByIdAndUpdate(engineerId, {
+            $addToSet: { assignedOrders: id },
+            isAvailable: false
+        });
+
         const updatedOrder = order;
 
         // Normalize for frontend compatibility
@@ -443,6 +449,12 @@ export const rejectRequest = async (req, res) => {
             } else {
                 console.log('Engineer removed from acceptedBy/assignedEngineer (already in rejectedBy)');
             }
+
+            // Sync Engineer profile
+            await Engineer.findByIdAndUpdate(engineerId, {
+                $pull: { assignedOrders: id },
+                isAvailable: true
+            });
         } else if (order.acceptedBy || order.assignedEngineer) {
             // Order is assigned to a different engineer
             console.log(' Order already assigned to another engineer');

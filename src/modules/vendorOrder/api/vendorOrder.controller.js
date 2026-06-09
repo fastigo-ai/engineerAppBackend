@@ -162,7 +162,10 @@ export const acceptVendorOrder = async (req, res) => {
 
 export const rejectVendorOrder = async (req, res) => {
   try {
-    const { orderId } = req.body;
+    const orderId = req.body.orderId || req.body.id || req.params.id || req.params.orderId;
+    if (!orderId) {
+      return res.status(400).json({ success: false, message: "Order ID is required" });
+    }
     const engineerId = req.user.id;
 
     // 1. Call the service to update the Database
