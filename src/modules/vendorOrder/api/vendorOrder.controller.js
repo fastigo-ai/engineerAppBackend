@@ -327,30 +327,30 @@ export const updateVendorOrderWorkStatus = async (req, res) => {
       });
     }
 
-    // Geo-fencing verification for STARTED status
-    if (workStatus === "STARTED") {
-      const { latitude, longitude } = req.body;
-      if (!latitude || !longitude) {
-        return res.status(400).json({
-          success: false,
-          message: "Location verification is required to start work."
-        });
-      }
-
-      if (order.location && order.location.coordinates) {
-        const orderLng = order.location.coordinates[0];
-        const orderLat = order.location.coordinates[1];
-        const distance = getDistanceInMeters(latitude, longitude, orderLat, orderLng);
-        console.log(`📏 Backend Vendor Distance Check: ${distance.toFixed(2)}m`);
-
-        if (distance > 300) {
-          return res.status(400).json({
-            success: false,
-            message: `Location verification failed. You are ${distance.toFixed(0)}m away. Please be within 300m.`
-          });
-        }
-      }
-    }
+    // Geo-fencing verification for STARTED status (Temporarily disabled for vendor orders)
+    // if (workStatus === "STARTED") {
+    //   const { latitude, longitude } = req.body;
+    //   if (!latitude || !longitude) {
+    //     return res.status(400).json({
+    //       success: false,
+    //       message: "Location verification is required to start work."
+    //     });
+    //   }
+    //
+    //   if (order.location && order.location.coordinates) {
+    //     const orderLng = order.location.coordinates[0];
+    //     const orderLat = order.location.coordinates[1];
+    //     const distance = getDistanceInMeters(latitude, longitude, orderLat, orderLng);
+    //     console.log(`📏 Backend Vendor Distance Check: ${distance.toFixed(2)}m`);
+    //
+    //     if (distance > 300) {
+    //       return res.status(400).json({
+    //         success: false,
+    //         message: `Location verification failed. You are ${distance.toFixed(0)}m away. Please be within 300m.`
+    //       });
+    //     }
+    //   }
+    // }
 
     // Atomic update to avoid triggering validation errors on unrelated fields
     const updatedOrder = await VendorOrder.findByIdAndUpdate(
