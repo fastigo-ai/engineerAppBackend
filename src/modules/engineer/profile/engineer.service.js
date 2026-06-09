@@ -256,7 +256,7 @@ export const dispatchOrder = async (orderId) => {
 
   //  Step 5: Send to top engineers (batch)
   const topEngineers = availableEngineers.slice(0, 5);
-  const { getDistanceInMeters } = await import("../utils/distance.js");
+  const { getDistanceInMeters } = await import("../../../utils/distance.js");
 
   for (let eng of topEngineers) {
     if (eng.location?.coordinates && order.location?.coordinates) {

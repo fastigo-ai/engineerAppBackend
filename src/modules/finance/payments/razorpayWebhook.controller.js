@@ -1,8 +1,8 @@
 import crypto from 'crypto';
 import mongoose from 'mongoose';
-import { Wallet } from "../modules/finance/wallet/Wallet.model.js";
-import { Ledger } from "../modules/finance/ledger/Ledger.model.js";
-import { WithdrawalRequest } from "../modules/finance/wallet/WithdrawalRequest.model.js";
+import { Wallet } from "../wallet/Wallet.model.js";
+import { Ledger } from "../ledger/Ledger.model.js";
+import { WithdrawalRequest } from "../wallet/WithdrawalRequest.model.js";
 
 /**
  * Handle Razorpay Webhooks (Payouts)

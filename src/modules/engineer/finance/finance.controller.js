@@ -146,7 +146,7 @@ export const getWalletBalance = async (req, res) => {
             const existingIds = new Set(existingLedgerEntries.map(l => l.referenceId?.toString()));
 
             // E. Create missing Ledger entries
-            const { creditEngineerWallet } = await import('../../../services/walletService.js');
+            const { creditEngineerWallet } = await import('../../finance/wallet/wallet.service.js');
             for (const cred of potentialCredits) {
                 if (!existingIds.has(cred.id.toString()) && cred.amount > 0) {
                     console.log(`Syncing missing credit for order ${cred.id}: ₹${cred.amount}`);

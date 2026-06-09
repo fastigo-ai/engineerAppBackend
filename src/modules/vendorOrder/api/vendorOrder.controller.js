@@ -476,7 +476,7 @@ export const completeOrder = async (req, res) => {
 
     // --- NEW: CREDIT WALLET FOR VENDOR WORK ---
     try {
-      const { creditEngineerWallet } = await import('../../../services/walletService.js');
+      const { creditEngineerWallet } = await import('../../finance/wallet/wallet.service.js');
       if (order.order_price > 0) {
         await creditEngineerWallet({
           engineerId,

@@ -1188,7 +1188,7 @@ export const updateWorkStatus = async (req, res) => {
             if (work_status === 'Completed') {
                 await vendorOrderModal.findByIdAndUpdate(id, { status: 'COMPLETED' });
                 try {
-                    const { creditEngineerWallet } = await import('../../../services/walletService.js');
+                    const { creditEngineerWallet } = await import('../../finance/wallet/wallet.service.js');
                     const payoutAmount = vendorOrder.totalAmount || vendorOrder.order_price || 0;
                     if (payoutAmount > 0) {
                         await creditEngineerWallet({
