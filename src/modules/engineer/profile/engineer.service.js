@@ -23,7 +23,7 @@ export const getEngineerStatsService = async (engineerId) => {
   ]);
 
   // 4. Get Wallet Balance
-  const { Wallet } = await import("../../../models/Wallet.js");
+  const { Wallet } = await import("../../finance/wallet/Wallet.model.js");
   const walletPromise = Wallet.findOne({ engineerId }).select('availableBalance').lean();
 
 
