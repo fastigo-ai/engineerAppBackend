@@ -358,13 +358,13 @@ export const updateVendorOrderWorkStatus = async (req, res) => {
     // Atomic update to avoid triggering validation errors on unrelated fields
     const updatedOrder = await VendorOrder.findByIdAndUpdate(
       orderId,
-      { 
+      {
         $set: { work_status: workStatus },
         $push: {
           tracking: {
             status: workStatus === 'STARTED' ? 'STARTED' : workStatus,
-            title: workStatus === 'STARTED' ? 'Work Started' : 
-                   workStatus === 'COMPLETED' ? 'Work Completed' : `Status: ${workStatus}`,
+            title: workStatus === 'STARTED' ? 'Work Started' :
+              workStatus === 'COMPLETED' ? 'Work Completed' : `Status: ${workStatus}`,
             timestamp: new Date()
           }
         }

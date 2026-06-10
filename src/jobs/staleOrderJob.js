@@ -238,6 +238,95 @@ export const initStaleOrderJob = () => {
         console.log(`[StaleJob] Cleaned up ${ghostResult.modifiedCount} ghost experts (No heartbeat > 30m)`);
       }
 
+      // --- CASE 5: FORGOTTEN JOB ESCALATION (6h, 12h, 24h) ---
+      const thresholds = [
+        { hours: 24, phase: 3 },
+        { hours: 12, phase: 2 },
+        { hours: 6, phase: 1 }
+      ];
+
+      for (const t of thresholds) {
+        const timeLimit = new Date(now.getTime() - t.hours * 60 * 60000);
+        
+        const forgottenReminderQuery = {
+           $or: [
+             { forgottenReminderPhase: { $exists: false } },
+             { forgottenReminderPhase: null },
+             { forgottenReminderPhase: { $lt: t.phase } }
+           ]
+        };
+
+        // --- Standard Orders ---
+        const forgottenOrders = await Order.find({
+          orderStatus: 'Accepted',
+          work_status: { $in: ['Started', 'STARTED', 'In Progress', 'IN_PROGRESS'] },
+          updatedAt: { $lte: timeLimit },
+          ...forgottenReminderQuery
+        }).populate('assignedEngineer servicePlan');
+
+        for (const order of forgottenOrders) {
+          try {
+            const eng = order.assignedEngineer;
+            if (eng) {
+              await sendPushToEngineer(eng._id, {
+                title: 'Job Status Reminder',
+                body: `Hi ${eng.name}, your job for ${order.servicePlan?.name || 'the service'} has been in progress for over ${t.hours} hours. Please mark it as completed or update the status in the app.`,
+                data: { type: 'SYSTEM', orderId: order._id.toString() }
+              });
+            }
+            await Order.updateOne(
+              { _id: order._id },
+              { 
+                $set: { forgottenReminderPhase: t.phase },
+                $push: {
+                  tracking: {
+                    status: 'STALE_JOB_REMINDER',
+                    title: `${t.hours}h System Reminder Sent`,
+                    subTitle: `Engineer reminded to update the forgotten job status after ${t.hours} hours.`,
+                    timestamp: now
+                  }
+                }
+              }
+            );
+            console.log(`[StaleJob] ${t.hours}h Forgotten job reminder sent for Order ${order._id}`);
+          } catch (err) { console.error(`[StaleJob] Error sending ${t.hours}h reminder for Order ${order._id}:`, err); }
+        }
+
+        // --- Vendor Orders ---
+        const forgottenVendorOrders = await VendorOrder.find({
+          status: 'ACCEPTED',
+          work_status: { $in: ['Started', 'STARTED', 'IN_PROGRESS'] },
+          updated_at: { $lte: timeLimit },
+          ...forgottenReminderQuery
+        });
+
+        for (const vOrder of forgottenVendorOrders) {
+          try {
+            if (vOrder.assigned_engineer_id) {
+              await sendPushToEngineer(vOrder.assigned_engineer_id, {
+                title: 'Vendor Job Reminder',
+                body: `Hi, you started a vendor job over ${t.hours} hours ago but haven't marked it as completed. Please update the status in the app.`,
+                data: { type: 'SYSTEM', orderId: vOrder._id.toString() }
+              });
+            }
+            await VendorOrder.updateOne(
+              { _id: vOrder._id },
+              { 
+                $set: { forgottenReminderPhase: t.phase },
+                $push: {
+                  tracking: {
+                    status: 'STALE_JOB_REMINDER',
+                    title: `${t.hours}h System Reminder Sent`,
+                    subTitle: `Engineer reminded to update the forgotten job status after ${t.hours} hours.`,
+                    timestamp: now
+                  }
+                }
+              }
+            );
+            console.log(`[StaleJob] ${t.hours}h Forgotten job reminder sent for VendorOrder ${vOrder._id}`);
+          } catch (err) { console.error(`[StaleJob] Error sending ${t.hours}h reminder for VendorOrder ${vOrder._id}:`, err); }
+        }
+      }
 
     } catch (error) {
       console.error('[StaleOrderJob] Execution error:', error);
