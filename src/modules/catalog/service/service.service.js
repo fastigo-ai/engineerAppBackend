@@ -11,7 +11,7 @@ import {
 } from "./service.repository.js";
 import { Category } from "../category/category.model.js";
 import mongoose from 'mongoose';
-import { uploadToCloudinary } from "../../../utils/uploadToCloudinary.js";
+
 
 export const addServiceToPlanService = async (planType, serviceData) => {
   if (!planType || !serviceData) {
@@ -199,8 +199,7 @@ export const createCategoryService = async (data, file) => {
   let imageUrl = null;
 
   if (file) {
-    const result = await uploadToCloudinary(file.buffer, "categories");
-    imageUrl = result.url;
+    imageUrl = file.path;
   }
 
   const category = await createCategoryRepository({
@@ -216,8 +215,7 @@ export const createServicePlanService = async (data, file) => {
   let imageUrl = null;
 
   if (file) {
-    const result = await uploadToCloudinary(file.buffer, "servicePlans");
-    imageUrl = result.url;
+    imageUrl = file.path;
   }
 
   const servicePlan = await createServicePlanRepository({

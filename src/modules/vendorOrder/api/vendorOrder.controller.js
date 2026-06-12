@@ -10,7 +10,6 @@ import {
 import { getDistanceInMeters } from "../../../utils/distance.js";
 import { latLngToCell, gridDisk } from "h3-js";
 import { getIO } from "../../../config/socket.js";
-import { uploadToCloudinary } from "../../../utils/uploadToCloudinary.js";
 import axios from 'axios';
 
 const H3_RESOLUTION = 8;
@@ -426,25 +425,8 @@ export const completeOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: "Please upload at least one completion image." });
     }
 
-    // 2. Parallel Upload to Cloudinary
-    console.log(`[CompleteOrder] Uploading ${files.length} images to Cloudinary...`);
-    const uploadResults = await Promise.all(
-      files.map((file, index) => {
-        console.log(`[CompleteOrder] Starting upload for image ${index + 1}/${files.length}`);
-        return uploadToCloudinary(file.buffer, "order_completions")
-          .then(res => {
-            console.log(`[CompleteOrder] Image ${index + 1} uploaded successfully`);
-            return res;
-          })
-          .catch(err => {
-            console.error(`[CompleteOrder] Image ${index + 1} upload failed:`, err.message);
-            throw err;
-          });
-      })
-    );
-
-    // Extract only the URLs for the database
-    const imageUrls = uploadResults.map(result => result.url);
+    // The files are already uploaded to Cloudinary by multer-storage-cloudinary
+    const imageUrls = files.map(file => file.path);
 
     // 3. Update Order Status and Save Image URLs
     const order = await VendorOrder.findOneAndUpdate(

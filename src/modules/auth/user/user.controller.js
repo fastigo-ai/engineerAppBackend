@@ -2,7 +2,6 @@ import { admin } from "../../../config/firebase.js";
 import User from "./user.model.js";
 import jwt from "jsonwebtoken";
 import { syncDeviceToken } from "../../notification/core/notification.service.js";
-import { uploadToCloudinary } from "../../../utils/uploadToCloudinary.js";
 import cloudinary from "../../../config/cloudinary.js";
 import { userAuthService } from "./user.service.js";
 
@@ -289,7 +288,7 @@ export const uploadProfileImage = async (req, res) => {
       }
     }
 
-    const { url } = await uploadToCloudinary(req.file.buffer, "profile_images");
+    const url = req.file.path;
 
     user.profileImage = url;
     await user.save();

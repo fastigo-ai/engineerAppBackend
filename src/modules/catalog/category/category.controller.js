@@ -1,6 +1,5 @@
 import STATUS_CODES from '../../../constants/statusCodes.js';
 import { Category } from './category.model.js';
-import { uploadToCloudinary } from '../../../utils/uploadToCloudinary.js';
 import { createCategoryService } from "../service/service.service.js";
 
 export const createCategoryController = async (req, res) => {
@@ -83,7 +82,7 @@ export const updateCategoryImages = async (req, res) => {
 
     for (let i = 0; i < ids.length; i++) {
       const file = files[i];
-      const { url } = await uploadToCloudinary(file.buffer, "categories");
+      const url = file.path;
 
       const updated = await Category.findByIdAndUpdate(
         ids[i],
@@ -112,8 +111,7 @@ export const createCategory = async (req, res) => {
     let imageUrl = null;
 
     if (req.file) {
-      const uploadResult = await uploadToCloudinary(req.file.buffer, "categories");
-      imageUrl = uploadResult.url;
+      imageUrl = req.file.path;
     }
 
     const category = await Category.create({
@@ -164,8 +162,7 @@ export const editCategory = async (req, res) => {
     const updateData = {};
 
     if (file) {
-      const uploadResult = await uploadToCloudinary(file.buffer, "categories");
-      updateData.image = uploadResult.url;
+      updateData.image = file.path;
     }
 
     if (name !== undefined) updateData.name = name;

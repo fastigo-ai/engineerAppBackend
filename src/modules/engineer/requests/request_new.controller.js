@@ -9,7 +9,6 @@ import { getDistanceInMeters } from "../../../utils/distance.js";
 import razorpay from "../../../config/razorpay.js";
 import { notifyEngineersForOrder } from '../../notification/engineers/notificationEngineer.service.js';
 import { notifyBookingUpdate } from "../../notification/core/notification.facade.js";
-import { uploadToCloudinary } from "../../../utils/uploadToCloudinary.js";
 import { creditEngineerWallet } from "../../finance/wallet/wallet.service.js";
 
 
@@ -1426,12 +1425,8 @@ export const uploadOrderPhotos = async (req, res) => {
             return res.status(STATUS_CODES.FORBIDDEN).json({ success: false, message: "Not authorized." });
         }
 
-        // Parallel Upload to Cloudinary
-        const uploadResults = await Promise.all(
-            files.map((file) => uploadToCloudinary(file.buffer, "order_completions"))
-        );
-
-        const imageUrls = uploadResults.map(result => result.url);
+        // Files are already uploaded to Cloudinary by multer-storage-cloudinary
+        const imageUrls = files.map(file => file.path);
 
         // Update Order with Image URLs
         order.completion_images = imageUrls;

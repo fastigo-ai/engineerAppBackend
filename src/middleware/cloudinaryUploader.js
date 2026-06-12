@@ -1,5 +1,4 @@
 // middleware/cloudinaryUploader.js
-import { uploadToCloudinary } from '../utils/uploadToCloudinary.js';
 
 export const cloudinaryUploader = (folder = 'uploads') => {
   return async (req, res, next) => {
@@ -13,7 +12,7 @@ export const cloudinaryUploader = (folder = 'uploads') => {
         : Object.values(req.files).flat();
 
       for (const file of fileEntries) {
-        const { secure_url } = await uploadToCloudinary(file.path, folder);
+        const secure_url = file.path;
 
         // Attach only the public URL to req.body
         if (!req.body[file.fieldname]) {

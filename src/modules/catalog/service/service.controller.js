@@ -11,7 +11,7 @@ import {
   getAllCategoryService,
 } from './service.service.js';
 import { Category } from "../category/category.model.js"
-import { uploadToCloudinary } from '../../../utils/uploadToCloudinary.js';
+
 import { ServicePlan } from './service.model.js';
 import { ServicePlans } from '../plan/plan.model.js';
 import { Order } from '../../userOrder/core/userOrder.model.js';
@@ -396,7 +396,7 @@ export const updateCategoryImages = async (req, res) => {
 
     for (let i = 0; i < ids.length; i++) {
       const file = files[i];
-      const { url } = await uploadToCloudinary(file.buffer, "categories");
+      const url = file.path;
 
       const updated = await Category.findByIdAndUpdate(
         ids[i],
@@ -433,7 +433,7 @@ export const updateServicePlanImages = async (req, res) => {
 
     for (let i = 0; i < ids.length; i++) {
       const file = files[i];
-      const { url } = await uploadToCloudinary(file.buffer, "servicePlans");
+      const url = file.path;
 
       const updated = await ServicePlan.findByIdAndUpdate(
         ids[i],
@@ -462,10 +462,9 @@ export const createCategory = async (req, res) => {
 
     let imageUrl = null;
 
-    // Upload image to Cloudinary using the utility function
+    // The image is already uploaded by multer-storage-cloudinary
     if (req.file) {
-      const uploadResult = await uploadToCloudinary(req.file.buffer, "categories");
-      imageUrl = uploadResult.url;
+      imageUrl = req.file.path;
     }
 
     const category = await Category.create({
@@ -499,10 +498,9 @@ export const createServicePlan = async (req, res) => {
 
     let imageUrl = null;
 
-    // Upload image to Cloudinary using the utility function
+    // The image is already uploaded by multer-storage-cloudinary
     if (req.file) {
-      const uploadResult = await uploadToCloudinary(req.file.buffer, "servicePlans");
-      imageUrl = uploadResult.url;
+      imageUrl = req.file.path;
     }
 
     const parsedFeatures = features ? JSON.parse(features) : [];
@@ -935,8 +933,7 @@ export const editServicePlan = async (req, res) => {
 
     // Only update image if a new file is provided
     if (file) {
-      const uploadResult = await uploadToCloudinary(file.buffer, "servicePlans");
-      updateData.image = uploadResult.url;
+      updateData.image = file.path;
     }
     // If no file provided, image field is not included in updateData, so existing image is preserved
 
@@ -1008,8 +1005,7 @@ export const editCategory = async (req, res) => {
 
     // Handle image upload if file is provided
     if (file) {
-      const uploadResult = await uploadToCloudinary(file.buffer, "categories");
-      updateData.image = uploadResult.url;
+      updateData.image = file.path;
     }
 
     // Add fields to update only if they are provided in request body
