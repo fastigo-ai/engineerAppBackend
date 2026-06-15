@@ -692,17 +692,22 @@ export const getCompletedVendorOrders = async (req, res) => {
 
 
 
-export const toggleVendorOrderHoldWebhook = async (req, res) => {
+export const 
+toggleVendorOrderHoldWebhook = async (req, res) => {
   try {
-    const { call_id } = req.body;
+    const { call_id, vendor_id } = req.body;
 
-    if (!call_id) {
-      return res.status(400).json({ success: false, message: 'call_id is required' });
+    if (!call_id || !vendor_id) {
+      return res.status(400).json({ success: false, message: 'call_id and vendor_id are required' });
     }
 
     const order = await VendorOrder.findOne({ call_id });
     if (!order) {
       return res.status(404).json({ success: false, message: 'Vendor Order not found' });
+    }
+
+    if (order.vendor_id !== vendor_id) {
+      return res.status(403).json({ success: false, message: 'Unauthorized: Vendor ID mismatch' });
     }
 
     // Check if the order can be put on hold (engineer has not started)
@@ -750,15 +755,19 @@ export const toggleVendorOrderHoldWebhook = async (req, res) => {
 
 export const redispatchVendorOrderWebhook = async (req, res) => {
   try {
-    const { call_id } = req.body;
+    const { call_id, vendor_id } = req.body;
 
-    if (!call_id) {
-      return res.status(400).json({ success: false, message: 'call_id is required' });
+    if (!call_id || !vendor_id) {
+      return res.status(400).json({ success: false, message: 'call_id and vendor_id are required' });
     }
 
     const order = await VendorOrder.findOne({ call_id });
     if (!order) {
       return res.status(404).json({ success: false, message: 'Vendor Order not found' });
+    }
+
+    if (order.vendor_id !== vendor_id) {
+      return res.status(403).json({ success: false, message: 'Unauthorized: Vendor ID mismatch' });
     }
 
     // Check if the order is already accepted by an engineer
