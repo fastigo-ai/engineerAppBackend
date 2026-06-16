@@ -11,7 +11,11 @@ import cookieParser from 'cookie-parser';
 import config from './config/config.js';
 import { initSocket } from './config/socket.js';
 import { createServer } from 'http';
-import logger from './middleware/logger.js';
+import pinoHttp from 'pino-http';
+import { logger } from './config/logger.js';
+import { v4 as uuidv4 } from 'uuid';
+import promBundle from 'express-prom-bundle';
+import { client } from './config/metrics.js';
 import catalogRoutes from './modules/catalog/index.js';
 import { userAuthRoutes as authRoutes, engineerAuthRoutes, adminAuthRoutes } from './modules/auth/index.js';
 import paymentRoutes from "./modules/finance/payments/payment.routes.js";
@@ -53,7 +57,49 @@ app.use(cors({
 app.use(cookieParser());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use(logger);
+
+// Correlation ID Middleware
+app.use((req, res, next) => {
+  req.id = req.headers['x-request-id'] || uuidv4();
+  res.setHeader('x-request-id', req.id);
+  next();
+});
+
+// Pino HTTP Logging
+app.use(pinoHttp({
+  logger,
+  genReqId: (req) => req.id
+}));
+
+// Prometheus HTTP Metrics
+app.use(
+  promBundle({
+    includeMethod: true,
+    includePath: true,
+    includeStatusCode: true,
+    promClient: {
+      collectDefaultMetrics: {}
+    }
+  })
+);
+
+// Secure Metrics Endpoint
+const authenticateMetrics = (req, res, next) => {
+  const token = req.headers.authorization;
+  if (token !== `Bearer ${process.env.METRICS_TOKEN}`) {
+    return res.status(401).send("Unauthorized");
+  }
+  next();
+};
+
+app.get("/internal/metrics", authenticateMetrics, async (req, res) => {
+  try {
+    res.set("Content-Type", client.register.contentType);
+    res.send(await client.register.metrics());
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
 app.use((req, res, next) => {
   res.setTimeout(300000, () => {
     console.log(`!!! [TIMEOUT] Request to ${req.url} timed out after 5 minutes`);

@@ -11,6 +11,15 @@ import { getDistanceInMeters } from "../../../utils/distance.js";
 import { latLngToCell, gridDisk } from "h3-js";
 import { getIO } from "../../../config/socket.js";
 import axios from 'axios';
+import { logger } from "../../../config/logger.js";
+import { 
+  vendorOrdersCreated, 
+  engineerMatchingSuccess, 
+  engineerMatchingFailed,
+  vendorOrdersCompleted,
+  vendorOrdersCancelled,
+  vendorOrdersFailed
+} from "../../../config/metrics.js";
 
 const H3_RESOLUTION = 8;
 const SEARCH_RING_SIZE = 30;
@@ -53,7 +62,12 @@ export const createVendorRequests = async (req, res) => {
   try {
     const { vendor_id, call_id, location } = req.body;
 
-    console.log("All Order Is", req.body);
+    logger.info({
+      event: "ORDER_CREATED_REQUEST",
+      vendorId: vendor_id,
+      callId: call_id,
+      requestId: req.id
+    });
 
     if (!vendor_id || !call_id) {
       return res.status(400).json({
@@ -75,13 +89,30 @@ export const createVendorRequests = async (req, res) => {
 
     const result = await createAndMatchVendorOrder(req.body);
 
+    vendorOrdersCreated.inc();
+
     if (!result.success) {
+      engineerMatchingFailed.inc();
+      logger.info({
+        event: "ORDER_MATCH_FAILED",
+        orderId: result.order?._id,
+        reason: "No engineers available",
+        requestId: req.id
+      });
       return res.status(200).json({
         success: false,
         message: "No engineers available",
         orderId: result.order._id
       });
     }
+
+    engineerMatchingSuccess.inc();
+    logger.info({
+      event: "ORDER_MATCH_SUCCESS",
+      orderId: result.order._id,
+      totalFound: result.matchedEngineers.length,
+      requestId: req.id
+    });
 
     return res.status(200).json({
       success: true,
@@ -107,13 +138,16 @@ export const acceptVendorOrder = async (req, res) => {
     const { orderId, distance } = req.body;
     const engineerId = req.user.id;
 
-    console.log('=== ACCEPT VENDOR ORDER ===');
-    console.log('Order ID:', orderId);
-    console.log('Engineer ID:', engineerId);
-    console.log('Distance:', distance);
+    logger.info({
+      event: "ORDER_ACCEPTED",
+      orderId,
+      engineerId,
+      distance,
+      requestId: req.id
+    });
 
     if (!orderId) {
-      console.log('❌ Missing orderId in request body');
+      logger.error({ event: "ORDER_ACCEPT_FAILED", reason: "Missing orderId", requestId: req.id });
       return res.status(400).json({
         success: false,
         message: "OrderId is required"
@@ -411,6 +445,9 @@ export const updateVendorOrderWorkStatus = async (req, res) => {
 };
 
 export const completeOrder = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const { orderId } = req.body;
     const engineerId = req.user.id;
@@ -420,8 +457,14 @@ export const completeOrder = async (req, res) => {
     console.log('>>> [BACKEND] Files received count:', files?.length || 0);
 
     // 1. Basic Validation
-    if (!orderId) return res.status(400).json({ success: false, message: "Order ID is required." });
+    if (!orderId) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: "Order ID is required." });
+    }
     if (!files || files.length === 0) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({ success: false, message: "Please upload at least one completion image." });
     }
 
@@ -443,10 +486,12 @@ export const completeOrder = async (req, res) => {
           completion_images: imageUrls
         }
       },
-      { new: true }
+      { new: true, session }
     );
 
     if (!order) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({
         success: false,
         message: "Order not found or you aren't authorized to complete it."
@@ -454,7 +499,7 @@ export const completeOrder = async (req, res) => {
     }
 
     // 4. Update Engineer Availability
-    await Engineer.findByIdAndUpdate(engineerId, { isAvailable: true });
+    await Engineer.findByIdAndUpdate(engineerId, { isAvailable: true }, { session });
 
     // --- NEW: CREDIT WALLET FOR VENDOR WORK ---
     try {
@@ -464,14 +509,26 @@ export const completeOrder = async (req, res) => {
           engineerId,
           amount: order.order_price,
           orderId: order._id.toString(),
-          category: 'earning'
+          type: 'ORDER_EARNING',
+          transactionType: 'CREDIT',
+          earningStatus: 'PENDING',
+          externalSession: session
         });
         console.log(`Credited ₹${order.order_price} to wallet for vendor job ${order._id}`);
       }
     } catch (creditError) {
       console.error("Failed to credit wallet for vendor job:", creditError);
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(500).json({
+        success: false,
+        message: "Failed to credit wallet. Order completion aborted."
+      });
     }
     // ------------------------------------------
+
+    await session.commitTransaction();
+    session.endSession();
 
     // 5. Notify Vendor Webhook (Standard Payload)
     const webhookPayload = {
@@ -483,9 +540,16 @@ export const completeOrder = async (req, res) => {
 
     // Fire-and-forget or await depending on vendor reliability
     axios.post("https://door2fyvendor-gv4g4.ondigitalocean.app/calls/engineer/assignment-result", webhookPayload)
-      .catch(err => console.error("Vendor Webhook Error:", err.message));
+      .catch(err => logger.error({ event: "VENDOR_WEBHOOK_ERROR", error: err.message, requestId: req.id }));
 
-    console.log('>>> [BACKEND] Order completed successfully for ID:', orderId);
+    vendorOrdersCompleted.inc();
+    logger.info({
+      event: "ORDER_COMPLETED",
+      orderId,
+      engineerId: engineer_id,
+      requestId: req.id
+    });
+
     return res.status(200).json({
       success: true,
       message: "Order completed successfully.",

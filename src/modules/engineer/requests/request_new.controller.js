@@ -1092,19 +1092,7 @@ export const updateWorkStatus = async (req, res) => {
                     }).catch(err => console.error('[RequestController] Completion notification failed:', err));
                 }
 
-                try {
-                    const payoutAmount = order.totalAmount || order.amount || 0;
-                    if (payoutAmount > 0) {
-                        await creditEngineerWallet({
-                            engineerId,
-                            amount: payoutAmount,
-                            orderId: order._id.toString(),
-                            category: 'earning'
-                        });
-                    }
-                } catch (creditError) {
-                    console.error("Failed to credit wallet:", creditError);
-                }
+                // We will handle wallet credit later inside the transaction
             } else if (work_status === 'Cancelled') {
                 order.orderStatus = 'Cancelled';
             }
@@ -1123,8 +1111,34 @@ export const updateWorkStatus = async (req, res) => {
                 }).catch(err => console.error('[RequestController] Service start notification failed:', err));
             }
 
-            // Single final save for all changes (status, tracking, OTP)
-            await order.save();
+            // Single final save for all changes (status, tracking, OTP) inside a transaction
+            const session = await mongoose.startSession();
+            session.startTransaction();
+            try {
+                await order.save({ session });
+                
+                if (work_status === 'Completed') {
+                    const payoutAmount = order.totalAmount || order.amount || 0;
+                    if (payoutAmount > 0) {
+                        await creditEngineerWallet({
+                            engineerId,
+                            amount: payoutAmount,
+                            orderId: order._id.toString(),
+                            type: 'ORDER_EARNING',
+                            transactionType: 'CREDIT',
+                            earningStatus: 'PENDING',
+                            externalSession: session
+                        });
+                    }
+                }
+                
+                await session.commitTransaction();
+            } catch (txError) {
+                await session.abortTransaction();
+                throw txError;
+            } finally {
+                session.endSession();
+            }
 
             // Normalize for frontend compatibility
             const orderData = order.toObject ? order.toObject() : order;
@@ -1177,30 +1191,40 @@ export const updateWorkStatus = async (req, res) => {
             };
         }
 
-        const vendorOrder = await vendorOrderModal.findOneAndUpdate(
-            { _id: id, assigned_engineer_id: engineerId },
-            vendorUpdate,
-            { new: true }
-        );
+        const session = await mongoose.startSession();
+        session.startTransaction();
+        let vendorOrder;
+        
+        try {
+            vendorOrder = await vendorOrderModal.findOneAndUpdate(
+                { _id: id, assigned_engineer_id: engineerId },
+                vendorUpdate,
+                { new: true, session }
+            );
 
-        if (vendorOrder) {
-            if (work_status === 'Completed') {
-                await vendorOrderModal.findByIdAndUpdate(id, { status: 'COMPLETED' });
-                try {
-                    const { creditEngineerWallet } = await import('../../finance/wallet/wallet.service.js');
-                    const payoutAmount = vendorOrder.totalAmount || vendorOrder.order_price || 0;
-                    if (payoutAmount > 0) {
-                        await creditEngineerWallet({
-                            engineerId,
-                            amount: payoutAmount,
-                            orderId: vendorOrder._id.toString(),
-                            category: 'earning'
-                        });
-                    }
-                } catch (creditError) {
-                    console.error("Failed to credit wallet for vendor:", creditError);
+            if (vendorOrder && work_status === 'Completed') {
+                await vendorOrderModal.findByIdAndUpdate(id, { status: 'COMPLETED' }, { session });
+                
+                const payoutAmount = vendorOrder.totalAmount || vendorOrder.order_price || 0;
+                if (payoutAmount > 0) {
+                    await creditEngineerWallet({
+                        engineerId,
+                        amount: payoutAmount,
+                        orderId: vendorOrder._id.toString(),
+                        type: 'ORDER_EARNING',
+                        transactionType: 'CREDIT',
+                        earningStatus: 'PENDING',
+                        externalSession: session
+                    });
                 }
             }
+            await session.commitTransaction();
+        } catch (txError) {
+            await session.abortTransaction();
+            throw txError;
+        } finally {
+            session.endSession();
+        }
 
             return res.status(STATUS_CODES.SUCCESS).json({
                 success: true,

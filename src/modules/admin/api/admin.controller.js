@@ -6,6 +6,7 @@ import { WithdrawalRequest } from "../../finance/wallet/WithdrawalRequest.model.
 import { Wallet } from "../../finance/wallet/Wallet.model.js";
 import { Ledger } from "../../finance/ledger/Ledger.model.js";
 import { BankAccount } from "../../engineer/finance/BankAccount.model.js";
+import { SystemSettings } from "./SystemSettings.model.js";
 import Notification from '../../notification/core/Notification.model.js';
 import * as payoutService from "../../finance/payouts/payout.service.js";
 import { notifyEngineersForOrder } from '../../notification/engineers/notificationEngineer.service.js';
@@ -18,6 +19,53 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+/**
+ * Get System Settings
+ */
+export const getSettings = async (req, res) => {
+  try {
+    let settings = await SystemSettings.findOne();
+    if (!settings) {
+      settings = await SystemSettings.create({});
+    }
+    return res.status(STATUS_CODES.SUCCESS).json({
+      success: true,
+      data: settings
+    });
+  } catch (error) {
+    console.error('[AdminController] Get settings error:', error);
+    return res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to fetch settings'
+    });
+  }
+};
+
+/**
+ * Update System Settings
+ */
+export const updateSettings = async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    const settings = await SystemSettings.findOneAndUpdate(
+      {},
+      { ...req.body, updatedBy: adminId },
+      { new: true, upsert: true }
+    );
+    return res.status(STATUS_CODES.SUCCESS).json({
+      success: true,
+      message: 'Settings updated successfully',
+      data: settings
+    });
+  } catch (error) {
+    console.error('[AdminController] Update settings error:', error);
+    return res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to update settings'
+    });
+  }
+};
 
 /**
  * Get all orders that are pending a refund

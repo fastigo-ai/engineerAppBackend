@@ -7,14 +7,14 @@ const LedgerSchema = new mongoose.Schema({
         required: true,
         index: true
     },
-    type: {
+    transactionType: {
         type: String,
-        enum: ['credit', 'debit'],
+        enum: ['CREDIT', 'DEBIT'],
         required: true
     },
-    category: {
+    type: {
         type: String,
-        enum: ['earning', 'withdrawal', 'bonus', 'penalty'],
+        enum: ['ORDER_EARNING', 'WITHDRAWAL_SUCCESS', 'ADJUSTMENT', 'BONUS', 'PENALTY'],
         required: true
     },
     amount: {
@@ -28,6 +28,12 @@ const LedgerSchema = new mongoose.Schema({
         default: 'pending',
         index: true
     },
+    earningStatus: {
+        type: String,
+        enum: ['PENDING', 'AVAILABLE', 'SETTLED'],
+        default: 'PENDING',
+        index: true
+    },
     referenceId: {
         type: String,
         required: true
@@ -35,7 +41,6 @@ const LedgerSchema = new mongoose.Schema({
     idempotencyKey: {
         type: String,
         required: true,
-        unique: true,
         index: true
     }
 }, {
@@ -44,5 +49,8 @@ const LedgerSchema = new mongoose.Schema({
 
 // Compound index for status and createdAt for auditing
 LedgerSchema.index({ status: 1, createdAt: -1 });
+
+// Unique compound index to prevent duplicate credits for the same order and type
+LedgerSchema.index({ referenceId: 1, type: 1 }, { unique: true });
 
 export const Ledger = mongoose.model('Ledger', LedgerSchema);

@@ -3,10 +3,12 @@ import { Wallet } from "../../finance/wallet/Wallet.model.js";
 import { Ledger } from "../../finance/ledger/Ledger.model.js";
 import { BankAccount } from '../finance/BankAccount.model.js';
 import { WithdrawalRequest } from "../../finance/wallet/WithdrawalRequest.model.js";
+import { SystemSettings } from "../../admin/api/SystemSettings.model.js";
 import { Order } from '../../userOrder/core/userOrder.model.js';
 import * as payoutService from "../../finance/payouts/payout.service.js";
 import { v4 as uuidv4 } from 'uuid';
 import STATUS_CODES from '../../../constants/statusCodes.js';
+import { logger } from "../../../config/logger.js";
 
 /**
  * Request a withdrawal from wallet
@@ -20,10 +22,31 @@ export const requestWithdrawal = async (req, res) => {
         const engineerId = req.user.id;
         const { amount } = req.body;
 
-        if (!amount || amount < 100) {
+        // Fetch Dynamic Settings
+        let settings = await SystemSettings.findOne().session(session);
+        if (!settings) {
+            settings = {
+                platformCommissionRate: 0.25,
+                minimumWithdrawalAmount: 500,
+                maximumWithdrawalAmount: 50000
+            };
+        }
+
+        if (!amount || amount < settings.minimumWithdrawalAmount) {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(STATUS_CODES.BAD_REQUEST).json({
                 success: false,
-                message: "Minimum withdrawal amount is ₹100"
+                message: `Minimum withdrawal amount is ₹${settings.minimumWithdrawalAmount}`
+            });
+        }
+
+        if (amount > settings.maximumWithdrawalAmount) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(STATUS_CODES.BAD_REQUEST).json({
+                success: false,
+                message: `Maximum withdrawal amount is ₹${settings.maximumWithdrawalAmount}`
             });
         }
 
@@ -50,12 +73,20 @@ export const requestWithdrawal = async (req, res) => {
         const idempotencyKey = uuidv4();
         const requestId = new mongoose.Types.ObjectId();
 
-        // 3. COMMISSION LOGIC (25% Platform, 75% Engineer)
-        const commission = amount * 0.25;
+        // 3. DYNAMIC COMMISSION LOGIC
+        const commissionRate = settings.platformCommissionRate;
+        const commission = amount * commissionRate;
         const netPayout = amount - commission;
 
-        console.log(`Withdrawal Request - Gross: ${amount}, Commission: ${commission}, Net Payout: ${netPayout}`);
-
+        logger.info({
+            event: "WITHDRAWAL_REQUESTED",
+            engineerId,
+            grossAmount: amount,
+            commissionRate,
+            commissionFee: commission,
+            netPayout,
+            requestId: req.id
+        });
 
         // 4. INTERNAL TRANSACTIONAL ACCOUNTING
         // Move Gross amount from available to locked
@@ -68,23 +99,14 @@ export const requestWithdrawal = async (req, res) => {
             _id: requestId,
             engineerId,
             amount,           // Total requested (Gross)
+            platformCommissionRateApplied: commissionRate, // Historical Snapshot
             commission,       // Platform Fee
             netAmount: netPayout, // What engineer gets
             status: 'requested'
         });
         await withdrawal.save({ session });
 
-        // Create Ledger Entry (debit, pending)
-        const ledger = new Ledger({
-            engineerId,
-            type: 'debit',
-            category: 'withdrawal',
-            amount, // Full amount including commission
-            status: 'pending',
-            referenceId: requestId.toString(),
-            idempotencyKey
-        });
-        await ledger.save({ session });
+        // NOTE: Ledger DEBIT entry is ONLY created when admin approves and bank payout is successful.
 
         // COMMIT TRANSACTION
         await session.commitTransaction();
@@ -101,7 +123,7 @@ export const requestWithdrawal = async (req, res) => {
             await session.abortTransaction();
         }
         session.endSession();
-        console.error("Withdrawal Controller Error:", error);
+        logger.error({ event: "WITHDRAWAL_REQUEST_ERROR", engineerId, error: error.message, requestId: req.id });
         return res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({
             success: false,
             message: error.message
@@ -140,7 +162,7 @@ export const getWalletBalance = async (req, res) => {
             // D. Get existing success credits in Ledger
             const existingLedgerEntries = await Ledger.find({
                 engineerId,
-                type: 'credit',
+                transactionType: 'CREDIT',
                 status: 'success'
             }).select('referenceId').lean();
             const existingIds = new Set(existingLedgerEntries.map(l => l.referenceId?.toString()));
@@ -149,17 +171,25 @@ export const getWalletBalance = async (req, res) => {
             const { creditEngineerWallet } = await import('../../finance/wallet/wallet.service.js');
             for (const cred of potentialCredits) {
                 if (!existingIds.has(cred.id.toString()) && cred.amount > 0) {
-                    console.log(`Syncing missing credit for order ${cred.id}: ₹${cred.amount}`);
+                    logger.info({
+                        event: "LEDGER_SYNC",
+                        engineerId,
+                        orderId: cred.id.toString(),
+                        amount: cred.amount,
+                        requestId: req.id
+                    });
                     await creditEngineerWallet({
                         engineerId,
                         amount: cred.amount,
                         orderId: cred.id.toString(),
-                        category: 'earning'
+                        type: 'ORDER_EARNING',
+                        transactionType: 'CREDIT',
+                        earningStatus: 'PENDING'
                     });
                 }
             }
         } catch (syncError) {
-            console.error("Wallet Sync Error:", syncError);
+            logger.error({ event: "WALLET_SYNC_ERROR", engineerId, error: syncError.message, requestId: req.id });
             // Don't block the balance return if sync fails
         }
 
@@ -175,21 +205,26 @@ export const getWalletBalance = async (req, res) => {
             { $match: { engineerId: new mongoose.Types.ObjectId(engineerId), status: 'success' } },
             { 
                 $group: {
-                    _id: "$type",
+                    _id: "$transactionType",
                     total: { $sum: "$amount" }
                 }
             }
         ]);
 
-        const credits = ledgerAggregation.find(i => i._id === 'credit')?.total || 0;
-        const debits = ledgerAggregation.find(i => i._id === 'debit')?.total || 0;
+        const credits = ledgerAggregation.find(i => i._id === 'CREDIT')?.total || 0;
+        const debits = ledgerAggregation.find(i => i._id === 'DEBIT')?.total || 0;
         const actualBalance = credits - debits;
 
         // Auto-reconcile balance if discrepancy exists
         if (wallet.availableBalance !== actualBalance) {
             wallet.availableBalance = actualBalance;
             await wallet.save();
-            console.log(`Reconciled wallet balance for engineer ${engineerId} to ₹${actualBalance}`);
+            logger.info({
+                event: "WALLET_RECONCILED",
+                engineerId,
+                actualBalance,
+                requestId: req.id
+            });
         }
 
         return res.status(STATUS_CODES.SUCCESS).json({
@@ -219,9 +254,30 @@ export const getTransactionHistory = async (req, res) => {
             .sort({ createdAt: -1 })
             .limit(50);
 
+        // Backward Compatibility Mapping for the Engineer App Frontend
+        const mappedTransactions = transactions.map(tx => {
+            const txObj = tx.toObject ? tx.toObject() : tx;
+            
+            // Map the new fields back to what the frontend expects
+            if (txObj.transactionType) {
+                txObj.type = txObj.transactionType.toLowerCase(); // 'CREDIT' -> 'credit'
+                
+                // Map the new 'type' to the old 'category'
+                const typeMap = {
+                    'ORDER_EARNING': 'earning',
+                    'WITHDRAWAL_SUCCESS': 'withdrawal',
+                    'BONUS': 'bonus',
+                    'PENALTY': 'penalty',
+                    'ADJUSTMENT': 'earning'
+                };
+                txObj.category = typeMap[txObj.type] || 'earning';
+            }
+            return txObj;
+        });
+
         return res.status(STATUS_CODES.SUCCESS).json({
             success: true,
-            data: transactions
+            data: mappedTransactions
         });
     } catch (error) {
         return res.status(STATUS_CODES.INTERNAL_SERVER_ERROR).json({

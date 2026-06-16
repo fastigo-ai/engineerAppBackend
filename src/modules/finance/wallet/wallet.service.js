@@ -10,47 +10,61 @@ import { v4 as uuidv4 } from 'uuid';
  * @param {string} params.engineerId - The engineer's ID
  * @param {number} params.amount - The full amount to credit
  * @param {string} params.orderId - The associated order ID
- * @param {string} params.category - 'earning', 'bonus', etc.
+ * @param {string} params.type - Ledger entry type (e.g. 'ORDER_EARNING')
+ * @param {string} params.transactionType - 'CREDIT' or 'DEBIT'
+ * @param {string} params.earningStatus - 'PENDING', 'AVAILABLE', 'SETTLED'
+ * @param {Object} params.externalSession - Optional Mongoose session for distributed transactions
  */
-export const creditEngineerWallet = async ({ engineerId, amount, orderId, category = 'earning' }) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
+export const creditEngineerWallet = async ({ engineerId, amount, orderId, type = 'ORDER_EARNING', transactionType = 'CREDIT', earningStatus = 'PENDING', externalSession = null }) => {
+    const session = externalSession || await mongoose.startSession();
+    if (!externalSession) session.startTransaction();
 
     try {
         console.log(`Crediting Wallet for Engineer: ${engineerId}, Amount: ${amount}, Order: ${orderId}`);
 
-        // 1. Find or Create Wallet
-        let wallet = await Wallet.findOne({ engineerId }).session(session);
-        if (!wallet) {
-            wallet = new Wallet({ engineerId, availableBalance: 0, lockedBalance: 0 });
+        // 1. Prepare Atomic Update
+        const incUpdate = { 
+            availableBalance: transactionType === 'CREDIT' ? amount : -amount
+        };
+        
+        // Only increment lifetime earnings for actual new earnings
+        if (transactionType === 'CREDIT' && (type === 'ORDER_EARNING' || type === 'BONUS')) {
+            incUpdate.lifetimeEarnings = amount;
         }
 
-        // 2. Update Balance (100% Gross)
-        wallet.availableBalance += amount;
-        await wallet.save({ session });
+        // 2. Update Wallet Atomically
+        let wallet = await Wallet.findOneAndUpdate(
+            { engineerId },
+            { $inc: incUpdate },
+            { new: true, upsert: true, session }
+        );
 
-        // 3. Create Ledger Entry (Success)
+        // 3. Create Immutable Ledger Entry
         const ledger = new Ledger({
             engineerId,
-            type: 'credit',
-            category,
+            transactionType,
+            type,
             amount,
             status: 'success',
-            referenceId: orderId,
-            idempotencyKey: uuidv4() // Unique key for this credit
+            earningStatus,
+            referenceId: orderId
         });
         await ledger.save({ session });
 
-        await session.commitTransaction();
-        session.endSession();
+        if (!externalSession) {
+            await session.commitTransaction();
+            session.endSession();
+        }
         
         return { success: true, wallet };
 
     } catch (error) {
-        if (session.inTransaction()) {
-            await session.abortTransaction();
+        if (!externalSession) {
+            if (session.inTransaction()) {
+                await session.abortTransaction();
+            }
+            session.endSession();
         }
-        session.endSession();
         console.error("Credit Wallet Error:", error);
         throw error;
     }

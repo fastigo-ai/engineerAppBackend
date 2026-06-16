@@ -10,7 +10,11 @@ const WithdrawalRequestSchema = new mongoose.Schema({
     amount: {
         type: Number,
         required: true,
-        min: 100 // Min withdrawal limit
+        min: 0 
+    },
+    platformCommissionRateApplied: {
+        type: Number,
+        default: 0
     },
     commission: {
         type: Number,

@@ -60,6 +60,8 @@ router.post('/payouts/reject/:id', adminController.rejectPayout);
 /**
  * Dashboard Analytics
  */
+router.get('/settings', adminController.getSettings);
+router.put('/settings', adminController.updateSettings);
 router.get('/dashboard/stats', adminController.getDashboardStats);
 router.get('/wallets', adminController.getAllWallets);
 router.get('/ledger', adminController.getLedger);
