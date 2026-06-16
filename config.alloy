@@ -1,0 +1,26 @@
+// config.alloy
+
+// 1. Scrape the local Node.js application (using the internal Docker network name 'backend')
+prometheus.scrape "nodejs_app" {
+  targets = [{"__address__" = "backend:8080"}]
+  metrics_path = "/internal/metrics"
+  
+  // Gets past your Node.js security using environment variables
+  bearer_token = sys.env("METRICS_TOKEN")
+
+  // Forwards the data to the cloud
+  forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+// 2. Push securely to Grafana Cloud
+prometheus.remote_write "grafana_cloud" {
+  endpoint {
+    // Your specific Grafana Cloud region (ap-south-1)
+    url = "https://prometheus-prod-ap-south-1.grafana.net/api/prom/push"
+    
+    basic_auth {
+      username = sys.env("GRAFANA_STACK_ID")
+      password = sys.env("GRAFANA_CLOUD_TOKEN_RAW")
+    }
+  }
+}

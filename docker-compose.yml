@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: engineer-backend:latest
+    container_name: fastigo-backend
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - fastigo-net
+
+  alloy:
+    image: grafana/alloy:latest
+    container_name: fastigo-alloy
+    restart: unless-stopped
+    depends_on:
+      - backend
+    volumes:
+      - ./config.alloy:/etc/alloy/config.alloy:ro
+    command:
+      - run
+      - /etc/alloy/config.alloy
+    env_file:
+      - .env
+    networks:
+      - fastigo-net
+
+networks:
+  fastigo-net:
+    driver: bridge
