@@ -6,7 +6,7 @@ prometheus.scrape "nodejs_app" {
   metrics_path = "/internal/metrics"
   
   // Gets past your Node.js security using environment variables
-  bearer_token = sys.env("METRICS_TOKEN")
+  bearer_token = env("METRICS_TOKEN")
 
   // Forwards the data to the cloud
   forward_to = [prometheus.remote_write.grafana_cloud.receiver]
@@ -19,8 +19,8 @@ prometheus.remote_write "grafana_cloud" {
     url = "https://prometheus-prod-ap-south-1.grafana.net/api/prom/push"
     
     basic_auth {
-      username = sys.env("GRAFANA_STACK_ID")
-      password = sys.env("GRAFANA_CLOUD_TOKEN_RAW")
+      username = env("GRAFANA_STACK_ID")
+      password = env("GRAFANA_CLOUD_TOKEN_RAW")
     }
   }
 }
