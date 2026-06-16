@@ -23,8 +23,15 @@ RUN npm prune --production
 # Stage 2: Production Runner
 FROM node:22-alpine
 
-# Install dumb-init for proper process management and signal handling
-RUN apk add --no-cache dumb-init
+# Install dumb-init and utilities for Alloy
+RUN apk add --no-cache dumb-init wget unzip
+
+# Download Grafana Alloy binary directly into the container
+RUN wget https://github.com/grafana/alloy/releases/download/v1.0.0/alloy-linux-amd64.zip && \
+    unzip alloy-linux-amd64.zip && \
+    mv alloy-linux-amd64 /usr/local/bin/alloy && \
+    chmod +x /usr/local/bin/alloy && \
+    rm alloy-linux-amd64.zip
 
 # Set working directory
 WORKDIR /app
@@ -37,6 +44,13 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/src ./src
 
+# Copy the Alloy config and our new startup script
+COPY --from=builder /app/config.alloy ./config.alloy
+COPY --from=builder /app/start.sh ./start.sh
+
+# Ensure the script is executable
+RUN chmod +x ./start.sh
+
 # Create a non-root user for security
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 RUN chown -R appuser:appgroup /app
@@ -48,5 +62,5 @@ EXPOSE 8080
 # Use dumb-init as the entrypoint
 ENTRYPOINT ["dumb-init", "--"]
 
-# Start the application
-CMD ["npm", "start"]
+# Start both Alloy and the Node app using the entrypoint script
+CMD ["./start.sh"]

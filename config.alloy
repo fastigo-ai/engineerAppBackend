@@ -1,8 +1,8 @@
 // config.alloy
 
-// 1. Scrape the local Node.js application (using the internal Docker network name 'backend')
+// 1. Scrape the local Node.js application (now running in the exact same container)
 prometheus.scrape "nodejs_app" {
-  targets = [{"__address__" = "backend:8080"}]
+  targets = [{"__address__" = "localhost:8080"}]
   metrics_path = "/internal/metrics"
   
   // Gets past your Node.js security using environment variables
