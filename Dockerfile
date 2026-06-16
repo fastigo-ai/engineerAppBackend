@@ -23,8 +23,8 @@ RUN npm prune --production
 # Stage 2: Production Runner
 FROM node:22-alpine
 
-# Install dumb-init and utilities for Alloy
-RUN apk add --no-cache dumb-init wget unzip
+# Install dumb-init and utilities for Alloy (including gcompat for glibc binaries)
+RUN apk add --no-cache dumb-init wget unzip gcompat
 
 # Download Grafana Alloy binary directly into the container
 RUN wget https://github.com/grafana/alloy/releases/download/v1.0.0/alloy-linux-amd64.zip && \
