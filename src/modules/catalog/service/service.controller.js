@@ -1508,7 +1508,7 @@ export const getAllBookingsAdmin = async (req, res) => {
             { $limit: limitNum },
             {
               $lookup: {
-                from: 'serviceplans',
+                from: 'servicePlan',
                 localField: 'servicePlan',
                 foreignField: '_id',
                 as: 'servicePlan'

@@ -20,6 +20,7 @@ import {
   vendorOrdersCancelled,
   vendorOrdersFailed
 } from "../../../config/metrics.js";
+import { sendAdminOrderNotification } from "../../../utils/emailService.js";
 
 const H3_RESOLUTION = 8;
 const SEARCH_RING_SIZE = 30;
@@ -90,6 +91,9 @@ export const createVendorRequests = async (req, res) => {
     const result = await createAndMatchVendorOrder(req.body);
 
     vendorOrdersCreated.inc();
+    if (result.success && result.order) {
+      sendAdminOrderNotification(result.order, 'VENDOR').catch(err => console.error('[VendorOrderController] Admin Email failed:', err));
+    }
 
     if (!result.success) {
       engineerMatchingFailed.inc();

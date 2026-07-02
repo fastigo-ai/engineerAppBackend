@@ -7,6 +7,7 @@ import { dispatchOrder } from '../../userOrder/core/dispatch.service.js';
 import razorpay from "../../../config/razorpay.js";
 import { validateCoupon, reserveCoupon } from "../../coupon/coupon.service.js";
 import { verifyValidationKey } from "../../coupon/coupon.validator.js";
+import { sendAdminOrderNotification } from "../../../utils/emailService.js";
 
 const H3_RESOLUTION = 8;
 
@@ -184,6 +185,7 @@ export const createCheckoutService = async ({
 
     if (paymentMode === "Payment After Service") {
       dispatchOrder(order._id);
+      sendAdminOrderNotification(order, 'USER').catch(err => console.error('[CheckoutService] Admin Email failed:', err));
 
       //  Notify User: Booking Confirmed (PAS)
       import("../../notification/core/notification.facade.js").then(({ notifyBookingUpdate }) => {

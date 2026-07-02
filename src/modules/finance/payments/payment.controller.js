@@ -13,6 +13,7 @@ import { WithdrawalRequest } from '../wallet/WithdrawalRequest.model.js';
 import { markCouponAsUsed, markCouponAsFailed } from '../../coupon/coupon.service.js';
 import { notifyBookingUpdate } from '../../notification/core/notification.facade.js';
 import { getIO } from '../../../config/socket.js';
+import { sendAdminOrderNotification } from "../../../utils/emailService.js";
 
 
 // Create Checkout Session
@@ -647,6 +648,8 @@ const handleOrderPaid = async (payload) => {
 
     await session.commitTransaction();
     console.log(`Order paid handled: ${orderEntity.id}`);
+    
+    sendAdminOrderNotification(order, 'USER').catch(err => console.error('[PaymentController] Admin Email failed:', err));
 
     // Trigger notification
     await notifyEngineersForOrder(order);
